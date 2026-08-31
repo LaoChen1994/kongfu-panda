@@ -1,0 +1,3 @@
+interface:
+  display_name: "Game Development Loop"
+  short_description: "Build, playtest, screenshot, repair, and regress game features"
