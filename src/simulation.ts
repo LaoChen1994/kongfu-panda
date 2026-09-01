@@ -12,10 +12,10 @@ export const upgrades: Record<UpgradeId, { name: string; rarity: string; descrip
 }
 
 export const items: Record<ItemId, { name: string; rarity: string; description: string; price: number; image: string }> = {
-  'martial-belt': { name: '武道腰带', rarity: '普通', description: '竹杖伤害 +15%', price: 18, image: '/assets/items/martial-belt.png' },
-  'wind-feather': { name: '风羽', rarity: '稀有', description: '飞叶速度 +20%，伤害 +10%', price: 32, image: '/assets/items/wind-feather.png' },
-  'iron-bracer': { name: '铁砂护腕', rarity: '普通', description: '护甲 +4，移动速度 -3%', price: 20, image: '/assets/items/iron-bracer.png' },
-  'panda-roller': { name: '熊猫滚轮', rarity: '稀有', description: '闪避结束震开敌人并造成 32 伤害', price: 38, image: '/assets/items/panda-roller.png' },
+  'martial-belt': { name: '武道腰带', rarity: '普通', description: '竹杖伤害 +15%', price: 18, image: 'assets/items/martial-belt.png' },
+  'wind-feather': { name: '风羽', rarity: '稀有', description: '飞叶速度 +20%，伤害 +10%', price: 32, image: 'assets/items/wind-feather.png' },
+  'iron-bracer': { name: '铁砂护腕', rarity: '普通', description: '护甲 +4，移动速度 -3%', price: 20, image: 'assets/items/iron-bracer.png' },
+  'panda-roller': { name: '熊猫滚轮', rarity: '稀有', description: '闪避结束震开敌人并造成 32 伤害', price: 38, image: 'assets/items/panda-roller.png' },
 }
 
 export type GameState = {

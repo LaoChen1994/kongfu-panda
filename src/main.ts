@@ -2,6 +2,8 @@ import Phaser from 'phaser'
 import './style.css'
 import { buyItem, chooseUpgrade, continueWave, createGameState, items, stepGame, upgrades } from './simulation.js'
 
+const assetRoot = `${import.meta.env.BASE_URL}assets/`
+
 class BattleScene extends Phaser.Scene {
   private state = createGameState()
   private actorGraphics!: Phaser.GameObjects.Graphics
@@ -19,12 +21,12 @@ class BattleScene extends Phaser.Scene {
   private hitStop = 0
 
   preload(): void {
-    this.load.image('bamboo-ground', '/assets/environments/bamboo-ground.png')
-    this.load.image('panda-wanderer', '/assets/characters/panda-wanderer.png')
-    this.load.image('redfang-chaser', '/assets/enemies/redfang-chaser.png')
-    this.load.image('violet-horn-dasher', '/assets/enemies/violet-horn-dasher.png')
-    this.load.image('cyan-lantern-shooter', '/assets/enemies/cyan-lantern-shooter.png')
-    this.load.image('leaf-dart', '/assets/weapons/leaf-dart.png')
+    this.load.image('bamboo-ground', `${assetRoot}environments/bamboo-ground.png`)
+    this.load.image('panda-wanderer', `${assetRoot}characters/panda-wanderer.png`)
+    this.load.image('redfang-chaser', `${assetRoot}enemies/redfang-chaser.png`)
+    this.load.image('violet-horn-dasher', `${assetRoot}enemies/violet-horn-dasher.png`)
+    this.load.image('cyan-lantern-shooter', `${assetRoot}enemies/cyan-lantern-shooter.png`)
+    this.load.image('leaf-dart', `${assetRoot}weapons/leaf-dart.png`)
   }
 
   create(): void {
@@ -132,7 +134,7 @@ class BattleScene extends Phaser.Scene {
         button.className = 'choice-card'
         button.type = 'button'
         button.disabled = purchased || this.state.player.coins < item.price
-        button.innerHTML = `<kbd>${index + 1}</kbd><img src="${item.image}" alt=""><small>${item.rarity} · 宝物</small><strong>${item.name}</strong><span>${item.description}</span><em>${purchased ? '已购入' : `${item.price} 铜钱`}</em>`
+        button.innerHTML = `<kbd>${index + 1}</kbd><img src="${import.meta.env.BASE_URL}${item.image}" alt=""><small>${item.rarity} · 宝物</small><strong>${item.name}</strong><span>${item.description}</span><em>${purchased ? '已购入' : `${item.price} 铜钱`}</em>`
         button.addEventListener('click', () => buyItem(this.state, id))
         cards.append(button)
       })
@@ -305,7 +307,7 @@ class BattleScene extends Phaser.Scene {
       buildTags.innerHTML = (names.length ? names : ['初入竹林']).map((name) => `<span>${name}</span>`).join('')
     }
     const itemIcons = document.querySelector<HTMLElement>('#item-icons')
-    if (itemIcons) itemIcons.innerHTML = this.state.ownedItems.map((id) => `<img src="${items[id].image}" title="${items[id].name}" alt="${items[id].name}">`).join('')
+    if (itemIcons) itemIcons.innerHTML = this.state.ownedItems.map((id) => `<img src="${import.meta.env.BASE_URL}${items[id].image}" title="${items[id].name}" alt="${items[id].name}">`).join('')
 
     if (this.state.gameOver) {
       const overlay = document.querySelector<HTMLDivElement>('#pause-overlay')
