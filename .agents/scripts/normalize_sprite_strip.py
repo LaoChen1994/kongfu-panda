@@ -51,6 +51,18 @@ def parse_args() -> argparse.Namespace:
         default=8,
         help="Pixels with alpha above this threshold count as sprite content. Default: 8.",
     )
+    parser.add_argument(
+        "--content-ratio",
+        type=float,
+        default=1,
+        help="Maximum content size relative to the output frame. Default: 1.",
+    )
+    parser.add_argument(
+        "--resampling",
+        choices=("nearest", "lanczos"),
+        default="nearest",
+        help="Resize filter. Use lanczos for painted sprites. Default: nearest.",
+    )
     return parser.parse_args()
 
 
@@ -95,6 +107,7 @@ def compose_frame(
     image: Image.Image | None,
     frame_size: int,
     scale: float,
+    resampling: Image.Resampling,
 ) -> Image.Image:
     canvas = Image.new("RGBA", (frame_size, frame_size), (0, 0, 0, 0))
     if image is None:
@@ -102,7 +115,7 @@ def compose_frame(
 
     width = max(1, int(round(image.width * scale)))
     height = max(1, int(round(image.height * scale)))
-    resized = image.resize((width, height), Image.Resampling.NEAREST)
+    resized = image.resize((width, height), resampling)
     offset_x = (frame_size - width) // 2
     offset_y = frame_size - height
     canvas.alpha_composite(resized, (offset_x, offset_y))
@@ -123,6 +136,8 @@ def main() -> None:
         raise SystemExit("--frames must be at least 1.")
     if args.frame_size < 1:
         raise SystemExit("--frame-size must be positive.")
+    if not 0 < args.content_ratio <= 1:
+        raise SystemExit("--content-ratio must be greater than 0 and at most 1.")
     if args.lock_frame1 and not args.anchor:
         raise SystemExit("--lock-frame1 requires --anchor.")
 
@@ -131,7 +146,15 @@ def main() -> None:
     contents = [crop_to_content(slot, args.alpha_threshold) for slot in slots]
     anchor_image, anchor_content = load_anchor(args.anchor, args.alpha_threshold)
     max_width, max_height = max_content_size([*contents, anchor_content])
-    scale = min(args.frame_size / max_width, args.frame_size / max_height)
+    scale = min(
+        args.frame_size * args.content_ratio / max_width,
+        args.frame_size * args.content_ratio / max_height,
+    )
+    resampling = (
+        Image.Resampling.LANCZOS
+        if args.resampling == "lanczos"
+        else Image.Resampling.NEAREST
+    )
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -142,9 +165,9 @@ def main() -> None:
             if anchor_image.width == args.frame_size and anchor_image.height == args.frame_size:
                 frame = anchor_image
             else:
-                frame = compose_frame(anchor_content, args.frame_size, scale)
+                frame = compose_frame(anchor_content, args.frame_size, scale, resampling)
         else:
-            frame = compose_frame(content, args.frame_size, scale)
+            frame = compose_frame(content, args.frame_size, scale, resampling)
         frame.save(out_dir / f"{index:02d}.png")
 
 

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#10251c" />
+    <title>竹林无双 · M0 战斗原型</title>
+  </head>
+  <body>
+    <main class="game-shell">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-seal">竹</span>
+          <div>
+            <p class="eyebrow">灵竹谷 · 守卫试炼</p>
+            <h1>竹林无双</h1>
+          </div>
+        </div>
+        <div class="controls" aria-label="操作说明">
+          <span><kbd>WASD</kbd> 移动</span>
+          <span><kbd>SPACE</kbd> 闪避</span>
+          <span><kbd>ESC</kbd> 暂停</span>
+        </div>
+      </header>
+
+      <section class="playfield" aria-label="游戏画布">
+        <div id="game"></div>
+        <div id="pause-overlay" class="overlay" hidden>
+          <div class="overlay-card">
+            <strong id="overlay-title">竹息凝神</strong>
+            <span id="overlay-copy">按 ESC 继续战斗</span>
+          </div>
+        </div>
+        <div class="hud" aria-live="polite">
+          <div class="health-card">
+            <span>熊猫体力</span>
+            <div class="health-track"><i id="health-fill"></i></div>
+            <b id="health-text">100 / 100</b>
+          </div>
+          <div class="stats">
+            <span>生存 <b id="time">00:00</b></span>
+            <span>击破 <b id="kills">0</b></span>
+            <span>妖物 <b id="enemies">0</b></span>
+          </div>
+          <div id="dash" class="dash ready">闪避就绪</div>
+        </div>
+        <div class="weapon-strip">
+          <span class="weapon-slot"><img src="/assets/weapons/bamboo-staff.png" alt="青竹杖" /><span><b>青竹杖</b><small>近战横扫</small></span></span>
+          <span class="weapon-slot"><img src="/assets/weapons/leaf-dart.png" alt="飞叶" /><span><b>飞叶</b><small>自动追敌</small></span></span>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
