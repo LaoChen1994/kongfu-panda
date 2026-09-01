@@ -3,12 +3,23 @@ import './style.css'
 import { buyItem, chooseUpgrade, continueWave, createGameState, items, stepGame, upgrades } from './simulation.js'
 
 const assetRoot = `${import.meta.env.BASE_URL}assets/`
+const animationSets = [
+  { key: 'panda-idle', path: 'panda-wanderer/idle', frames: 6, frameRate: 7, repeat: -1 },
+  { key: 'panda-run', path: 'panda-wanderer/run', frames: 8, frameRate: 13, repeat: -1 },
+  { key: 'panda-attack', path: 'panda-wanderer/attack', frames: 6, frameRate: 22, repeat: 0 },
+  { key: 'redfang-chaser-move', path: 'redfang-chaser/move', frames: 8, frameRate: 12, repeat: -1 },
+  { key: 'redfang-chaser-attack', path: 'redfang-chaser/attack', frames: 6, frameRate: 18, repeat: 0 },
+  { key: 'violet-horn-dasher-move', path: 'violet-horn-dasher/move', frames: 8, frameRate: 10, repeat: -1 },
+  { key: 'violet-horn-dasher-attack', path: 'violet-horn-dasher/attack', frames: 6, frameRate: 15, repeat: 0 },
+  { key: 'cyan-lantern-shooter-move', path: 'cyan-lantern-shooter/move', frames: 8, frameRate: 8, repeat: -1 },
+  { key: 'cyan-lantern-shooter-attack', path: 'cyan-lantern-shooter/attack', frames: 6, frameRate: 15, repeat: 0 },
+]
 
 class BattleScene extends Phaser.Scene {
   private state = createGameState()
   private actorGraphics!: Phaser.GameObjects.Graphics
-  private playerSprite!: Phaser.GameObjects.Image
-  private enemySprites = new Map<number, Phaser.GameObjects.Image>()
+  private playerSprite!: Phaser.GameObjects.Sprite
+  private enemySprites = new Map<number, Phaser.GameObjects.Sprite>()
   private leafSprites = new Map<number, Phaser.GameObjects.Image>()
   private effectTexts = new Map<number, Phaser.GameObjects.Text>()
   private seenEffects = new Set<number>()
@@ -19,14 +30,17 @@ class BattleScene extends Phaser.Scene {
   private audioContext?: AudioContext
   private lastHitSound = 0
   private hitStop = 0
+  private lastAttackId = 0
 
   preload(): void {
     this.load.image('bamboo-ground', `${assetRoot}environments/bamboo-ground.png`)
-    this.load.image('panda-wanderer', `${assetRoot}characters/panda-wanderer.png`)
-    this.load.image('redfang-chaser', `${assetRoot}enemies/redfang-chaser.png`)
-    this.load.image('violet-horn-dasher', `${assetRoot}enemies/violet-horn-dasher.png`)
-    this.load.image('cyan-lantern-shooter', `${assetRoot}enemies/cyan-lantern-shooter.png`)
     this.load.image('leaf-dart', `${assetRoot}weapons/leaf-dart.png`)
+    for (const animation of animationSets) {
+      for (let index = 1; index <= animation.frames; index += 1) {
+        const frame = String(index).padStart(2, '0')
+        this.load.image(`${animation.key}-${frame}`, `${assetRoot}animations/${animation.path}/${frame}.png`)
+      }
+    }
   }
 
   create(): void {
@@ -38,7 +52,15 @@ class BattleScene extends Phaser.Scene {
     for (let y = 0; y <= 1000; y += 80) worldGraphics.lineBetween(0, y, 1600, y)
     worldGraphics.lineStyle(8, 0x513d22, 0.7).strokeRect(5, 5, 1590, 990)
     this.actorGraphics = this.add.graphics().setDepth(3000)
-    this.playerSprite = this.add.image(this.state.player.x, this.state.player.y, 'panda-wanderer').setOrigin(0.5, 1).setDisplaySize(68, 68)
+    for (const animation of animationSets) {
+      this.anims.create({
+        key: animation.key,
+        frames: Array.from({ length: animation.frames }, (_, index) => ({ key: `${animation.key}-${String(index + 1).padStart(2, '0')}` })),
+        frameRate: animation.frameRate,
+        repeat: animation.repeat,
+      })
+    }
+    this.playerSprite = this.add.sprite(this.state.player.x, this.state.player.y, 'panda-idle-01').setOrigin(0.5, 1).setScale(68 / 96).play('panda-idle')
     this.cameras.main.setBounds(0, 0, 1600, 1000)
     const keyboard = this.input.keyboard
     if (!keyboard) throw new Error('浏览器不支持键盘输入')
@@ -69,6 +91,7 @@ class BattleScene extends Phaser.Scene {
       }
       if (event.code === 'KeyR' && this.state.gameOver) {
         this.state = createGameState()
+        this.lastAttackId = 0
         this.paused = false
         this.overlayMode = ''
         const overlay = document.querySelector<HTMLDivElement>('#pause-overlay')
@@ -260,13 +283,17 @@ class BattleScene extends Phaser.Scene {
       liveEnemyIds.add(enemy.id)
       let sprite = this.enemySprites.get(enemy.id)
       const size = enemy.kind === 'chaser' ? 54 : enemy.kind === 'dasher' ? 62 : 58
+      const family = enemy.kind === 'chaser' ? 'redfang-chaser' : enemy.kind === 'dasher' ? 'violet-horn-dasher' : 'cyan-lantern-shooter'
       if (!sprite) {
-        const texture = enemy.kind === 'chaser' ? 'redfang-chaser' : enemy.kind === 'dasher' ? 'violet-horn-dasher' : 'cyan-lantern-shooter'
-        sprite = this.add.image(enemy.x, enemy.y, texture).setOrigin(0.5, 1).setDisplaySize(size, size)
+        sprite = this.add.sprite(enemy.x, enemy.y, `${family}-move-01`).setOrigin(0.5, 1).setScale(size / 96).play(`${family}-move`)
         this.enemySprites.set(enemy.id, sprite)
       }
       const flashing = this.state.effects.some((effect) => (effect.kind === 'hit' || effect.kind === 'crit' || effect.kind === 'projectile-hit' || effect.kind === 'projectile-crit') && Math.abs(effect.x - enemy.x) < 24 && Math.abs(effect.y + 28 - enemy.y) < 24)
-      sprite.setPosition(enemy.x, enemy.y).setDepth(enemy.y).setDisplaySize(enemy.kind === 'dasher' && enemy.dashTime > 0 ? size * 1.12 : size, enemy.kind === 'dasher' && enemy.dashTime > 0 ? size * 1.12 : size)
+      const attacking = enemy.kind === 'chaser' ? Math.hypot(this.state.player.x - enemy.x, this.state.player.y - enemy.y) < 42 : enemy.kind === 'dasher' ? enemy.dashTime > 0 : enemy.cooldown > 1.45
+      sprite.play(`${family}-${attacking ? 'attack' : 'move'}`, true)
+      sprite.setFlipX(this.state.player.x < enemy.x)
+      const actionScale = enemy.kind === 'dasher' && enemy.dashTime > 0 ? 1.12 : 1
+      sprite.setPosition(enemy.x, enemy.y).setDepth(enemy.y).setScale(size / 96 * actionScale * (flashing ? 1.06 : 1), size / 96 * actionScale * (flashing ? 0.92 : 1))
       sprite.setBlendMode(flashing ? Phaser.BlendModes.ADD : Phaser.BlendModes.NORMAL)
       if (enemy.hp < enemy.maxHp) {
         graphics.fillStyle(0x221715, 0.7).fillRect(enemy.x - 18, enemy.y - size - 5, 36, 4)
@@ -277,7 +304,20 @@ class BattleScene extends Phaser.Scene {
 
     const { x, y, dashTime } = this.state.player
     if (dashTime > 0) graphics.fillStyle(0xd4ffb8, 0.22).fillCircle(x, y, 38)
-    this.playerSprite.setPosition(x, y).setDepth(y).setAlpha(this.state.player.hitCooldown > 0 ? 0.55 + Math.sin(this.state.time * 50) * 0.25 : 1)
+    const latestAttack = this.state.attacks.at(-1)
+    if (latestAttack && latestAttack.id > this.lastAttackId) {
+      this.lastAttackId = latestAttack.id
+      this.playerSprite.setFlipX(Math.cos(latestAttack.angle) < 0).play('panda-attack')
+    }
+    const playerAttacking = this.playerSprite.anims.currentAnim?.key === 'panda-attack' && this.playerSprite.anims.isPlaying
+    const moveX = Number(this.keys.right.isDown || this.keys.d.isDown) - Number(this.keys.left.isDown || this.keys.a.isDown)
+    const moveY = Number(this.keys.down.isDown || this.keys.s.isDown) - Number(this.keys.up.isDown || this.keys.w.isDown)
+    if (!playerAttacking) {
+      this.playerSprite.play(moveX !== 0 || moveY !== 0 || dashTime > 0 ? 'panda-run' : 'panda-idle', true)
+      this.playerSprite.setFlipX(moveX === 0 ? this.state.player.facingX < 0 : moveX < 0)
+    }
+    const playerHurt = this.state.player.hitCooldown > 0
+    this.playerSprite.setPosition(x, y).setDepth(y).setRotation(playerAttacking ? 0 : moveY * 0.035).setScale(68 / 96 * (playerHurt ? 1.06 : 1), 68 / 96 * (playerHurt ? 0.92 : 1)).setAlpha(playerHurt ? 0.55 + Math.sin(this.state.time * 50) * 0.25 : 1)
 
     const healthFill = document.querySelector<HTMLElement>('#health-fill')
     const xpFill = document.querySelector<HTMLElement>('#xp-fill')

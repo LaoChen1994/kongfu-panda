@@ -63,6 +63,12 @@ def parse_args() -> argparse.Namespace:
         default="nearest",
         help="Resize filter. Use lanczos for painted sprites. Default: nearest.",
     )
+    parser.add_argument(
+        "--split-mode",
+        choices=("equal", "content", "adaptive"),
+        default="equal",
+        help="Split equal slots, detect content groups, or adapt boundaries to transparent gaps. Default: equal.",
+    )
     return parser.parse_args()
 
 
@@ -88,6 +94,46 @@ def split_strip(strip: Image.Image, frames: int) -> list[Image.Image]:
         right = int(round((index + 1) * step))
         slots.append(strip.crop((left, 0, right, strip.height)))
     return slots
+
+
+def split_strip_content(strip: Image.Image, frames: int, alpha_threshold: int) -> list[Image.Image]:
+    alpha = strip.getchannel("A")
+    active = [alpha.crop((left, 0, left + 1, strip.height)).getextrema()[1] > alpha_threshold for left in range(strip.width)]
+    ranges: list[tuple[int, int]] = []
+    start: int | None = None
+    for left, visible in enumerate(active):
+        if visible and start is None:
+            start = left
+        if not visible and start is not None:
+            ranges.append((start, left))
+            start = None
+    if start is not None:
+        ranges.append((start, strip.width))
+
+    minimum_width = strip.width / frames * 0.12
+    ranges = [(left, right) for left, right in ranges if right - left >= minimum_width]
+    if len(ranges) != frames:
+        raise SystemExit(f"Detected {len(ranges)} content frames, expected {frames}.")
+    return [strip.crop((left, 0, right, strip.height)) for left, right in ranges]
+
+
+def split_strip_adaptive(strip: Image.Image, frames: int, alpha_threshold: int) -> list[Image.Image]:
+    alpha = strip.getchannel("A")
+    counts = []
+    for left in range(strip.width):
+        column = alpha.crop((left, 0, left + 1, strip.height))
+        counts.append(sum(column.histogram()[alpha_threshold + 1 :]))
+
+    step = strip.width / frames
+    boundaries = [0]
+    for index in range(1, frames):
+        expected = index * step
+        search_left = max(boundaries[-1] + 1, int(expected - step * 0.38))
+        search_right = min(strip.width - 1, int(expected + step * 0.38))
+        boundary = min(range(search_left, search_right + 1), key=lambda left: (counts[left], abs(left - expected)))
+        boundaries.append(boundary)
+    boundaries.append(strip.width)
+    return [strip.crop((boundaries[index], 0, boundaries[index + 1], strip.height)) for index in range(frames)]
 
 
 def max_content_size(images: Iterable[Image.Image | None]) -> tuple[int, int]:
@@ -142,7 +188,12 @@ def main() -> None:
         raise SystemExit("--lock-frame1 requires --anchor.")
 
     strip = Image.open(args.input).convert("RGBA")
-    slots = split_strip(strip, args.frames)
+    if args.split_mode == "content":
+        slots = split_strip_content(strip, args.frames, args.alpha_threshold)
+    elif args.split_mode == "adaptive":
+        slots = split_strip_adaptive(strip, args.frames, args.alpha_threshold)
+    else:
+        slots = split_strip(strip, args.frames)
     contents = [crop_to_content(slot, args.alpha_threshold) for slot in slots]
     anchor_image, anchor_content = load_anchor(args.anchor, args.alpha_threshold)
     max_width, max_height = max_content_size([*contents, anchor_content])
@@ -165,7 +216,12 @@ def main() -> None:
             if anchor_image.width == args.frame_size and anchor_image.height == args.frame_size:
                 frame = anchor_image
             else:
-                frame = compose_frame(anchor_content, args.frame_size, scale, resampling)
+                assert anchor_content is not None
+                anchor_scale = min(
+                    args.frame_size * args.content_ratio / anchor_content.width,
+                    args.frame_size * args.content_ratio / anchor_content.height,
+                )
+                frame = compose_frame(anchor_content, args.frame_size, anchor_scale, resampling)
         else:
             frame = compose_frame(content, args.frame_size, scale, resampling)
         frame.save(out_dir / f"{index:02d}.png")

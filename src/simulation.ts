@@ -78,7 +78,7 @@ export type GameState = {
   }>
   playerProjectiles: Array<{ id: number; x: number; y: number; vx: number; vy: number; damage: number; critical: boolean }>
   enemyProjectiles: Array<{ id: number; x: number; y: number; vx: number; vy: number }>
-  attacks: Array<{ x: number; y: number; life: number; radius: number; angle: number; critical: boolean }>
+  attacks: Array<{ id: number; x: number; y: number; life: number; radius: number; angle: number; critical: boolean }>
   drops: Array<{ id: number; kind: 'xp' | 'coin' | 'heal'; x: number; y: number; value: number }>
   effects: Array<{ id: number; kind: 'hit' | 'crit' | 'projectile-hit' | 'projectile-crit' | 'kill' | 'player-hit' | 'dash-burst'; x: number; y: number; value: number; life: number; angle: number }>
 }
@@ -298,7 +298,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
           state.effects.push({ id: state.nextId++, kind: critical ? 'crit' : 'hit', x: enemy.x, y: enemy.y - 28, value: damage, life: 0.42, angle })
         }
       }
-      state.attacks.push({ x: state.player.x, y: state.player.y, life: 0.28, radius: attackRadius, angle, critical })
+      state.attacks.push({ id: state.nextId++, x: state.player.x, y: state.player.y, life: 0.28, radius: attackRadius, angle, critical })
     }
     state.bambooCooldown = 0.62 / state.player.attackSpeed
   }
