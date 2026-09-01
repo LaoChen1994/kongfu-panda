@@ -78,9 +78,9 @@ export type GameState = {
   }>
   playerProjectiles: Array<{ id: number; x: number; y: number; vx: number; vy: number; damage: number; critical: boolean }>
   enemyProjectiles: Array<{ id: number; x: number; y: number; vx: number; vy: number }>
-  attacks: Array<{ x: number; y: number; life: number; radius: number }>
+  attacks: Array<{ x: number; y: number; life: number; radius: number; angle: number; critical: boolean }>
   drops: Array<{ id: number; kind: 'xp' | 'coin' | 'heal'; x: number; y: number; value: number }>
-  effects: Array<{ id: number; kind: 'hit' | 'crit' | 'kill' | 'player-hit' | 'dash-burst'; x: number; y: number; value: number; life: number }>
+  effects: Array<{ id: number; kind: 'hit' | 'crit' | 'projectile-hit' | 'projectile-crit' | 'kill' | 'player-hit' | 'dash-burst'; x: number; y: number; value: number; life: number; angle: number }>
 }
 
 export type PlayerInput = { x: number; y: number; dash: boolean }
@@ -191,7 +191,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
 
   if (previousDashTime > 0 && state.player.dashTime === 0 && state.player.dashBurstPending) {
     state.player.dashBurstPending = false
-    state.effects.push({ id: state.nextId++, kind: 'dash-burst', x: state.player.x, y: state.player.y, value: 32, life: 0.35 })
+    state.effects.push({ id: state.nextId++, kind: 'dash-burst', x: state.player.x, y: state.player.y, value: 32, life: 0.35, angle: 0 })
     for (const enemy of state.enemies) {
       const dx = enemy.x - state.player.x
       const dy = enemy.y - state.player.y
@@ -270,23 +270,35 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
       const damage = Math.max(1, Math.floor(rawDamage * (1 - state.player.armor / (state.player.armor + 60))))
       state.player.hp -= damage
       state.player.hitCooldown = 1.15
-      state.effects.push({ id: state.nextId++, kind: 'player-hit', x: state.player.x, y: state.player.y, value: damage, life: 0.35 })
+      state.effects.push({ id: state.nextId++, kind: 'player-hit', x: state.player.x, y: state.player.y, value: damage, life: 0.35, angle: Math.atan2(dy, dx) })
     }
   }
 
   if (state.bambooCooldown <= 0) {
     let target: GameState['enemies'][number] | undefined
-    let targetDistance = state.player.meleeRange + 36
+    const attackRadius = state.player.meleeRange + 24
+    let targetDistance = attackRadius
     for (const enemy of state.enemies) {
       const distance = Math.hypot(enemy.x - state.player.x, enemy.y - state.player.y)
       if (distance < targetDistance) { target = enemy; targetDistance = distance }
     }
     if (target) {
+      const angle = Math.atan2(target.y - state.player.y, target.x - state.player.x)
       const critical = random(state) < 0.1
       const damage = Math.round(38 * state.player.damage * state.player.meleeDamage * (critical ? 1.75 : 1))
-      target.hp -= damage
-      state.attacks.push({ x: state.player.x, y: state.player.y, life: 0.16, radius: state.player.meleeRange })
-      state.effects.push({ id: state.nextId++, kind: critical ? 'crit' : 'hit', x: target.x, y: target.y - 28, value: damage, life: 0.42 })
+      for (const enemy of state.enemies) {
+        const dx = enemy.x - state.player.x
+        const dy = enemy.y - state.player.y
+        const distance = Math.max(0.001, Math.hypot(dx, dy))
+        const angleDelta = Math.atan2(Math.sin(Math.atan2(dy, dx) - angle), Math.cos(Math.atan2(dy, dx) - angle))
+        if (distance <= attackRadius && Math.abs(angleDelta) <= Math.PI / 4) {
+          enemy.hp -= damage
+          enemy.x = Math.min(1580, Math.max(20, enemy.x + (dx / distance) * (critical ? 22 : 14)))
+          enemy.y = Math.min(980, Math.max(20, enemy.y + (dy / distance) * (critical ? 22 : 14)))
+          state.effects.push({ id: state.nextId++, kind: critical ? 'crit' : 'hit', x: enemy.x, y: enemy.y - 28, value: damage, life: 0.42, angle })
+        }
+      }
+      state.attacks.push({ x: state.player.x, y: state.player.y, life: 0.28, radius: attackRadius, angle, critical })
     }
     state.bambooCooldown = 0.62 / state.player.attackSpeed
   }
@@ -316,7 +328,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
     for (const enemy of state.enemies) {
       if (projectile.damage > 0 && Math.hypot(enemy.x - projectile.x, enemy.y - projectile.y) < 24) {
         enemy.hp -= projectile.damage
-        state.effects.push({ id: state.nextId++, kind: projectile.critical ? 'crit' : 'hit', x: enemy.x, y: enemy.y - 28, value: projectile.damage, life: 0.42 })
+        state.effects.push({ id: state.nextId++, kind: projectile.critical ? 'projectile-crit' : 'projectile-hit', x: enemy.x, y: enemy.y - 28, value: projectile.damage, life: 0.42, angle: Math.atan2(projectile.vy, projectile.vx) })
         projectile.damage = 0
       }
     }
@@ -329,7 +341,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
       const damage = Math.max(1, Math.floor(3 * (1 - state.player.armor / (state.player.armor + 60))))
       state.player.hp -= damage
       state.player.hitCooldown = 1.05
-      state.effects.push({ id: state.nextId++, kind: 'player-hit', x: state.player.x, y: state.player.y, value: damage, life: 0.35 })
+      state.effects.push({ id: state.nextId++, kind: 'player-hit', x: state.player.x, y: state.player.y, value: damage, life: 0.35, angle: Math.atan2(projectile.vy, projectile.vx) })
       projectile.x = -100
     }
   }
@@ -357,7 +369,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
       state.drops.push({ id: state.nextId++, kind: 'xp', x: enemy.x, y: enemy.y, value: 4 })
       if (state.kills % 2 === 0) state.drops.push({ id: state.nextId++, kind: 'coin', x: enemy.x + 8, y: enemy.y, value: 2 })
       if (state.kills % 8 === 0) state.drops.push({ id: state.nextId++, kind: 'heal', x: enemy.x - 8, y: enemy.y, value: 10 })
-      state.effects.push({ id: state.nextId++, kind: 'kill', x: enemy.x, y: enemy.y, value: 0, life: 0.36 })
+      state.effects.push({ id: state.nextId++, kind: 'kill', x: enemy.x, y: enemy.y, value: 0, life: 0.36, angle: 0 })
     }
   }
   state.enemies = state.enemies.filter((enemy) => enemy.hp > 0)

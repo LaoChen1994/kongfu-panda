@@ -16,6 +16,7 @@ class BattleScene extends Phaser.Scene {
   private overlayMode = ''
   private audioContext?: AudioContext
   private lastHitSound = 0
+  private hitStop = 0
 
   preload(): void {
     this.load.image('bamboo-ground', '/assets/environments/bamboo-ground.png')
@@ -140,11 +141,14 @@ class BattleScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     if (!this.paused) {
-      stepGame(this.state, {
-        x: Number(this.keys.right.isDown || this.keys.d.isDown) - Number(this.keys.left.isDown || this.keys.a.isDown),
-        y: Number(this.keys.down.isDown || this.keys.s.isDown) - Number(this.keys.up.isDown || this.keys.w.isDown),
-        dash: this.dashQueued,
-      }, delta / 1000)
+      if (this.hitStop > 0) this.hitStop = Math.max(0, this.hitStop - delta / 1000)
+      else {
+        stepGame(this.state, {
+          x: Number(this.keys.right.isDown || this.keys.d.isDown) - Number(this.keys.left.isDown || this.keys.a.isDown),
+          y: Number(this.keys.down.isDown || this.keys.s.isDown) - Number(this.keys.up.isDown || this.keys.w.isDown),
+          dash: this.dashQueued,
+        }, delta / 1000)
+      }
     }
     this.dashQueued = false
     this.renderChoiceOverlay()
@@ -156,37 +160,61 @@ class BattleScene extends Phaser.Scene {
       graphics.fillStyle(color, 0.9).fillCircle(drop.x, drop.y, drop.kind === 'xp' ? 5 : 6)
       graphics.lineStyle(2, 0xf9f0c8, 0.7).strokeCircle(drop.x, drop.y, drop.kind === 'xp' ? 8 : 9)
     }
-    for (const attack of this.state.attacks) graphics.lineStyle(10, 0xf0c96a, attack.life / 0.16).strokeCircle(attack.x, attack.y, attack.radius)
+    for (const attack of this.state.attacks) {
+      const alpha = Math.min(1, attack.life / 0.2)
+      const start = attack.angle - Math.PI / 4
+      const end = attack.angle + Math.PI / 4
+      graphics.fillStyle(attack.critical ? 0xffdf65 : 0x9bcb66, alpha * 0.18).beginPath().moveTo(attack.x, attack.y).arc(attack.x, attack.y, attack.radius, start, end).closePath().fillPath()
+      graphics.lineStyle(attack.critical ? 9 : 7, attack.critical ? 0xffdf65 : 0xe3a83b, alpha).beginPath().arc(attack.x, attack.y, attack.radius, start, end).strokePath()
+      graphics.lineStyle(3, 0xcdf08a, alpha * 0.8).beginPath().arc(attack.x, attack.y, attack.radius * 0.72, start + 0.08, end - 0.08).strokePath()
+      graphics.lineStyle(2, 0xf3e6c8, alpha * 0.6).lineBetween(attack.x, attack.y, attack.x + Math.cos(start) * attack.radius, attack.y + Math.sin(start) * attack.radius).lineBetween(attack.x, attack.y, attack.x + Math.cos(end) * attack.radius, attack.y + Math.sin(end) * attack.radius)
+    }
     for (const effect of this.state.effects) {
       const alpha = Math.min(1, effect.life * 4)
       if (effect.kind === 'kill') {
-        graphics.fillStyle(0x7651a8, alpha * 0.42).fillCircle(effect.x, effect.y, 34 * (1 - effect.life))
+        graphics.fillStyle(0x9bcb66, alpha * 0.32).fillCircle(effect.x, effect.y, 34 * (1 - effect.life))
         for (let index = 0; index < 5; index += 1) {
           const angle = index * Math.PI * 0.4
-          graphics.lineStyle(4, 0xc5a4e8, alpha).lineBetween(effect.x, effect.y, effect.x + Math.cos(angle) * 28, effect.y + Math.sin(angle) * 28)
+          graphics.lineStyle(4, index === 0 ? 0xe3a83b : 0xcdf08a, alpha).lineBetween(effect.x, effect.y, effect.x + Math.cos(angle) * 28, effect.y + Math.sin(angle) * 28)
         }
       }
       if (effect.kind === 'dash-burst') graphics.lineStyle(8, 0x9bcb66, alpha).strokeCircle(effect.x, effect.y, 118 * (1 - effect.life / 0.35))
       if (effect.kind === 'hit' || effect.kind === 'crit') {
-        graphics.fillStyle(effect.kind === 'crit' ? 0xffdf65 : 0xf3e6c8, alpha).fillCircle(effect.x, effect.y + 26, effect.kind === 'crit' ? 9 : 5)
+        const centerY = effect.y + 26
+        graphics.fillStyle(effect.kind === 'crit' ? 0xffdf65 : 0xf3e6c8, alpha).fillCircle(effect.x, centerY, effect.kind === 'crit' ? 9 : 5)
+        graphics.lineStyle(effect.kind === 'crit' ? 5 : 3, effect.kind === 'crit' ? 0xe3a83b : 0x9bcb66, alpha).lineBetween(effect.x - Math.cos(effect.angle) * 18, centerY - Math.sin(effect.angle) * 18, effect.x + Math.cos(effect.angle) * 12, centerY + Math.sin(effect.angle) * 12)
+      }
+      if (effect.kind === 'projectile-hit' || effect.kind === 'projectile-crit') {
+        const centerY = effect.y + 28
+        const length = effect.kind === 'projectile-crit' ? 38 : 26
+        for (let index = -1; index <= 1; index += 1) {
+          const angle = effect.angle + index * 0.5
+          graphics.lineStyle(index === 0 ? 5 : 3, effect.kind === 'projectile-crit' ? 0xffdf65 : 0x9bcb66, alpha).lineBetween(effect.x - Math.cos(angle) * 5, centerY - Math.sin(angle) * 5, effect.x + Math.cos(angle) * length, centerY + Math.sin(angle) * length)
+        }
       }
       if (!this.seenEffects.has(effect.id)) {
         this.seenEffects.add(effect.id)
-        if (effect.kind === 'crit') {
+        if (effect.kind === 'crit' || effect.kind === 'projectile-crit') {
+          this.hitStop = 0.04
           this.cameras.main.shake(75, 0.0025)
           this.playTone(155, 0.08, 0.035)
         } else if (effect.kind === 'player-hit') {
           this.cameras.main.shake(100, 0.004)
           this.playTone(70, 0.1, 0.055)
-        } else if ((effect.kind === 'hit' || effect.kind === 'kill') && performance.now() - this.lastHitSound > 70) {
+        } else if ((effect.kind === 'hit' || effect.kind === 'projectile-hit') && performance.now() - this.lastHitSound > 70) {
+          this.hitStop = effect.kind === 'hit' ? 0.018 : 0.012
           this.lastHitSound = performance.now()
-          this.playTone(effect.kind === 'kill' ? 210 : 105, 0.045, 0.018)
+          this.playTone(effect.kind === 'hit' ? 105 : 130, 0.045, 0.018)
+        } else if (effect.kind === 'kill' && performance.now() - this.lastHitSound > 70) {
+          this.lastHitSound = performance.now()
+          this.playTone(210, 0.045, 0.018)
         }
       }
-      if ((effect.kind === 'hit' || effect.kind === 'crit' || effect.kind === 'player-hit') && !this.effectTexts.has(effect.id)) {
+      if ((effect.kind === 'hit' || effect.kind === 'crit' || effect.kind === 'projectile-hit' || effect.kind === 'projectile-crit' || effect.kind === 'player-hit') && !this.effectTexts.has(effect.id)) {
+        const critical = effect.kind === 'crit' || effect.kind === 'projectile-crit'
         const text = this.add.text(effect.x, effect.y, `${effect.kind === 'player-hit' ? '-' : ''}${effect.value}`, {
-          fontFamily: 'PingFang SC, sans-serif', fontSize: effect.kind === 'crit' ? '24px' : '17px',
-          fontStyle: 'bold', color: effect.kind === 'crit' ? '#ffe06a' : effect.kind === 'player-hit' ? '#ff766d' : '#fff0c5',
+          fontFamily: 'PingFang SC, sans-serif', fontSize: critical ? '24px' : '17px',
+          fontStyle: 'bold', color: critical ? '#ffe06a' : effect.kind === 'player-hit' ? '#ff766d' : '#fff0c5',
           stroke: '#202622', strokeThickness: 4,
         }).setOrigin(0.5).setDepth(5000)
         this.effectTexts.set(effect.id, text)
@@ -203,17 +231,26 @@ class BattleScene extends Phaser.Scene {
     const liveLeafIds = new Set<number>()
     for (const projectile of this.state.playerProjectiles) {
       liveLeafIds.add(projectile.id)
+      const length = Math.max(0.001, Math.hypot(projectile.vx, projectile.vy))
+      const directionX = projectile.vx / length
+      const directionY = projectile.vy / length
+      graphics.lineStyle(projectile.critical ? 9 : 7, 0x202622, 0.48).lineBetween(projectile.x - directionX * 34, projectile.y - directionY * 34, projectile.x, projectile.y)
+      graphics.lineStyle(projectile.critical ? 5 : 3, projectile.critical ? 0xe3a83b : 0x9bcb66, 0.92).lineBetween(projectile.x - directionX * (projectile.critical ? 42 : 30), projectile.y - directionY * (projectile.critical ? 42 : 30), projectile.x, projectile.y)
       let sprite = this.leafSprites.get(projectile.id)
       if (!sprite) {
-        sprite = this.add.image(projectile.x, projectile.y, 'leaf-dart').setDisplaySize(projectile.critical ? 27 : 22, projectile.critical ? 27 : 22)
+        sprite = this.add.image(projectile.x, projectile.y, 'leaf-dart').setDisplaySize(projectile.critical ? 38 : 31, projectile.critical ? 38 : 31)
         this.leafSprites.set(projectile.id, sprite)
       }
-      sprite.setPosition(projectile.x, projectile.y).setRotation(Math.atan2(projectile.vy, projectile.vx) + Math.PI / 4).setDepth(projectile.y + 5)
+      sprite.setPosition(projectile.x, projectile.y).setRotation(Math.atan2(projectile.vy, projectile.vx) + Math.PI / 4 + Math.sin(this.state.time * 18 + projectile.id) * 0.18).setDepth(projectile.y + 5)
+      if (projectile.critical) sprite.setTint(0xffdf65)
+      else sprite.clearTint()
     }
     for (const [id, sprite] of this.leafSprites) if (!liveLeafIds.has(id)) { sprite.destroy(); this.leafSprites.delete(id) }
     for (const projectile of this.state.enemyProjectiles) {
-      graphics.fillStyle(0x6be4df).fillCircle(projectile.x, projectile.y, 6)
-      graphics.lineStyle(2, 0xc8ffff, 0.7).strokeCircle(projectile.x, projectile.y, 10)
+      const length = Math.max(0.001, Math.hypot(projectile.vx, projectile.vy))
+      graphics.lineStyle(5, 0xd9554d, 0.7).lineBetween(projectile.x - projectile.vx / length * 18, projectile.y - projectile.vy / length * 18, projectile.x, projectile.y)
+      graphics.fillStyle(0x7651a8).fillCircle(projectile.x, projectile.y, 7)
+      graphics.lineStyle(2, 0xff958a, 0.9).strokeCircle(projectile.x, projectile.y, 11)
     }
 
     const liveEnemyIds = new Set<number>()
@@ -226,7 +263,7 @@ class BattleScene extends Phaser.Scene {
         sprite = this.add.image(enemy.x, enemy.y, texture).setOrigin(0.5, 1).setDisplaySize(size, size)
         this.enemySprites.set(enemy.id, sprite)
       }
-      const flashing = this.state.effects.some((effect) => (effect.kind === 'hit' || effect.kind === 'crit') && Math.abs(effect.x - enemy.x) < 12 && Math.abs(effect.y + 28 - enemy.y) < 12)
+      const flashing = this.state.effects.some((effect) => (effect.kind === 'hit' || effect.kind === 'crit' || effect.kind === 'projectile-hit' || effect.kind === 'projectile-crit') && Math.abs(effect.x - enemy.x) < 24 && Math.abs(effect.y + 28 - enemy.y) < 24)
       sprite.setPosition(enemy.x, enemy.y).setDepth(enemy.y).setDisplaySize(enemy.kind === 'dasher' && enemy.dashTime > 0 ? size * 1.12 : size, enemy.kind === 'dasher' && enemy.dashTime > 0 ? size * 1.12 : size)
       sprite.setBlendMode(flashing ? Phaser.BlendModes.ADD : Phaser.BlendModes.NORMAL)
       if (enemy.hp < enemy.maxHp) {
