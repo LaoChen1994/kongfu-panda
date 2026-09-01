@@ -16,7 +16,10 @@ Before changing a playable feature, read `../../../docs/GAME_DESIGN_DOCUMENT.md`
 5. Capture representative screenshots for initial, active, and result/error states when those states exist.
 6. Compare observed behavior with the acceptance checks, including playfield readability and HUD obstruction.
 7. If any check fails, identify the owning subsystem, make the smallest root-cause fix, and repeat from step 3.
-8. After the feature passes, run nearby regression checks. Continue to the next accepted feature only when evidence is complete.
+8. After behavior passes, answer `UI_REQUIRED`: does the feature add or change a visible player-facing element, state, asset family, HUD surface, menu, reward, item, character, enemy, weapon, or feedback? Record the answer and reason.
+9. When `UI_REQUIRED = yes`, read `../../../docs/VISUAL_DESIGN_SYSTEM.md`. Add the missing family specification before asset work, then generate or design the required elements in that family. Normalize sprites and icons to the documented canvas, anchor, scale, outline, palette, lighting, and safe-area rules.
+10. Replace temporary visuals with the approved assets, then repeat type/build checks, browser playtest, current-code screenshots, visual comparison, repair, and regression. A functional placeholder is not a finished visible feature.
+11. After the feature passes, run nearby regression checks. Continue to the next accepted feature only when evidence is complete.
 
 ## Evidence gate
 
@@ -26,6 +29,7 @@ Do not call a visual game feature complete without:
 - a real browser playtest of its main action;
 - screenshot evidence from the current implementation;
 - a concise expected-versus-observed assessment;
+- a recorded `UI_REQUIRED` decision and, when applicable, evidence that the asset family follows `docs/VISUAL_DESIGN_SYSTEM.md`;
 - regression verification after the last fix.
 
 Use `artifacts/agent-loop/<task>/iteration-<nn>/` for local screenshots and notes. These artifacts are verification evidence, not product source.
@@ -37,3 +41,4 @@ Use `artifacts/agent-loop/<task>/iteration-<nn>/` for local screenshots and note
 - Ask before a design change, new dependency with material impact, destructive action, external mutation, or scope expansion.
 - Stop and report the blocker after the same unresolved condition survives three evidence-based repair passes.
 - When browser verification is unavailable, report the missing evidence; do not substitute code inspection for a visual pass.
+- Do not generate isolated visible assets without first defining their shared family rules. Generated images must be copied into the workspace, normalized, inspected at in-game scale, and consumed by the current implementation.

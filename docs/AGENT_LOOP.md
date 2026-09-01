@@ -1,8 +1,8 @@
 # 游戏开发 Agent Loop
 
 > 状态：项目强制开发流程  
-> 版本：v1.0  
-> 更新日期：2026-08-31
+> 版本：v1.1  
+> 更新日期：2026-09-01
 
 ## 1. 目标
 
@@ -34,7 +34,13 @@ PLAYTEST ─────失败──────┤
 CAPTURE                 │
   ↓                     │
 EVALUATE ─────失败──────┘
-  ↓通过
+  ↓行为通过
+UI_REQUIRED? ──否──→ REGRESSION
+  ↓是
+VISUAL_SPEC → ASSET_CREATE → NORMALIZE → INTEGRATE
+  ↓
+STATIC_VERIFY → RUN → PLAYTEST → CAPTURE → EVALUATE
+  ↓视觉通过
 REGRESSION
   ↓通过
 COMPLETE / NEXT ACCEPTED FEATURE
@@ -129,7 +135,29 @@ artifacts/agent-loop/<task-slug>/iteration-<nn>/
 
 失败项必须包含：玩家看到什么、如何复现、为什么重要、最可能属于哪个子系统。
 
-## 10. FIX：最小根因修复
+## 10. UI_REQUIRED：玩家可见功能必须经过美化判断
+
+功能规则通过后必须记录：
+
+```text
+UI_REQUIRED = yes / no
+理由 = 玩家会看到哪些新增或变化的元素
+涉及元素族 = 角色 / 敌人 / 武器 / 道具 / 掉落物 / HUD / 菜单 / 场景 / 特效
+```
+
+以下情况默认是 `yes`：新增或修改角色、敌人、武器、道具、掉落物、状态图标、HUD、菜单、奖励、危险提示、场景或玩家反馈。
+
+`yes` 时必须先读取 `docs/VISUAL_DESIGN_SYSTEM.md`。如果没有对应元素族规范，先定义用途、源画布、运行时尺寸、透明边距、锚点、轮廓、色板、光源、状态变体和命名，再开始生成或绘制。功能占位图只能用于规则验证，不能跨过完成门。
+
+资产完成后必须：
+
+1. 保存到项目资源目录，不引用临时位置。
+2. 统一裁切、透明度、缩放和锚点。
+3. 替换运行时占位视觉。
+4. 在真实游戏尺寸下检查，而不是只看原始大图。
+5. 重新执行静态验证、浏览器试玩、截图对比和回归。
+
+## 11. FIX：最小根因修复
 
 - 根据证据定位根因，不针对单张截图做表面补丁。
 - 搜索相关调用路径后在共同入口修复。
@@ -137,7 +165,7 @@ artifacts/agent-loop/<task-slug>/iteration-<nn>/
 - 每次修复后重新执行 STATIC_VERIFY、RUN、PLAYTEST、CAPTURE 和 EVALUATE。
 - 迭代目录按 `iteration-01`、`iteration-02` 递增，保留最终通过证据。
 
-## 11. REGRESSION：完成前回归
+## 12. REGRESSION：完成前回归
 
 最后一次修复通过后验证：
 
@@ -148,7 +176,7 @@ artifacts/agent-loop/<task-slug>/iteration-<nn>/
 
 视觉或运行时代码在最后截图后再次改变，原截图失效，必须重新验证。
 
-## 12. 完成与继续条件
+## 13. 完成与继续条件
 
 只有同时满足以下条件才可以标记完成：
 
@@ -156,12 +184,13 @@ artifacts/agent-loop/<task-slug>/iteration-<nn>/
 - 自动检查通过。
 - 真实浏览器路径已操作。
 - 当前代码状态有截图证据。
+- 已记录 `UI_REQUIRED`，需要 UI 时已按统一元素族规范替换占位视觉。
 - 最后一次修复后完成回归。
 - 未通过修改 GDD 来迁就实现。
 
 完成当前功能后，只能继续用户已经批准的下一项功能或里程碑。Agent Loop 提供持续执行能力，但不扩大任务授权。
 
-## 13. 停止条件
+## 14. 停止条件
 
 遇到以下情况必须停止并请求用户处理：
 
@@ -172,7 +201,7 @@ artifacts/agent-loop/<task-slug>/iteration-<nn>/
 - 浏览器或运行环境无法提供必需验证证据。
 - 同一阻塞条件经过三轮有证据的修复仍未解决。
 
-## 14. 完成报告格式
+## 15. 完成报告格式
 
 每个功能完成时至少报告：
 
@@ -182,5 +211,5 @@ artifacts/agent-loop/<task-slug>/iteration-<nn>/
 - 浏览器实际操作了什么。
 - 截图证据路径。
 - 修复过哪些问题。
+- `UI_REQUIRED` 判断、采用的元素族规范和最终资产路径。
 - 哪些内容明确没有实现。
-
