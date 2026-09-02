@@ -41,11 +41,11 @@ export const upgrades: Record<UpgradeId, { name: string; rarity: string; descrip
   'wide-sweep': { name: '横扫千军', rarity: '稀有', description: '竹杖范围 +18，攻击速度 -5%', tag: '近战 · 天赋' },
 }
 
-export const items: Record<ItemId, { name: string; rarity: string; description: string; price: number; image: string }> = {
-  'martial-belt': { name: '武道腰带', rarity: '普通', description: '竹杖伤害 +15%', price: 18, image: 'assets/items/martial-belt.png' },
-  'wind-feather': { name: '风羽', rarity: '稀有', description: '飞叶速度 +20%，伤害 +10%', price: 32, image: 'assets/items/wind-feather.png' },
-  'iron-bracer': { name: '铁砂护腕', rarity: '普通', description: '护甲 +4，移动速度 -3%', price: 20, image: 'assets/items/iron-bracer.png' },
-  'panda-roller': { name: '熊猫滚轮', rarity: '稀有', description: '闪避结束震开敌人并造成 32 伤害', price: 38, image: 'assets/items/panda-roller.png' },
+export const items: Record<ItemId, { name: string; rarity: string; description: string; preview: string; price: number; image: string; unique?: boolean }> = {
+  'martial-belt': { name: '武道腰带', rarity: '普通', description: '近战伤害 +10%', preview: '近战伤害提高 10%', price: 18, image: 'assets/items/martial-belt.png' },
+  'wind-feather': { name: '风羽', rarity: '稀有', description: '投射物速度 +20%，远程伤害 +5%', preview: '弹速提高 20% · 远程伤害提高 5%', price: 38, image: 'assets/items/wind-feather.png' },
+  'iron-bracer': { name: '铁砂护腕', rarity: '普通', description: '护甲 +4，移动速度 -3%', preview: '护甲增加 4 · 移速降低 3%', price: 20, image: 'assets/items/iron-bracer.png' },
+  'panda-roller': { name: '熊猫滚轮', rarity: '稀有', description: '闪避结束震开敌人并造成 32 伤害', preview: '解锁闪避震击', price: 38, image: 'assets/items/panda-roller.png', unique: true },
 }
 
 export type GameState = {
@@ -65,8 +65,9 @@ export type GameState = {
   pendingUpgrade: boolean
   shopOpen: boolean
   upgradeChoices: UpgradeId[]
-  shopChoices: ItemId[]
-  purchasedShopItems: ItemId[]
+  shopChoices: Array<ItemId | null>
+  lockedShopIndex: number | null
+  shopRefreshCost: number
   ownedItems: ItemId[]
   chosenUpgrades: UpgradeId[]
   player: {
@@ -143,7 +144,8 @@ export const createGameState = (seed = 20260831, characterId: CharacterId = 'sha
   shopOpen: false,
   upgradeChoices: [],
   shopChoices: ['martial-belt', 'wind-feather', 'iron-bracer', 'panda-roller'],
-  purchasedShopItems: [],
+  lockedShopIndex: null,
+  shopRefreshCost: 4,
   ownedItems: [],
   chosenUpgrades: [],
   player: {
@@ -183,16 +185,19 @@ export const chooseUpgrade = (state: GameState, id: UpgradeId): boolean => {
   return true
 }
 
-export const buyItem = (state: GameState, id: ItemId): boolean => {
+export const buyItem = (state: GameState, index: number): boolean => {
+  const id = state.shopChoices[index]
+  if (!id) return false
   const item = items[id]
-  if (!state.shopOpen || !state.shopChoices.includes(id) || state.purchasedShopItems.includes(id) || state.player.coins < item.price) return false
+  if (!state.shopOpen || state.player.coins < item.price || (item.unique && state.ownedItems.includes(id))) return false
   state.player.coins -= item.price
-  state.purchasedShopItems.push(id)
   state.ownedItems.push(id)
-  if (id === 'martial-belt') state.player.meleeDamage += 0.15
+  state.shopChoices[index] = null
+  if (state.lockedShopIndex === index) state.lockedShopIndex = null
+  if (id === 'martial-belt') state.player.meleeDamage += 0.1
   if (id === 'wind-feather') {
     state.player.projectileSpeed *= 1.2
-    state.player.rangedDamage += 0.1
+    state.player.rangedDamage += 0.05
   }
   if (id === 'iron-bracer') {
     state.player.armor += 4
@@ -201,10 +206,43 @@ export const buyItem = (state: GameState, id: ItemId): boolean => {
   return true
 }
 
+export const refreshShop = (state: GameState): boolean => {
+  if (!state.shopOpen || state.player.coins < state.shopRefreshCost) return false
+  state.player.coins -= state.shopRefreshCost
+  state.shopRefreshCost += 2
+  const pool = Object.keys(items) as ItemId[]
+  state.shopChoices = state.shopChoices.map((id, index) => index === state.lockedShopIndex ? id : pool[Math.floor(random(state) * pool.length)])
+  return true
+}
+
+export const toggleShopLock = (state: GameState, index: number): boolean => {
+  if (!state.shopOpen || !state.shopChoices[index]) return false
+  state.lockedShopIndex = state.lockedShopIndex === index ? null : index
+  return true
+}
+
+export const sellItem = (state: GameState, index: number): boolean => {
+  const id = state.ownedItems[index]
+  if (!state.shopOpen || !id) return false
+  state.ownedItems.splice(index, 1)
+  state.player.coins += Math.floor(items[id].price * 0.6)
+  if (id === 'martial-belt') state.player.meleeDamage -= 0.1
+  if (id === 'wind-feather') {
+    state.player.projectileSpeed /= 1.2
+    state.player.rangedDamage -= 0.05
+  }
+  if (id === 'iron-bracer') {
+    state.player.armor -= 4
+    state.player.moveSpeed += 0.03
+  }
+  return true
+}
+
 export const continueWave = (state: GameState): boolean => {
   if (!state.shopOpen) return false
   state.shopOpen = false
-  state.purchasedShopItems = []
+  state.shopRefreshCost = 4
+  state.shopChoices = state.shopChoices.map((id, index) => index === state.lockedShopIndex ? id : null)
   state.wave += 1
   state.waveTime = 0
   state.enemies = []
@@ -490,6 +528,8 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
     }
     state.pendingUpgrade = true
   } else if (state.waveTime >= state.waveDuration) {
+    const pool = Object.keys(items) as ItemId[]
+    state.shopChoices = state.shopChoices.map((id, index) => index === state.lockedShopIndex ? id : pool[Math.floor(random(state) * pool.length)])
     state.shopOpen = true
   }
 

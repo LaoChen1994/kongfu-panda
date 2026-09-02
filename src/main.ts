@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import './style.css'
-import { buyItem, characters, chooseUpgrade, continueWave, createGameState, items, stepGame, upgrades, type CharacterId } from './simulation.js'
+import { buyItem, characters, chooseUpgrade, continueWave, createGameState, items, refreshShop, sellItem, stepGame, toggleShopLock, upgrades, type CharacterId } from './simulation.js'
 
 const assetRoot = `${import.meta.env.BASE_URL}assets/`
 let selectedCharacter: CharacterId = 'shanlan'
@@ -89,8 +89,7 @@ class BattleScene extends Phaser.Scene {
         if (choice) chooseUpgrade(this.state, choice)
       }
       if (this.state.shopOpen && ['Digit1', 'Digit2', 'Digit3', 'Digit4'].includes(event.code)) {
-        const choice = this.state.shopChoices[Number(event.code.slice(-1)) - 1]
-        if (choice) buyItem(this.state, choice)
+        buyItem(this.state, Number(event.code.slice(-1)) - 1)
       }
       if (event.code === 'Enter' && this.state.shopOpen) continueWave(this.state)
       if (event.code === 'Escape' && !this.state.gameOver && !this.state.pendingUpgrade && !this.state.shopOpen) {
@@ -130,14 +129,21 @@ class BattleScene extends Phaser.Scene {
     const kicker = document.querySelector<HTMLElement>('#choice-kicker')
     const copy = document.querySelector<HTMLElement>('#choice-copy')
     const continueButton = document.querySelector<HTMLButtonElement>('#continue-wave')
-    if (!overlay || !cards || !title || !kicker || !copy || !continueButton) return
+    const shopLayout = document.querySelector<HTMLElement>('#shop-layout')
+    const shopCards = document.querySelector<HTMLElement>('#shop-cards')
+    const shopInventory = document.querySelector<HTMLElement>('#shop-inventory')
+    const shopStats = document.querySelector<HTMLElement>('#shop-stats')
+    const refreshButton = document.querySelector<HTMLButtonElement>('#refresh-shop')
+    if (!overlay || !cards || !title || !kicker || !copy || !continueButton || !shopLayout || !shopCards || !shopInventory || !shopStats || !refreshButton) return
 
-    const mode = this.state.pendingUpgrade ? `upgrade-${this.state.player.level}` : this.state.shopOpen ? `shop-${this.state.wave}-${this.state.player.coins}-${this.state.purchasedShopItems.join('-')}` : ''
+    const mode = this.state.pendingUpgrade ? `upgrade-${this.state.player.level}` : this.state.shopOpen ? `shop-${this.state.wave}-${this.state.player.coins}-${this.state.shopChoices.join('-')}-${this.state.lockedShopIndex}-${this.state.ownedItems.join('-')}` : ''
     overlay.hidden = !mode
     if (!mode || mode === this.overlayMode) return
     this.overlayMode = mode
     cards.innerHTML = ''
     if (this.state.pendingUpgrade) {
+      cards.hidden = false
+      shopLayout.hidden = true
       kicker.textContent = `境界突破 · Lv.${this.state.player.level}`
       title.textContent = '选择一门强化'
       copy.textContent = '战斗已暂停 · 让这一局形成自己的招式'
@@ -154,22 +160,74 @@ class BattleScene extends Phaser.Scene {
       })
       this.playTone(520, 0.18, 0.045)
     } else {
+      cards.hidden = true
+      shopLayout.hidden = false
       kicker.textContent = `竹林补给 · 第 ${this.state.wave} 波结束`
-      title.textContent = '用战利品强化构筑'
-      copy.textContent = `现有 ${this.state.player.coins} 铜钱 · 可购买多件，整备后继续`
-      cards.style.gridTemplateColumns = 'repeat(4, 1fr)'
+      title.textContent = '整备下一波构筑'
+      copy.textContent = `现有 ${this.state.player.coins} 铜钱 · 商品可重复购买，唯一宝物除外`
       continueButton.hidden = false
       continueButton.onclick = () => continueWave(this.state)
+      refreshButton.textContent = `刷新商品 · ${this.state.shopRefreshCost} 铜钱`
+      refreshButton.disabled = this.state.player.coins < this.state.shopRefreshCost
+      refreshButton.onclick = () => {
+        if (refreshShop(this.state)) this.overlayMode = ''
+      }
+      const character = characters[this.state.characterId]
+      shopStats.innerHTML = `
+        <div class="shop-character"><img src="${import.meta.env.BASE_URL}${character.portrait}" alt=""><strong>${character.name}</strong><span>${character.role}</span></div>
+        <dl>
+          <div><dt>生命</dt><dd>${Math.ceil(this.state.player.hp)} / ${this.state.player.maxHp}</dd></div>
+          <div><dt>护甲</dt><dd>${this.state.player.armor}</dd></div>
+          <div><dt>全部伤害</dt><dd>+${Math.round((this.state.player.damage - 1) * 100)}%</dd></div>
+          <div><dt>近战伤害</dt><dd>${Math.round(this.state.player.meleeDamage * 100)}%</dd></div>
+          <div><dt>远程伤害</dt><dd>${Math.round(this.state.player.rangedDamage * 100)}%</dd></div>
+          <div><dt>移动速度</dt><dd>${Math.round(this.state.player.moveSpeed * 100)}%</dd></div>
+        </dl>`
+      shopCards.innerHTML = ''
       this.state.shopChoices.forEach((id, index) => {
+        const article = document.createElement('article')
+        article.className = 'shop-card'
+        if (!id) {
+          article.classList.add('empty')
+          article.innerHTML = '<span>商品已购入</span><small>刷新后补充</small>'
+          shopCards.append(article)
+          return
+        }
         const item = items[id]
-        const purchased = this.state.purchasedShopItems.includes(id)
+        const uniqueOwned = Boolean(item.unique && this.state.ownedItems.includes(id))
+        const buyButton = document.createElement('button')
+        const lockButton = document.createElement('button')
+        const locked = this.state.lockedShopIndex === index
+        article.dataset.rarity = item.rarity
+        article.innerHTML = `<kbd>${index + 1}</kbd><img src="${import.meta.env.BASE_URL}${item.image}" alt=""><small>${item.rarity} · 宝物</small><strong>${item.name}</strong><span>${item.description}</span><em>${item.preview}</em>`
+        buyButton.type = 'button'
+        buyButton.className = 'shop-buy'
+        buyButton.disabled = uniqueOwned || this.state.player.coins < item.price
+        buyButton.textContent = uniqueOwned ? '已拥有' : this.state.player.coins < item.price ? `缺少 ${item.price - this.state.player.coins} 铜钱` : `${item.price} 铜钱 · 购买`
+        buyButton.addEventListener('click', () => {
+          if (buyItem(this.state, index)) this.overlayMode = ''
+        })
+        lockButton.type = 'button'
+        lockButton.className = `shop-lock${locked ? ' locked' : ''}`
+        lockButton.textContent = locked ? '已锁定' : '锁定'
+        lockButton.setAttribute('aria-pressed', String(locked))
+        lockButton.addEventListener('click', () => {
+          if (toggleShopLock(this.state, index)) this.overlayMode = ''
+        })
+        article.append(buyButton, lockButton)
+        shopCards.append(article)
+      })
+      shopInventory.innerHTML = ''
+      if (this.state.ownedItems.length === 0) shopInventory.innerHTML = '<p>尚未获得宝物</p>'
+      this.state.ownedItems.forEach((id, index) => {
+        const item = items[id]
         const button = document.createElement('button')
-        button.className = 'choice-card'
         button.type = 'button'
-        button.disabled = purchased || this.state.player.coins < item.price
-        button.innerHTML = `<kbd>${index + 1}</kbd><img src="${import.meta.env.BASE_URL}${item.image}" alt=""><small>${item.rarity} · 宝物</small><strong>${item.name}</strong><span>${item.description}</span><em>${purchased ? '已购入' : `${item.price} 铜钱`}</em>`
-        button.addEventListener('click', () => buyItem(this.state, id))
-        cards.append(button)
+        button.innerHTML = `<img src="${import.meta.env.BASE_URL}${item.image}" alt=""><span><strong>${item.name}</strong><small>出售 +${Math.floor(item.price * 0.6)} 铜钱</small></span>`
+        button.addEventListener('click', () => {
+          if (sellItem(this.state, index)) this.overlayMode = ''
+        })
+        shopInventory.append(button)
       })
     }
   }

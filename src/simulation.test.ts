@@ -1,4 +1,4 @@
-import { buyItem, chooseUpgrade, continueWave, createGameState, stepGame } from './simulation.js'
+import { buyItem, chooseUpgrade, continueWave, createGameState, refreshShop, sellItem, stepGame, toggleShopLock } from './simulation.js'
 
 const movement = createGameState(1)
 stepGame(movement, { x: 1, y: 0, dash: false }, 0.05)
@@ -23,13 +23,35 @@ if (!chooseUpgrade(progression, 'leaf-volley') || progression.player.projectileC
 progression.shopOpen = true
 progression.player.coins = 100
 progression.enemies.push({ id: 99, kind: 'chaser', x: 100, y: 100, hp: 20, maxHp: 20, cooldown: 1, dashTime: 0, vx: 0, vy: 0 })
-if (!buyItem(progression, 'iron-bracer') || progression.player.armor !== 4) throw new Error('道具购买应立即改变属性')
-progression.purchasedShopItems = []
+if (!buyItem(progression, 2) || progression.player.armor !== 4) throw new Error('道具购买应立即改变属性')
 const rangedBeforeBelt = progression.player.rangedDamage
 const meleeBeforeBelt = progression.player.meleeDamage
-if (!buyItem(progression, 'martial-belt') || Math.abs(progression.player.meleeDamage - meleeBeforeBelt - 0.15) > 0.0001 || progression.player.rangedDamage !== rangedBeforeBelt) throw new Error('武道腰带只能强化近战伤害')
+if (!buyItem(progression, 0) || Math.abs(progression.player.meleeDamage - meleeBeforeBelt - 0.1) > 0.0001 || progression.player.rangedDamage !== rangedBeforeBelt) throw new Error('武道腰带只能强化近战伤害')
 if (!continueWave(progression) || progression.wave !== 2) throw new Error('补给后应进入下一波')
 if (progression.enemies.length !== 0) throw new Error('新波次不得保留上一波敌人')
+
+const shopCheck = createGameState(4)
+shopCheck.shopOpen = true
+shopCheck.player.coins = 100
+if (!toggleShopLock(shopCheck, 1) || !refreshShop(shopCheck)) throw new Error('商城应允许锁定商品后刷新')
+if (shopCheck.shopChoices[1] !== 'wind-feather' || shopCheck.player.coins !== 96 || shopCheck.shopRefreshCost !== 6) throw new Error('刷新应保留锁定商品并让费用从 4 增加到 6')
+if (!buyItem(shopCheck, 1) || shopCheck.lockedShopIndex !== null || shopCheck.shopChoices[1] !== null) throw new Error('购买锁定商品后应清空商品槽和锁定状态')
+const coinsBeforeSale = shopCheck.player.coins
+const projectileSpeedBeforeSale = shopCheck.player.projectileSpeed
+if (!sellItem(shopCheck, 0) || shopCheck.player.coins !== coinsBeforeSale + 22 || Math.abs(shopCheck.player.projectileSpeed - projectileSpeedBeforeSale / 1.2) > 0.0001) throw new Error('出售风羽应返还 60% 基准价并撤销属性')
+shopCheck.shopChoices = ['panda-roller', 'martial-belt', 'martial-belt', 'iron-bracer']
+shopCheck.ownedItems.push('panda-roller')
+if (buyItem(shopCheck, 0)) throw new Error('唯一宝物已拥有时不得重复购买')
+if (!buyItem(shopCheck, 1) || !buyItem(shopCheck, 2)) throw new Error('普通数值宝物应允许重复购买')
+
+const lockCarryCheck = createGameState(6)
+lockCarryCheck.shopOpen = true
+lockCarryCheck.player.hp = 50
+if (!toggleShopLock(lockCarryCheck, 3) || !continueWave(lockCarryCheck)) throw new Error('锁定商品后应能进入下一波')
+if (lockCarryCheck.shopChoices[3] !== 'panda-roller' || lockCarryCheck.shopChoices.slice(0, 3).some(Boolean) || lockCarryCheck.shopRefreshCost !== 4) throw new Error('进入下一波时只应保留锁定商品并重置刷新费用')
+lockCarryCheck.waveTime = lockCarryCheck.waveDuration
+stepGame(lockCarryCheck, { x: 0, y: 0, dash: false }, 0.05)
+if (!lockCarryCheck.shopOpen || lockCarryCheck.shopChoices[3] !== 'panda-roller' || lockCarryCheck.shopChoices.slice(0, 3).some((id) => !id)) throw new Error('下一次商城应保留锁定商品并补齐其他商品')
 
 const armorCheck = createGameState(5)
 armorCheck.spawnTimer = 99

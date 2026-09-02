@@ -70,6 +70,23 @@
             <h2 id="choice-title">选择一门强化</h2>
             <p id="choice-copy" class="choice-copy">战斗已暂停，选择会立即改变本局构筑</p>
             <div id="choice-cards" class="choice-cards"></div>
+            <div id="shop-layout" class="shop-layout" hidden>
+              <aside class="shop-column shop-summary" aria-label="当前属性">
+                <h3>侠客属性</h3>
+                <div id="shop-stats"></div>
+              </aside>
+              <section class="shop-market" aria-label="补给商品">
+                <div id="shop-cards" class="shop-cards"></div>
+              </section>
+              <aside class="shop-column shop-inventory" aria-label="宝物栏">
+                <h3>宝物栏 <small>点击出售</small></h3>
+                <div id="shop-inventory"></div>
+              </aside>
+              <div class="shop-actions">
+                <button id="refresh-shop" type="button">刷新商品 · 4 铜钱</button>
+                <span>锁定最多 1 件 · 出售返还 60%</span>
+              </div>
+            </div>
             <button id="continue-wave" class="continue-wave" type="button" hidden>整备完毕 · 进入下一波</button>
           </div>
         </div>
