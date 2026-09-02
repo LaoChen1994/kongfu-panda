@@ -292,7 +292,9 @@ class BattleScene extends Phaser.Scene {
       const attacking = enemy.kind === 'chaser' ? Math.hypot(this.state.player.x - enemy.x, this.state.player.y - enemy.y) < 42 : enemy.kind === 'dasher' ? enemy.dashTime > 0 : enemy.cooldown > 1.45
       sprite.play(`${family}-${attacking ? 'attack' : 'move'}`, true)
       sprite.setFlipX(this.state.player.x < enemy.x)
-      const actionScale = enemy.kind === 'dasher' && enemy.dashTime > 0 ? 1.12 : 1
+      const actionScale = (enemy.kind === 'dasher' && enemy.dashTime > 0 ? 1.12 : 1) * (
+        attacking ? enemy.kind === 'chaser' ? 0.9 : enemy.kind === 'dasher' ? 0.625 : 0.51 : 1
+      )
       sprite.setPosition(enemy.x, enemy.y).setDepth(enemy.y).setScale(size / 96 * actionScale * (flashing ? 1.06 : 1), size / 96 * actionScale * (flashing ? 0.92 : 1))
       sprite.setBlendMode(flashing ? Phaser.BlendModes.ADD : Phaser.BlendModes.NORMAL)
       if (enemy.hp < enemy.maxHp) {
@@ -317,7 +319,8 @@ class BattleScene extends Phaser.Scene {
       this.playerSprite.setFlipX(moveX === 0 ? this.state.player.facingX < 0 : moveX < 0)
     }
     const playerHurt = this.state.player.hitCooldown > 0
-    this.playerSprite.setPosition(x, y).setDepth(y).setRotation(playerAttacking ? 0 : moveY * 0.035).setScale(68 / 96 * (playerHurt ? 1.06 : 1), 68 / 96 * (playerHurt ? 0.92 : 1)).setAlpha(playerHurt ? 0.55 + Math.sin(this.state.time * 50) * 0.25 : 1)
+    const playerScale = 68 / 96 * (playerAttacking ? 0.56 : 1)
+    this.playerSprite.setPosition(x, y).setDepth(y).setRotation(playerAttacking ? 0 : moveY * 0.035).setScale(playerScale * (playerHurt ? 1.06 : 1), playerScale * (playerHurt ? 0.92 : 1)).setAlpha(playerHurt ? 0.55 + Math.sin(this.state.time * 50) * 0.25 : 1)
 
     const healthFill = document.querySelector<HTMLElement>('#health-fill')
     const xpFill = document.querySelector<HTMLElement>('#xp-fill')
