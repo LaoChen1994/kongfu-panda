@@ -27,6 +27,8 @@ class BattleScene extends Phaser.Scene {
   private actorGraphics!: Phaser.GameObjects.Graphics
   private playerSprite!: Phaser.GameObjects.Sprite
   private enemySprites = new Map<number, Phaser.GameObjects.Sprite>()
+  private bossHazardSprites = new Map<number, Phaser.GameObjects.Image>()
+  private shieldAura!: Phaser.GameObjects.Image
   private leafSprites = new Map<number, Phaser.GameObjects.Image>()
   private effectTexts = new Map<number, Phaser.GameObjects.Text>()
   private seenEffects = new Set<number>()
@@ -44,6 +46,9 @@ class BattleScene extends Phaser.Scene {
     this.load.image('bamboo-ground', `${assetRoot}environments/bamboo-ground.png`)
     this.load.image('leaf-dart', `${assetRoot}weapons/leaf-dart.png`)
     this.load.image('corrupted-bamboo-giant', `${assetRoot}enemies/corrupted-bamboo-giant.png`)
+    this.load.image('corrupted-root-warning', `${assetRoot}effects/corrupted-root-warning.png`)
+    this.load.image('corrupted-root-burst', `${assetRoot}effects/corrupted-root-burst.png`)
+    this.load.image('ink-shield-aura', `${assetRoot}effects/ink-shield-aura.png`)
     for (const animation of animationSets) {
       for (let index = 1; index <= animation.frames; index += 1) {
         const frame = String(index).padStart(2, '0')
@@ -80,6 +85,7 @@ class BattleScene extends Phaser.Scene {
     }
     const playerAnimation = characters[this.state.characterId].animation
     this.playerSprite = this.add.sprite(this.state.player.x, this.state.player.y, `${playerAnimation}-idle-01`).setOrigin(0.5, 1).setScale(68 / 96).play(`${playerAnimation}-idle`)
+    this.shieldAura = this.add.image(this.state.player.x, this.state.player.y - 26, 'ink-shield-aura').setDisplaySize(104, 104).setVisible(false)
     this.cameras.main.setBounds(0, 0, 1600, 1000)
     const keyboard = this.input.keyboard
     if (!keyboard) throw new Error('浏览器不支持键盘输入')
@@ -267,29 +273,40 @@ class BattleScene extends Phaser.Scene {
       graphics.fillStyle(0x4a286d, 0.28).fillRect(0, 0, 1600, inset + 75).fillRect(0, 950 - inset, 1600, inset + 50).fillRect(0, 0, inset + 50, 1000).fillRect(1550 - inset, 0, inset + 50, 1000)
       graphics.lineStyle(8, 0x9e4f91, 0.72).strokeRect(50 + inset, 75 + inset, 1500 - inset * 2, 875 - inset * 2)
     }
+    const liveHazardIds = new Set<number>()
     for (const hazard of this.state.bossHazards) {
       if (hazard.kind === 'root') {
+        liveHazardIds.add(hazard.id)
+        let sprite = this.bossHazardSprites.get(hazard.id)
+        if (!sprite) {
+          sprite = this.add.image(hazard.x, hazard.y, 'corrupted-root-warning').setOrigin(0.5).setRotation((hazard.id % 12) * Math.PI / 6)
+          this.bossHazardSprites.set(hazard.id, sprite)
+        }
         if (!hazard.triggered) {
-          const pulse = 1 + Math.sin(this.state.time * 18 + hazard.id) * 0.08
-          graphics.fillStyle(0xd9554d, 0.16).fillCircle(hazard.x, hazard.y, hazard.radius * pulse)
-          graphics.lineStyle(5, 0xd9554d, 0.9).strokeCircle(hazard.x, hazard.y, hazard.radius * pulse)
-          graphics.lineStyle(2, 0x202622, 0.8).lineBetween(hazard.x - 28, hazard.y - 15, hazard.x + 25, hazard.y + 18).lineBetween(hazard.x - 18, hazard.y + 28, hazard.x + 12, hazard.y - 30)
+          const progress = 1 - hazard.life / hazard.duration
+          const size = hazard.radius * (2.9 + progress * 0.45)
+          sprite.setTexture('corrupted-root-warning').setPosition(hazard.x, hazard.y).setDisplaySize(size, size).setDepth(hazard.y - 80).setAlpha(0.68 + progress * 0.32)
         } else {
           const alpha = Math.max(0, (hazard.life + 0.28) / 0.28)
-          graphics.fillStyle(0x5b3524, alpha).beginPath().moveTo(hazard.x - 30, hazard.y + 35).lineTo(hazard.x - 8, hazard.y - 62).lineTo(hazard.x + 5, hazard.y - 24).lineTo(hazard.x + 28, hazard.y - 50).lineTo(hazard.x + 32, hazard.y + 35).closePath().fillPath()
-          graphics.lineStyle(5, 0xd9554d, alpha * 0.8).lineBetween(hazard.x - 8, hazard.y + 20, hazard.x + 5, hazard.y - 24)
+          sprite.setTexture('corrupted-root-burst').setPosition(hazard.x, hazard.y + 12).setDisplaySize(hazard.radius * 2.8, hazard.radius * 2.8).setDepth(hazard.y + 2).setAlpha(alpha * 0.9)
         }
       } else if (!hazard.triggered) {
         const progress = 1 - hazard.life / hazard.duration
-        graphics.fillStyle(0x7651a8, 0.08 + progress * 0.08).fillCircle(hazard.x, hazard.y, hazard.radius)
-        graphics.lineStyle(10, 0xd9554d, 0.38 + progress * 0.52).strokeCircle(hazard.x, hazard.y, hazard.radius)
-        graphics.lineStyle(3, 0xf3e6c8, 0.55).strokeCircle(hazard.x, hazard.y, hazard.radius - 9)
+        const rotation = this.state.time * 0.15
+        graphics.fillStyle(0x4a286d, 0.05 + progress * 0.08).fillCircle(hazard.x, hazard.y, hazard.radius - 8)
+        for (let index = 0; index < 3; index += 1) {
+          const start = rotation + index * Math.PI * 2 / 3
+          graphics.lineStyle(12 - index * 2, index === 1 ? 0xd9554d : 0x7651a8, 0.48 + progress * 0.38).beginPath().arc(hazard.x, hazard.y, hazard.radius - index * 7, start, start + 1.28).strokePath()
+        }
       } else {
         const alpha = Math.max(0, (hazard.life + 0.28) / 0.28)
-        graphics.lineStyle(18, 0x7651a8, alpha * 0.7).strokeCircle(hazard.x, hazard.y, hazard.radius)
-        graphics.lineStyle(5, 0xd9554d, alpha).strokeCircle(hazard.x, hazard.y, hazard.radius + 12)
+        for (let index = 0; index < 9; index += 1) {
+          const angle = index * Math.PI * 2 / 9 + hazard.id
+          graphics.lineStyle(index % 3 === 0 ? 8 : 4, index % 3 === 0 ? 0xd9554d : 0x7651a8, alpha).lineBetween(hazard.x + Math.cos(angle) * (hazard.radius - 12), hazard.y + Math.sin(angle) * (hazard.radius - 12), hazard.x + Math.cos(angle) * (hazard.radius + 28), hazard.y + Math.sin(angle) * (hazard.radius + 28))
+        }
       }
     }
+    for (const [id, sprite] of this.bossHazardSprites) if (!liveHazardIds.has(id)) { sprite.destroy(); this.bossHazardSprites.delete(id) }
 
     for (const drop of this.state.drops) {
       const color = drop.kind === 'xp' ? 0xb8ed72 : drop.kind === 'coin' ? 0xf0b844 : 0x63d889
@@ -303,10 +320,9 @@ class BattleScene extends Phaser.Scene {
       if (attack.kind === 'shield') {
         const impactX = attack.x + Math.cos(attack.angle) * attack.radius
         const impactY = attack.y + Math.sin(attack.angle) * attack.radius
-        graphics.fillStyle(0x53b8b2, alpha * 0.24).beginPath().moveTo(attack.x, attack.y).arc(attack.x, attack.y, attack.radius, start, end).closePath().fillPath()
-        graphics.lineStyle(10, attack.critical ? 0xf3e6c8 : 0x8ce8ec, alpha).beginPath().arc(attack.x, attack.y, attack.radius, start, end).strokePath()
-        graphics.lineStyle(4, 0xd5ffff, alpha * 0.9).beginPath().arc(attack.x, attack.y, attack.radius * 0.72, start + 0.08, end - 0.08).strokePath()
-        graphics.fillStyle(0xf3e6c8, alpha).fillCircle(impactX, impactY, attack.critical ? 9 : 6)
+        graphics.lineStyle(12, 0x286d72, alpha * 0.78).beginPath().arc(attack.x, attack.y, attack.radius * 0.82, start + 0.16, end - 0.16).strokePath()
+        graphics.lineStyle(6, attack.critical ? 0xf3e6c8 : 0x72d4cf, alpha).beginPath().arc(attack.x, attack.y, attack.radius, start, end).strokePath()
+        graphics.fillStyle(0xf3e6c8, alpha * 0.82).fillTriangle(impactX + Math.cos(attack.angle) * 12, impactY + Math.sin(attack.angle) * 12, impactX + Math.cos(attack.angle + 2.35) * 8, impactY + Math.sin(attack.angle + 2.35) * 8, impactX + Math.cos(attack.angle - 2.35) * 8, impactY + Math.sin(attack.angle - 2.35) * 8)
         for (let index = -1; index <= 1; index += 1) {
           const angle = attack.angle + index * 0.42
           graphics.lineStyle(4, index === 0 ? 0xf3e6c8 : 0x53b8b2, alpha * 0.9).lineBetween(impactX - Math.cos(angle) * 8, impactY - Math.sin(angle) * 8, impactX + Math.cos(angle) * 18, impactY + Math.sin(angle) * 18)
@@ -333,8 +349,11 @@ class BattleScene extends Phaser.Scene {
       }
       if (effect.kind === 'dash-burst') graphics.lineStyle(8, 0x9bcb66, alpha).strokeCircle(effect.x, effect.y, 118 * (1 - effect.life / 0.35))
       if (effect.kind === 'shield-break') {
-        graphics.fillStyle(0x66d6df, alpha * 0.18).fillCircle(effect.x, effect.y, 110 * (1 - effect.life / 0.42))
-        graphics.lineStyle(9, 0x8ce8ec, alpha).strokeCircle(effect.x, effect.y, 110 * (1 - effect.life / 0.42))
+        const distance = 35 + 82 * (1 - effect.life / 0.42)
+        for (let index = 0; index < 10; index += 1) {
+          const angle = index * Math.PI * 0.2 + 0.18
+          graphics.fillStyle(index % 3 === 0 ? 0xf3e6c8 : 0x53b8b2, alpha).fillTriangle(effect.x + Math.cos(angle) * distance, effect.y + Math.sin(angle) * distance, effect.x + Math.cos(angle + 0.1) * (distance - 15), effect.y + Math.sin(angle + 0.1) * (distance - 15), effect.x + Math.cos(angle - 0.12) * (distance - 8), effect.y + Math.sin(angle - 0.12) * (distance - 8))
+        }
       }
       if (effect.kind === 'enemy-shot') {
         const progress = 1 - effect.life / 0.24
@@ -470,10 +489,9 @@ class BattleScene extends Phaser.Scene {
 
     const { x, y, dashTime } = this.state.player
     if (dashTime > 0) graphics.fillStyle(0xd4ffb8, 0.22).fillCircle(x, y, 38)
-    if (this.state.player.shield > 0) {
-      graphics.fillStyle(0x66d6df, 0.1).fillCircle(x, y - 27, 43)
-      graphics.lineStyle(3, 0x8ce8ec, 0.65 + Math.sin(this.state.time * 4) * 0.15).strokeCircle(x, y - 27, 43)
-    }
+    const shieldRatio = this.state.player.shieldMax > 0 ? this.state.player.shield / this.state.player.shieldMax : 0
+    const shieldPulse = 1 + Math.sin(this.state.time * 2.3) * 0.018
+    this.shieldAura.setPosition(x, y - 10).setDepth(y + 1).setVisible(shieldRatio > 0).setAlpha(0.1 + shieldRatio * 0.09 + Math.sin(this.state.time * 4) * 0.018).setDisplaySize(102 * shieldPulse, 72 * shieldPulse)
     const playerAnimation = characters[this.state.characterId].animation
     const latestAttack = this.state.attacks.at(-1)
     if (latestAttack && latestAttack.id > this.lastAttackId) {
