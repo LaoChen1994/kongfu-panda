@@ -1,12 +1,19 @@
 import Phaser from 'phaser'
 import './style.css'
-import { buyItem, chooseUpgrade, continueWave, createGameState, items, stepGame, upgrades } from './simulation.js'
+import { buyItem, characters, chooseUpgrade, continueWave, createGameState, items, stepGame, upgrades, type CharacterId } from './simulation.js'
 
 const assetRoot = `${import.meta.env.BASE_URL}assets/`
+let selectedCharacter: CharacterId = 'shanlan'
 const animationSets = [
   { key: 'panda-idle', path: 'panda-wanderer/idle', frames: 6, frameRate: 7, repeat: -1 },
   { key: 'panda-run', path: 'panda-wanderer/run', frames: 8, frameRate: 13, repeat: -1 },
   { key: 'panda-attack', path: 'panda-wanderer/attack', frames: 6, frameRate: 22, repeat: 0 },
+  { key: 'qingtuan-idle', path: 'qingtuan/idle', frames: 6, frameRate: 7, repeat: -1 },
+  { key: 'qingtuan-run', path: 'qingtuan/run', frames: 8, frameRate: 13, repeat: -1 },
+  { key: 'qingtuan-attack', path: 'qingtuan/attack', frames: 6, frameRate: 20, repeat: 0 },
+  { key: 'shimo-idle', path: 'shimo/idle', frames: 6, frameRate: 6, repeat: -1 },
+  { key: 'shimo-run', path: 'shimo/run', frames: 8, frameRate: 11, repeat: -1 },
+  { key: 'shimo-attack', path: 'shimo/attack', frames: 6, frameRate: 18, repeat: 0 },
   { key: 'redfang-chaser-move', path: 'redfang-chaser/move', frames: 8, frameRate: 12, repeat: -1 },
   { key: 'redfang-chaser-attack', path: 'redfang-chaser/attack', frames: 6, frameRate: 18, repeat: 0 },
   { key: 'violet-horn-dasher-move', path: 'violet-horn-dasher/move', frames: 8, frameRate: 10, repeat: -1 },
@@ -16,7 +23,7 @@ const animationSets = [
 ]
 
 class BattleScene extends Phaser.Scene {
-  private state = createGameState()
+  private state = createGameState(20260831, selectedCharacter)
   private actorGraphics!: Phaser.GameObjects.Graphics
   private playerSprite!: Phaser.GameObjects.Sprite
   private enemySprites = new Map<number, Phaser.GameObjects.Sprite>()
@@ -31,6 +38,7 @@ class BattleScene extends Phaser.Scene {
   private lastHitSound = 0
   private hitStop = 0
   private lastAttackId = 0
+  private lastPlayerProjectileId = 0
 
   preload(): void {
     this.load.image('bamboo-ground', `${assetRoot}environments/bamboo-ground.png`)
@@ -60,7 +68,8 @@ class BattleScene extends Phaser.Scene {
         repeat: animation.repeat,
       })
     }
-    this.playerSprite = this.add.sprite(this.state.player.x, this.state.player.y, 'panda-idle-01').setOrigin(0.5, 1).setScale(68 / 96).play('panda-idle')
+    const playerAnimation = characters[this.state.characterId].animation
+    this.playerSprite = this.add.sprite(this.state.player.x, this.state.player.y, `${playerAnimation}-idle-01`).setOrigin(0.5, 1).setScale(68 / 96).play(`${playerAnimation}-idle`)
     this.cameras.main.setBounds(0, 0, 1600, 1000)
     const keyboard = this.input.keyboard
     if (!keyboard) throw new Error('浏览器不支持键盘输入')
@@ -90,8 +99,9 @@ class BattleScene extends Phaser.Scene {
         if (overlay) overlay.hidden = !this.paused
       }
       if (event.code === 'KeyR' && this.state.gameOver) {
-        this.state = createGameState()
+        this.state = createGameState(20260831, this.state.characterId)
         this.lastAttackId = 0
+        this.lastPlayerProjectileId = 0
         this.paused = false
         this.overlayMode = ''
         const overlay = document.querySelector<HTMLDivElement>('#pause-overlay')
@@ -187,11 +197,12 @@ class BattleScene extends Phaser.Scene {
     }
     for (const attack of this.state.attacks) {
       const alpha = Math.min(1, attack.life / 0.2)
-      const start = attack.angle - Math.PI / 4
-      const end = attack.angle + Math.PI / 4
-      graphics.fillStyle(attack.critical ? 0xffdf65 : 0x9bcb66, alpha * 0.18).beginPath().moveTo(attack.x, attack.y).arc(attack.x, attack.y, attack.radius, start, end).closePath().fillPath()
-      graphics.lineStyle(attack.critical ? 9 : 7, attack.critical ? 0xffdf65 : 0xe3a83b, alpha).beginPath().arc(attack.x, attack.y, attack.radius, start, end).strokePath()
-      graphics.lineStyle(3, 0xcdf08a, alpha * 0.8).beginPath().arc(attack.x, attack.y, attack.radius * 0.72, start + 0.08, end - 0.08).strokePath()
+      const start = attack.angle - attack.arc
+      const end = attack.angle + attack.arc
+      const attackColor = attack.kind === 'shield' ? 0x66d6df : attack.kind === 'whirlwind' ? 0xffdf65 : 0x9bcb66
+      graphics.fillStyle(attackColor, alpha * (attack.kind === 'whirlwind' ? 0.25 : 0.18)).beginPath().moveTo(attack.x, attack.y).arc(attack.x, attack.y, attack.radius, start, end).closePath().fillPath()
+      graphics.lineStyle(attack.critical || attack.kind === 'whirlwind' ? 9 : 7, attack.critical ? 0xffdf65 : attack.kind === 'shield' ? 0x8ce8ec : 0xe3a83b, alpha).beginPath().arc(attack.x, attack.y, attack.radius, start, end).strokePath()
+      graphics.lineStyle(3, attack.kind === 'shield' ? 0xd5ffff : 0xcdf08a, alpha * 0.8).beginPath().arc(attack.x, attack.y, attack.radius * 0.72, start + 0.08, end - 0.08).strokePath()
       graphics.lineStyle(2, 0xf3e6c8, alpha * 0.6).lineBetween(attack.x, attack.y, attack.x + Math.cos(start) * attack.radius, attack.y + Math.sin(start) * attack.radius).lineBetween(attack.x, attack.y, attack.x + Math.cos(end) * attack.radius, attack.y + Math.sin(end) * attack.radius)
     }
     for (const effect of this.state.effects) {
@@ -204,6 +215,10 @@ class BattleScene extends Phaser.Scene {
         }
       }
       if (effect.kind === 'dash-burst') graphics.lineStyle(8, 0x9bcb66, alpha).strokeCircle(effect.x, effect.y, 118 * (1 - effect.life / 0.35))
+      if (effect.kind === 'shield-break') {
+        graphics.fillStyle(0x66d6df, alpha * 0.18).fillCircle(effect.x, effect.y, 110 * (1 - effect.life / 0.42))
+        graphics.lineStyle(9, 0x8ce8ec, alpha).strokeCircle(effect.x, effect.y, 110 * (1 - effect.life / 0.42))
+      }
       if (effect.kind === 'hit' || effect.kind === 'crit') {
         const centerY = effect.y + 26
         graphics.fillStyle(effect.kind === 'crit' ? 0xffdf65 : 0xf3e6c8, alpha).fillCircle(effect.x, centerY, effect.kind === 'crit' ? 9 : 5)
@@ -226,6 +241,9 @@ class BattleScene extends Phaser.Scene {
         } else if (effect.kind === 'player-hit') {
           this.cameras.main.shake(100, 0.004)
           this.playTone(70, 0.1, 0.055)
+        } else if (effect.kind === 'shield-break') {
+          this.cameras.main.shake(130, 0.006)
+          this.playTone(92, 0.14, 0.06)
         } else if ((effect.kind === 'hit' || effect.kind === 'projectile-hit') && performance.now() - this.lastHitSound > 70) {
           this.hitStop = effect.kind === 'hit' ? 0.018 : 0.012
           this.lastHitSound = performance.now()
@@ -306,27 +324,44 @@ class BattleScene extends Phaser.Scene {
 
     const { x, y, dashTime } = this.state.player
     if (dashTime > 0) graphics.fillStyle(0xd4ffb8, 0.22).fillCircle(x, y, 38)
+    if (this.state.player.shield > 0) {
+      graphics.fillStyle(0x66d6df, 0.1).fillCircle(x, y - 27, 43)
+      graphics.lineStyle(3, 0x8ce8ec, 0.65 + Math.sin(this.state.time * 4) * 0.15).strokeCircle(x, y - 27, 43)
+    }
+    const playerAnimation = characters[this.state.characterId].animation
     const latestAttack = this.state.attacks.at(-1)
     if (latestAttack && latestAttack.id > this.lastAttackId) {
       this.lastAttackId = latestAttack.id
-      this.playerSprite.setFlipX(Math.cos(latestAttack.angle) < 0).play('panda-attack')
+      this.playerSprite.setFlipX(Math.cos(latestAttack.angle) < 0).play(`${playerAnimation}-attack`)
     }
-    const playerAttacking = this.playerSprite.anims.currentAnim?.key === 'panda-attack' && this.playerSprite.anims.isPlaying
+    const latestProjectile = this.state.playerProjectiles.at(-1)
+    if (latestProjectile && latestProjectile.id > this.lastPlayerProjectileId) {
+      this.lastPlayerProjectileId = latestProjectile.id
+      this.playerSprite.setFlipX(latestProjectile.vx < 0).play(`${playerAnimation}-attack`)
+    }
+    const playerAttacking = this.playerSprite.anims.currentAnim?.key === `${playerAnimation}-attack` && this.playerSprite.anims.isPlaying
     const moveX = Number(this.keys.right.isDown || this.keys.d.isDown) - Number(this.keys.left.isDown || this.keys.a.isDown)
     const moveY = Number(this.keys.down.isDown || this.keys.s.isDown) - Number(this.keys.up.isDown || this.keys.w.isDown)
     if (!playerAttacking) {
-      this.playerSprite.play(moveX !== 0 || moveY !== 0 || dashTime > 0 ? 'panda-run' : 'panda-idle', true)
+      this.playerSprite.play(`${playerAnimation}-${moveX !== 0 || moveY !== 0 || dashTime > 0 ? 'run' : 'idle'}`, true)
       this.playerSprite.setFlipX(moveX === 0 ? this.state.player.facingX < 0 : moveX < 0)
     }
     const playerHurt = this.state.player.hitCooldown > 0
-    const playerScale = 68 / 96 * (playerAttacking ? 0.56 : 1)
+    const playerScale = playerAttacking ? this.state.characterId === 'shanlan' ? 68 / 96 * 0.56 : 68 / 128 : 68 / 96
     this.playerSprite.setPosition(x, y).setDepth(y).setRotation(playerAttacking ? 0 : moveY * 0.035).setScale(playerScale * (playerHurt ? 1.06 : 1), playerScale * (playerHurt ? 0.92 : 1)).setAlpha(playerHurt ? 0.55 + Math.sin(this.state.time * 50) * 0.25 : 1)
 
     const healthFill = document.querySelector<HTMLElement>('#health-fill')
     const xpFill = document.querySelector<HTMLElement>('#xp-fill')
     if (healthFill) healthFill.style.width = `${(this.state.player.hp / this.state.player.maxHp) * 100}%`
     if (xpFill) xpFill.style.width = `${(this.state.player.xp / this.state.player.nextXp) * 100}%`
+    const shieldRow = document.querySelector<HTMLElement>('#shield-row')
+    const shieldFill = document.querySelector<HTMLElement>('#shield-fill')
+    const shieldText = document.querySelector<HTMLElement>('#shield-text')
+    if (shieldRow) shieldRow.hidden = this.state.characterId !== 'shimo'
+    if (shieldFill) shieldFill.style.width = `${this.state.player.shieldMax > 0 ? this.state.player.shield / this.state.player.shieldMax * 100 : 0}%`
+    if (shieldText) shieldText.textContent = `${Math.ceil(this.state.player.shield)} / ${this.state.player.shieldMax || Math.ceil(this.state.player.maxHp * 0.08)}`
     const values: Record<string, string> = {
+      '#character-name': characters[this.state.characterId].name,
       '#health-text': `${Math.ceil(this.state.player.hp)} / ${this.state.player.maxHp}`,
       '#xp-text': `${this.state.player.xp} / ${this.state.player.nextXp}`,
       '#level': String(this.state.player.level), '#wave': String(this.state.wave),
@@ -363,7 +398,30 @@ class BattleScene extends Phaser.Scene {
   }
 }
 
-new Phaser.Game({
-  type: Phaser.AUTO, parent: 'game', width: 960, height: 540, backgroundColor: '#173527', scene: BattleScene,
-  render: { antialias: true }, scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+document.querySelectorAll<HTMLButtonElement>('[data-character]').forEach((button) => {
+  button.addEventListener('click', () => {
+    const characterId = button.dataset.character
+    if (characterId !== 'shanlan' && characterId !== 'qingtuan' && characterId !== 'shimo') return
+    selectedCharacter = characterId
+    const character = characters[characterId]
+    const characterSelect = document.querySelector<HTMLElement>('#character-select')
+    const characterName = document.querySelector<HTMLElement>('#character-name')
+    const healthText = document.querySelector<HTMLElement>('#health-text')
+    const weaponImage = document.querySelector<HTMLImageElement>('#weapon-image')
+    const weaponName = document.querySelector<HTMLElement>('#weapon-name')
+    const weaponCopy = document.querySelector<HTMLElement>('#weapon-copy')
+    if (characterSelect) characterSelect.hidden = true
+    if (characterName) characterName.textContent = character.name
+    if (healthText) healthText.textContent = `${characterId === 'qingtuan' ? 85 : characterId === 'shimo' ? 140 : 110} / ${characterId === 'qingtuan' ? 85 : characterId === 'shimo' ? 140 : 110}`
+    if (weaponImage) {
+      weaponImage.src = `${import.meta.env.BASE_URL}${character.weaponImage}`
+      weaponImage.alt = character.weaponName
+    }
+    if (weaponName) weaponName.textContent = character.weaponName
+    if (weaponCopy) weaponCopy.textContent = character.weaponDescription
+    new Phaser.Game({
+      type: Phaser.AUTO, parent: 'game', width: 960, height: 540, backgroundColor: '#173527', scene: BattleScene,
+      render: { antialias: true }, scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+    })
+  })
 })

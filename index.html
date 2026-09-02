@@ -25,6 +25,39 @@
 
       <section class="playfield" aria-label="游戏画布">
         <div id="game"></div>
+        <div id="character-select" class="character-select">
+          <div class="character-panel">
+            <p class="choice-kicker">灵竹谷 · 出战名册</p>
+            <h2>选择你的熊猫侠客</h2>
+            <p class="character-lead">三种战斗节奏，每位侠客拥有专属武器与被动。</p>
+            <div class="character-cards">
+              <button class="character-card" type="button" data-character="shanlan">
+                <span class="character-role">近战 · 爆发</span>
+                <img src="/assets/characters/panda-wanderer.png" alt="山岚，手持青竹杖的近战熊猫" />
+                <strong>山岚</strong>
+                <span class="character-weapon">青竹杖 · 近战横扫</span>
+                <span class="character-passive">每第 4 次近战变为 180° 旋风，并恢复生命。</span>
+                <small>弱点：攻击距离较短</small>
+              </button>
+              <button class="character-card" type="button" data-character="qingtuan">
+                <span class="character-role">远程 · 机动</span>
+                <img src="/assets/characters/qingtuan.png" alt="青团，手持飞叶镖的远程熊猫" />
+                <strong>青团</strong>
+                <span class="character-weapon">飞叶镖 · 高速追敌</span>
+                <span class="character-passive">每第 6 次射击分裂为 3 枚飞叶。</span>
+                <small>弱点：生命较低</small>
+              </button>
+              <button class="character-card" type="button" data-character="shimo">
+                <span class="character-role">肉盾 · 反击</span>
+                <img src="/assets/characters/shimo.png" alt="石墨，手持铁竹盾的防御熊猫" />
+                <strong>石墨</strong>
+                <span class="character-weapon">铁竹盾 · 近战盾击</span>
+                <span class="character-passive">每 8 秒获得护盾，破盾时震开周围敌人。</span>
+                <small>弱点：移动速度较慢</small>
+              </button>
+            </div>
+          </div>
+        </div>
         <div id="pause-overlay" class="overlay" hidden>
           <div class="overlay-card">
             <strong id="overlay-title">竹息凝神</strong>
@@ -43,9 +76,13 @@
         <div id="hurt-vignette" class="hurt-vignette"></div>
         <div class="hud" aria-live="polite">
           <div class="health-card">
-            <span>山岚 · Lv.<b id="level">1</b></span>
+            <span><b id="character-name">山岚</b> · Lv.<b id="level">1</b></span>
             <div class="health-track"><i id="health-fill"></i></div>
             <b id="health-text">110 / 110</b>
+            <div id="shield-row" class="shield-row" hidden>
+              <div class="shield-track"><i id="shield-fill"></i></div>
+              <small>护盾 <b id="shield-text">0 / 12</b></small>
+            </div>
             <div class="xp-track"><i id="xp-fill"></i></div>
             <small>灵竹 <b id="xp-text">0 / 18</b></small>
           </div>
@@ -58,8 +95,7 @@
           <div id="dash" class="dash ready">闪避就绪</div>
         </div>
         <div class="weapon-strip">
-          <span class="weapon-slot"><img src="/assets/weapons/bamboo-staff.png" alt="青竹杖" /><span><b>青竹杖</b><small>近战横扫</small></span></span>
-          <span class="weapon-slot"><img src="/assets/weapons/leaf-dart.png" alt="飞叶" /><span><b>飞叶</b><small>自动追敌</small></span></span>
+          <span class="weapon-slot"><img id="weapon-image" src="/assets/weapons/bamboo-staff.png" alt="青竹杖" /><span><b id="weapon-name">青竹杖</b><small id="weapon-copy">近战横扫</small></span></span>
         </div>
         <aside class="build-panel" aria-label="当前构筑">
           <b>本局构筑</b>

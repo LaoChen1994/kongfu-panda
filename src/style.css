@@ -73,6 +73,11 @@ kbd { padding: 4px 7px; border: 1px solid #637969; border-bottom-width: 3px; bor
 .health-card { display: grid; grid-template-columns: 1fr auto; gap: 5px 12px; padding: 10px 13px; border-radius: 11px 8px 12px 9px; font-family: 'PingFang SC', sans-serif; font-size: 14px; }
 .health-track { grid-column: 1 / -1; height: 8px; overflow: hidden; border-radius: 10px; background: #301f1b; }
 .health-track i { display: block; width: 100%; height: 100%; background: linear-gradient(90deg, #d9554d, #e3a83b); transition: width .15s; }
+.shield-row { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; }
+.shield-row[hidden] { display: none; }
+.shield-track { height: 6px; overflow: hidden; border-radius: 10px; background: #18292d; }
+.shield-track i { display: block; width: 0; height: 100%; background: linear-gradient(90deg, #409bad, #8ce8ec); transition: width .15s; }
+.shield-row small { color: #9ee4e8; font-size: 14px; white-space: nowrap; }
 .xp-track { grid-column: 1 / -1; height: 4px; overflow: hidden; border-radius: 10px; background: #172718; }
 .xp-track i { display: block; width: 0; height: 100%; background: linear-gradient(90deg, #74ad56, #d7ee78); transition: width .2s; }
 .health-card small { grid-column: 1 / -1; color: #a7b9a9; font-size: 14px; }
@@ -94,6 +99,22 @@ kbd { padding: 4px 7px; border: 1px solid #637969; border-bottom-width: 3px; bor
 #build-tags span { padding: 3px 7px; border: 1px solid #9bcb6655; border-radius: 9px; color: #cfe9af; background: #36502a88; font-family: 'PingFang SC', sans-serif; font-size: 14px; }
 .item-icons { display: flex; min-height: 24px; gap: 4px; }
 .item-icons img { width: 26px; height: 26px; border: 1px solid #d7b86688; border-radius: 7px; background: #e8d7ae; object-fit: contain; }
+
+.character-select { position: absolute; inset: 0; z-index: 8; display: grid; place-content: center; padding: 22px; background: radial-gradient(circle at 50% 38%, #315b4199, #07100df0), var(--paper-texture); background-blend-mode: normal, soft-light; }
+.character-select[hidden] { display: none; }
+.character-panel { width: min(940px, 94vw); padding: 22px 28px 27px; border: 2px solid #9d7432; border-radius: 12px 18px 11px 16px; color: var(--ink); text-align: center; background-color: #ead9b5; background-image: linear-gradient(#f3e6c8e8, #ddc79bf2), var(--paper-texture); background-size: auto, 300px; background-blend-mode: normal, multiply; box-shadow: inset 0 0 0 5px #513d2226, 0 18px 50px #000b; }
+.character-panel h2 { margin: 4px 0 2px; font-size: clamp(27px, 3.4vw, 38px); letter-spacing: .08em; }
+.character-lead { margin: 0 0 15px; color: #5a665b; font: 15px 'PingFang SC', sans-serif; }
+.character-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 13px; }
+.character-card { position: relative; display: grid; min-height: 350px; align-content: start; gap: 6px; padding: 13px 14px 15px; overflow: hidden; border: 2px solid #6d552e; border-radius: 13px 9px 15px 11px; color: #273029; background: linear-gradient(#f7edd7e8, #e8d4abe8); box-shadow: 0 5px 0 #6b4e29, 0 9px 18px #4a341d40; cursor: pointer; transition: transform .12s, border-color .12s, box-shadow .12s; }
+.character-card:hover, .character-card:focus-visible { z-index: 1; transform: translateY(-6px); border-color: #c38a2d; box-shadow: 0 8px 0 #765426, 0 15px 26px #4a341d55; outline: none; }
+.character-card img { width: 148px; height: 148px; margin: 5px auto 0; object-fit: contain; filter: drop-shadow(0 5px 4px #5c431f55); transition: transform .15s; }
+.character-card:hover img, .character-card:focus-visible img { transform: scale(1.05) rotate(-1deg); }
+.character-card strong { font-size: 25px; letter-spacing: .12em; }
+.character-role { color: #805426; font: 700 14px 'PingFang SC', sans-serif; letter-spacing: .08em; }
+.character-weapon { color: #44633b; font: 700 15px 'PingFang SC', sans-serif; }
+.character-passive { min-height: 44px; color: #414b42; font: 14px/1.55 'PingFang SC', sans-serif; }
+.character-card small { margin-top: auto; color: #8b563d; font: 14px 'PingFang SC', sans-serif; }
 
 .choice-overlay { position: absolute; inset: 0; z-index: 5; place-content: center; padding: 24px; background: radial-gradient(circle, #19392b9c, #07100de8); backdrop-filter: blur(4px); }
 .choice-overlay:not([hidden]) { display: grid; }
@@ -131,4 +152,8 @@ kbd { padding: 4px 7px; border: 1px solid #637969; border-bottom-width: 3px; bor
   .weapon-strip { right: 18px; justify-content: center; }
   .build-panel { display: none; }
   .choice-cards { grid-template-columns: 1fr 1fr; }
+  .character-panel { padding: 18px; }
+  .character-cards { grid-template-columns: repeat(3, minmax(150px, 1fr)); overflow-x: auto; }
+  .character-card { min-height: 315px; }
+  .character-card img { width: 115px; height: 115px; }
 }
