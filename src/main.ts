@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import './style.css'
-import { buyItem, characters, chooseUpgrade, continueWave, createGameState, items, stepGame, upgrades, type CharacterId } from './simulation.js'
+import { buyItem, characters, chooseUpgrade, continueWave, createGameState, items, refreshShop, sellItem, stepGame, toggleShopLock, upgrades, type CharacterId } from './simulation.js'
 
 const assetRoot = `${import.meta.env.BASE_URL}assets/`
 let selectedCharacter: CharacterId = 'shanlan'
@@ -89,8 +89,7 @@ class BattleScene extends Phaser.Scene {
         if (choice) chooseUpgrade(this.state, choice)
       }
       if (this.state.shopOpen && ['Digit1', 'Digit2', 'Digit3', 'Digit4'].includes(event.code)) {
-        const choice = this.state.shopChoices[Number(event.code.slice(-1)) - 1]
-        if (choice) buyItem(this.state, choice)
+        buyItem(this.state, Number(event.code.slice(-1)) - 1)
       }
       if (event.code === 'Enter' && this.state.shopOpen) continueWave(this.state)
       if (event.code === 'Escape' && !this.state.gameOver && !this.state.pendingUpgrade && !this.state.shopOpen) {
@@ -130,14 +129,21 @@ class BattleScene extends Phaser.Scene {
     const kicker = document.querySelector<HTMLElement>('#choice-kicker')
     const copy = document.querySelector<HTMLElement>('#choice-copy')
     const continueButton = document.querySelector<HTMLButtonElement>('#continue-wave')
-    if (!overlay || !cards || !title || !kicker || !copy || !continueButton) return
+    const shopLayout = document.querySelector<HTMLElement>('#shop-layout')
+    const shopCards = document.querySelector<HTMLElement>('#shop-cards')
+    const shopInventory = document.querySelector<HTMLElement>('#shop-inventory')
+    const shopStats = document.querySelector<HTMLElement>('#shop-stats')
+    const refreshButton = document.querySelector<HTMLButtonElement>('#refresh-shop')
+    if (!overlay || !cards || !title || !kicker || !copy || !continueButton || !shopLayout || !shopCards || !shopInventory || !shopStats || !refreshButton) return
 
-    const mode = this.state.pendingUpgrade ? `upgrade-${this.state.player.level}` : this.state.shopOpen ? `shop-${this.state.wave}-${this.state.player.coins}-${this.state.purchasedShopItems.join('-')}` : ''
+    const mode = this.state.pendingUpgrade ? `upgrade-${this.state.player.level}` : this.state.shopOpen ? `shop-${this.state.wave}-${this.state.player.coins}-${this.state.shopChoices.join('-')}-${this.state.lockedShopIndex}-${this.state.ownedItems.join('-')}` : ''
     overlay.hidden = !mode
     if (!mode || mode === this.overlayMode) return
     this.overlayMode = mode
     cards.innerHTML = ''
     if (this.state.pendingUpgrade) {
+      cards.hidden = false
+      shopLayout.hidden = true
       kicker.textContent = `境界突破 · Lv.${this.state.player.level}`
       title.textContent = '选择一门强化'
       copy.textContent = '战斗已暂停 · 让这一局形成自己的招式'
@@ -154,22 +160,74 @@ class BattleScene extends Phaser.Scene {
       })
       this.playTone(520, 0.18, 0.045)
     } else {
+      cards.hidden = true
+      shopLayout.hidden = false
       kicker.textContent = `竹林补给 · 第 ${this.state.wave} 波结束`
-      title.textContent = '用战利品强化构筑'
-      copy.textContent = `现有 ${this.state.player.coins} 铜钱 · 可购买多件，整备后继续`
-      cards.style.gridTemplateColumns = 'repeat(4, 1fr)'
+      title.textContent = '整备下一波构筑'
+      copy.textContent = `现有 ${this.state.player.coins} 铜钱 · 商品可重复购买，唯一宝物除外`
       continueButton.hidden = false
       continueButton.onclick = () => continueWave(this.state)
+      refreshButton.textContent = `刷新商品 · ${this.state.shopRefreshCost} 铜钱`
+      refreshButton.disabled = this.state.player.coins < this.state.shopRefreshCost
+      refreshButton.onclick = () => {
+        if (refreshShop(this.state)) this.overlayMode = ''
+      }
+      const character = characters[this.state.characterId]
+      shopStats.innerHTML = `
+        <div class="shop-character"><img src="${import.meta.env.BASE_URL}${character.portrait}" alt=""><strong>${character.name}</strong><span>${character.role}</span></div>
+        <dl>
+          <div><dt>生命</dt><dd>${Math.ceil(this.state.player.hp)} / ${this.state.player.maxHp}</dd></div>
+          <div><dt>护甲</dt><dd>${this.state.player.armor}</dd></div>
+          <div><dt>全部伤害</dt><dd>+${Math.round((this.state.player.damage - 1) * 100)}%</dd></div>
+          <div><dt>近战伤害</dt><dd>${Math.round(this.state.player.meleeDamage * 100)}%</dd></div>
+          <div><dt>远程伤害</dt><dd>${Math.round(this.state.player.rangedDamage * 100)}%</dd></div>
+          <div><dt>移动速度</dt><dd>${Math.round(this.state.player.moveSpeed * 100)}%</dd></div>
+        </dl>`
+      shopCards.innerHTML = ''
       this.state.shopChoices.forEach((id, index) => {
+        const article = document.createElement('article')
+        article.className = 'shop-card'
+        if (!id) {
+          article.classList.add('empty')
+          article.innerHTML = '<span>商品已购入</span><small>刷新后补充</small>'
+          shopCards.append(article)
+          return
+        }
         const item = items[id]
-        const purchased = this.state.purchasedShopItems.includes(id)
+        const uniqueOwned = Boolean(item.unique && this.state.ownedItems.includes(id))
+        const buyButton = document.createElement('button')
+        const lockButton = document.createElement('button')
+        const locked = this.state.lockedShopIndex === index
+        article.dataset.rarity = item.rarity
+        article.innerHTML = `<kbd>${index + 1}</kbd><img src="${import.meta.env.BASE_URL}${item.image}" alt=""><small>${item.rarity} · 宝物</small><strong>${item.name}</strong><span>${item.description}</span><em>${item.preview}</em>`
+        buyButton.type = 'button'
+        buyButton.className = 'shop-buy'
+        buyButton.disabled = uniqueOwned || this.state.player.coins < item.price
+        buyButton.textContent = uniqueOwned ? '已拥有' : this.state.player.coins < item.price ? `缺少 ${item.price - this.state.player.coins} 铜钱` : `${item.price} 铜钱 · 购买`
+        buyButton.addEventListener('click', () => {
+          if (buyItem(this.state, index)) this.overlayMode = ''
+        })
+        lockButton.type = 'button'
+        lockButton.className = `shop-lock${locked ? ' locked' : ''}`
+        lockButton.textContent = locked ? '已锁定' : '锁定'
+        lockButton.setAttribute('aria-pressed', String(locked))
+        lockButton.addEventListener('click', () => {
+          if (toggleShopLock(this.state, index)) this.overlayMode = ''
+        })
+        article.append(buyButton, lockButton)
+        shopCards.append(article)
+      })
+      shopInventory.innerHTML = ''
+      if (this.state.ownedItems.length === 0) shopInventory.innerHTML = '<p>尚未获得宝物</p>'
+      this.state.ownedItems.forEach((id, index) => {
+        const item = items[id]
         const button = document.createElement('button')
-        button.className = 'choice-card'
         button.type = 'button'
-        button.disabled = purchased || this.state.player.coins < item.price
-        button.innerHTML = `<kbd>${index + 1}</kbd><img src="${import.meta.env.BASE_URL}${item.image}" alt=""><small>${item.rarity} · 宝物</small><strong>${item.name}</strong><span>${item.description}</span><em>${purchased ? '已购入' : `${item.price} 铜钱`}</em>`
-        button.addEventListener('click', () => buyItem(this.state, id))
-        cards.append(button)
+        button.innerHTML = `<img src="${import.meta.env.BASE_URL}${item.image}" alt=""><span><strong>${item.name}</strong><small>出售 +${Math.floor(item.price * 0.6)} 铜钱</small></span>`
+        button.addEventListener('click', () => {
+          if (sellItem(this.state, index)) this.overlayMode = ''
+        })
+        shopInventory.append(button)
       })
     }
   }
@@ -199,11 +257,27 @@ class BattleScene extends Phaser.Scene {
       const alpha = Math.min(1, attack.life / 0.2)
       const start = attack.angle - attack.arc
       const end = attack.angle + attack.arc
-      const attackColor = attack.kind === 'shield' ? 0x66d6df : attack.kind === 'whirlwind' ? 0xffdf65 : 0x9bcb66
-      graphics.fillStyle(attackColor, alpha * (attack.kind === 'whirlwind' ? 0.25 : 0.18)).beginPath().moveTo(attack.x, attack.y).arc(attack.x, attack.y, attack.radius, start, end).closePath().fillPath()
-      graphics.lineStyle(attack.critical || attack.kind === 'whirlwind' ? 9 : 7, attack.critical ? 0xffdf65 : attack.kind === 'shield' ? 0x8ce8ec : 0xe3a83b, alpha).beginPath().arc(attack.x, attack.y, attack.radius, start, end).strokePath()
-      graphics.lineStyle(3, attack.kind === 'shield' ? 0xd5ffff : 0xcdf08a, alpha * 0.8).beginPath().arc(attack.x, attack.y, attack.radius * 0.72, start + 0.08, end - 0.08).strokePath()
-      graphics.lineStyle(2, 0xf3e6c8, alpha * 0.6).lineBetween(attack.x, attack.y, attack.x + Math.cos(start) * attack.radius, attack.y + Math.sin(start) * attack.radius).lineBetween(attack.x, attack.y, attack.x + Math.cos(end) * attack.radius, attack.y + Math.sin(end) * attack.radius)
+      if (attack.kind === 'shield') {
+        const impactX = attack.x + Math.cos(attack.angle) * attack.radius
+        const impactY = attack.y + Math.sin(attack.angle) * attack.radius
+        graphics.fillStyle(0x53b8b2, alpha * 0.24).beginPath().moveTo(attack.x, attack.y).arc(attack.x, attack.y, attack.radius, start, end).closePath().fillPath()
+        graphics.lineStyle(10, attack.critical ? 0xf3e6c8 : 0x8ce8ec, alpha).beginPath().arc(attack.x, attack.y, attack.radius, start, end).strokePath()
+        graphics.lineStyle(4, 0xd5ffff, alpha * 0.9).beginPath().arc(attack.x, attack.y, attack.radius * 0.72, start + 0.08, end - 0.08).strokePath()
+        graphics.fillStyle(0xf3e6c8, alpha).fillCircle(impactX, impactY, attack.critical ? 9 : 6)
+        for (let index = -1; index <= 1; index += 1) {
+          const angle = attack.angle + index * 0.42
+          graphics.lineStyle(4, index === 0 ? 0xf3e6c8 : 0x53b8b2, alpha * 0.9).lineBetween(impactX - Math.cos(angle) * 8, impactY - Math.sin(angle) * 8, impactX + Math.cos(angle) * 18, impactY + Math.sin(angle) * 18)
+        }
+      } else {
+        graphics.fillStyle(attack.kind === 'whirlwind' ? 0xffdf65 : 0x9bcb66, alpha * (attack.kind === 'whirlwind' ? 0.25 : 0.18)).beginPath().moveTo(attack.x, attack.y).arc(attack.x, attack.y, attack.radius, start, end).closePath().fillPath()
+        graphics.lineStyle(attack.critical || attack.kind === 'whirlwind' ? 9 : 7, attack.critical || attack.kind === 'whirlwind' ? 0xffdf65 : 0xe3a83b, alpha).beginPath().arc(attack.x, attack.y, attack.radius, start, end).strokePath()
+        graphics.lineStyle(3, 0xcdf08a, alpha * 0.8).beginPath().arc(attack.x, attack.y, attack.radius * 0.72, start + 0.08, end - 0.08).strokePath()
+        if (attack.kind === 'whirlwind') graphics.lineStyle(5, 0xe3a83b, alpha * 0.8).beginPath().arc(attack.x, attack.y, attack.radius * 0.86, start + 0.2, end - 0.2).strokePath()
+        for (let index = 0; index < (attack.kind === 'whirlwind' ? 5 : attack.radius > 110 ? 3 : 2); index += 1) {
+          const angle = start + (end - start) * ((index + 1) / (attack.kind === 'whirlwind' ? 6 : attack.radius > 110 ? 4 : 3))
+          graphics.lineStyle(3, index % 2 === 0 ? 0xf3e6c8 : 0x9bcb66, alpha * 0.72).lineBetween(attack.x + Math.cos(angle) * attack.radius * 0.78, attack.y + Math.sin(angle) * attack.radius * 0.78, attack.x + Math.cos(angle + 0.08) * attack.radius, attack.y + Math.sin(angle + 0.08) * attack.radius)
+        }
+      }
     }
     for (const effect of this.state.effects) {
       const alpha = Math.min(1, effect.life * 4)
@@ -218,6 +292,13 @@ class BattleScene extends Phaser.Scene {
       if (effect.kind === 'shield-break') {
         graphics.fillStyle(0x66d6df, alpha * 0.18).fillCircle(effect.x, effect.y, 110 * (1 - effect.life / 0.42))
         graphics.lineStyle(9, 0x8ce8ec, alpha).strokeCircle(effect.x, effect.y, 110 * (1 - effect.life / 0.42))
+      }
+      if (effect.kind === 'enemy-shot') {
+        const progress = 1 - effect.life / 0.24
+        const muzzleX = effect.x + Math.cos(effect.angle) * progress * 20
+        const muzzleY = effect.y + Math.sin(effect.angle) * progress * 20
+        graphics.fillStyle(0x7651a8, alpha * 0.24).fillCircle(muzzleX, muzzleY, 18 * (1 - progress))
+        graphics.lineStyle(3, 0xd9554d, alpha * 0.85).strokeCircle(muzzleX, muzzleY, 6 + progress * 8)
       }
       if (effect.kind === 'hit' || effect.kind === 'crit') {
         const centerY = effect.y + 26
@@ -281,7 +362,7 @@ class BattleScene extends Phaser.Scene {
       graphics.lineStyle(projectile.critical ? 5 : 3, projectile.critical ? 0xe3a83b : 0x9bcb66, 0.92).lineBetween(projectile.x - directionX * (projectile.critical ? 42 : 30), projectile.y - directionY * (projectile.critical ? 42 : 30), projectile.x, projectile.y)
       let sprite = this.leafSprites.get(projectile.id)
       if (!sprite) {
-        sprite = this.add.image(projectile.x, projectile.y, 'leaf-dart').setDisplaySize(projectile.critical ? 38 : 31, projectile.critical ? 38 : 31)
+        sprite = this.add.image(projectile.x, projectile.y, 'leaf-dart').setDisplaySize(projectile.critical ? 34 : 28, projectile.critical ? 34 : 28)
         this.leafSprites.set(projectile.id, sprite)
       }
       sprite.setPosition(projectile.x, projectile.y).setRotation(Math.atan2(projectile.vy, projectile.vx) + Math.PI / 4 + Math.sin(this.state.time * 18 + projectile.id) * 0.18).setDepth(projectile.y + 5)
@@ -291,9 +372,19 @@ class BattleScene extends Phaser.Scene {
     for (const [id, sprite] of this.leafSprites) if (!liveLeafIds.has(id)) { sprite.destroy(); this.leafSprites.delete(id) }
     for (const projectile of this.state.enemyProjectiles) {
       const length = Math.max(0.001, Math.hypot(projectile.vx, projectile.vy))
-      graphics.lineStyle(5, 0xd9554d, 0.7).lineBetween(projectile.x - projectile.vx / length * 18, projectile.y - projectile.vy / length * 18, projectile.x, projectile.y)
-      graphics.fillStyle(0x7651a8).fillCircle(projectile.x, projectile.y, 7)
-      graphics.lineStyle(2, 0xff958a, 0.9).strokeCircle(projectile.x, projectile.y, 11)
+      const directionX = projectile.vx / length
+      const directionY = projectile.vy / length
+      const angle = Math.atan2(projectile.vy, projectile.vx)
+      const sideX = -directionY
+      const sideY = directionX
+      graphics.lineStyle(7, 0x3f285d, 0.22).lineBetween(projectile.x - directionX * 34, projectile.y - directionY * 34, projectile.x, projectile.y)
+      graphics.lineStyle(3, 0xd9554d, 0.78).lineBetween(projectile.x - directionX * 28, projectile.y - directionY * 28, projectile.x, projectile.y)
+      graphics.lineStyle(1, 0xffb0a8, 0.9).lineBetween(projectile.x - directionX * 15, projectile.y - directionY * 15, projectile.x, projectile.y)
+      const pulse = Math.sin(this.state.time * 12 + projectile.id) * 1.5
+      graphics.fillStyle(0x7651a8, 0.96).beginPath().moveTo(projectile.x + directionX * (9 + pulse), projectile.y + directionY * (9 + pulse)).lineTo(projectile.x + sideX * 5, projectile.y + sideY * 5).lineTo(projectile.x - directionX * 8, projectile.y - directionY * 8).lineTo(projectile.x - sideX * 5, projectile.y - sideY * 5).closePath().fillPath()
+      graphics.lineStyle(2, 0xd9554d, 0.9).beginPath().moveTo(projectile.x + directionX * (9 + pulse), projectile.y + directionY * (9 + pulse)).lineTo(projectile.x + sideX * 5, projectile.y + sideY * 5).lineTo(projectile.x - directionX * 8, projectile.y - directionY * 8).lineTo(projectile.x - sideX * 5, projectile.y - sideY * 5).closePath().strokePath()
+      graphics.fillStyle(0xf3e6c8, 0.95).fillCircle(projectile.x + Math.cos(angle) * 2, projectile.y + Math.sin(angle) * 2, 2)
+      graphics.fillStyle(0xd9554d, 0.72).fillCircle(projectile.x + sideX * (8 + pulse), projectile.y + sideY * (8 + pulse), 2).fillCircle(projectile.x - sideX * (8 + pulse), projectile.y - sideY * (8 + pulse), 2)
     }
 
     const liveEnemyIds = new Set<number>()
