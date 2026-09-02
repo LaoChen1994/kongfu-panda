@@ -138,6 +138,44 @@ defeatCheck.enemies.push({ id: 1, kind: 'chaser', x: 800, y: 500, hp: 50, maxHp:
 stepGame(defeatCheck, { x: 0, y: 0, dash: false }, 0.05)
 if (!defeatCheck.gameOver || defeatCheck.player.hp !== 0) throw new Error('生命归零时应进入失败状态')
 
+const bossCheck = createGameState(17, 'shimo')
+bossCheck.wave = 9
+bossCheck.shopOpen = true
+if (!continueWave(bossCheck) || bossCheck.wave !== 10 || bossCheck.waveDuration !== 90) throw new Error('第 9 波补给后应进入 90 秒最终 Boss 波')
+const boss = bossCheck.enemies.find((enemy) => enemy.kind === 'boss')
+if (!boss || boss.hp !== 2400 || bossCheck.bossIntroTime <= 0 || boss.x !== 760 || boss.y !== 600 || bossCheck.player.x !== 1100 || bossCheck.player.y !== 600) throw new Error('最终波应在同一镜头内安排玩家与腐竹巨灵的出场站位')
+bossCheck.bambooCooldown = 99
+bossCheck.leafCooldown = 99
+bossCheck.bossIntroTime = 0
+boss.cooldown = 0
+const hpBeforeRoot = bossCheck.player.hp
+bossCheck.player.shield = 1
+stepGame(bossCheck, { x: 0, y: 0, dash: false }, 0.05)
+if (bossCheck.bossHazards.length !== 3 || bossCheck.bossHazards.some((hazard) => hazard.kind !== 'root' || hazard.duration !== 0.9)) throw new Error('Boss 首招应生成三处 0.9 秒根刺预警')
+for (let tick = 0; tick < 19; tick += 1) stepGame(bossCheck, { x: 0, y: 0, dash: false }, 0.05)
+if (bossCheck.player.hp >= hpBeforeRoot || !bossCheck.effects.some((effect) => effect.kind === 'shield-break')) throw new Error('玩家停留在根刺预警内时应受伤，石墨护盾被击破时应触发反击')
+boss.hp = 1200
+stepGame(bossCheck, { x: 0, y: 0, dash: false }, 0.05)
+if (boss.phase !== 2 || bossCheck.corruptionInset !== 90) throw new Error('Boss 半血后应进入二阶段并收缩安全边界')
+bossCheck.waveTime = 90
+stepGame(bossCheck, { x: 0, y: 0, dash: false }, 0.05)
+if (!boss.enraged || bossCheck.shopOpen) throw new Error('Boss 波超时应进入狂暴而不是开启商城')
+
+const victoryCheck = createGameState(18)
+victoryCheck.wave = 9
+victoryCheck.shopOpen = true
+continueWave(victoryCheck)
+const finalBoss = victoryCheck.enemies.find((enemy) => enemy.kind === 'boss')
+if (!finalBoss) throw new Error('胜利测试缺少最终 Boss')
+victoryCheck.bossIntroTime = 0
+victoryCheck.player.x = finalBoss.x
+victoryCheck.player.y = finalBoss.y + 70
+victoryCheck.bambooCooldown = 0
+finalBoss.cooldown = 99
+finalBoss.hp = 1
+stepGame(victoryCheck, { x: 0, y: 0, dash: false }, 0.05)
+if (!victoryCheck.victory || victoryCheck.gameOver || victoryCheck.enemies.some((enemy) => enemy.kind === 'boss')) throw new Error('击败最终 Boss 后应进入胜利结算并移除 Boss')
+
 const endurance = createGameState(7)
 endurance.player.hp = 1_000_000
 endurance.player.maxHp = 1_000_000
@@ -148,9 +186,10 @@ for (let tick = 0; tick < 12_000; tick += 1) {
   if (endurance.pendingUpgrade) chooseUpgrade(endurance, endurance.upgradeChoices[0])
   if (endurance.shopOpen) continueWave(endurance)
 }
-if (seen.size !== 3) throw new Error('十分钟模拟应出现三类敌人')
+if (!['chaser', 'dasher', 'shooter'].every((kind) => seen.has(kind))) throw new Error('十分钟模拟应出现三类普通敌人')
 if (endurance.enemies.length > 100) throw new Error('敌人数量不得突破上限')
+if (endurance.wave === 10 && endurance.enemies.filter((enemy) => enemy.kind !== 'boss').length > 9) throw new Error('Boss 战普通增援不得超过 9 只')
 if (endurance.playerProjectiles.length + endurance.enemyProjectiles.length > 500) throw new Error('投射物疑似无限增长')
-if (endurance.player.level < 2 || endurance.wave < 6) throw new Error('十分钟内应形成升级与多波循环')
+if (endurance.player.level < 2 || endurance.wave !== 10 || !seen.has('boss')) throw new Error('十分钟内应形成升级、多波与最终 Boss 循环')
 
 console.log(`simulation ok: 600s, wave=${endurance.wave}, level=${endurance.player.level}, kills=${endurance.kills}, enemies=${endurance.enemies.length}`)
