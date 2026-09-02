@@ -1,6 +1,36 @@
 export type EnemyKind = 'chaser' | 'dasher' | 'shooter'
+export type CharacterId = 'shanlan' | 'qingtuan' | 'shimo'
 export type UpgradeId = 'power' | 'haste' | 'vitality' | 'footwork' | 'leaf-volley' | 'wide-sweep'
 export type ItemId = 'martial-belt' | 'wind-feather' | 'iron-bracer' | 'panda-roller'
+
+export const characters: Record<CharacterId, {
+  name: string
+  role: string
+  description: string
+  passive: string
+  weakness: string
+  portrait: string
+  weaponName: string
+  weaponDescription: string
+  weaponImage: string
+  animation: string
+}> = {
+  shanlan: {
+    name: '山岚', role: '近战 · 爆发', description: '贴近敌群，用大范围横扫打出持续压制。',
+    passive: '每第 4 次近战变为 180° 旋风，并恢复 1% 最大生命。', weakness: '攻击距离较短',
+    portrait: 'assets/characters/panda-wanderer.png', weaponName: '青竹杖', weaponDescription: '近战横扫', weaponImage: 'assets/weapons/bamboo-staff.png', animation: 'panda',
+  },
+  qingtuan: {
+    name: '青团', role: '远程 · 机动', description: '保持距离，用高速飞叶穿梭清场。',
+    passive: '每第 6 次射击分裂为 3 枚各造成 45% 伤害的飞叶。', weakness: '生命较低',
+    portrait: 'assets/characters/qingtuan.png', weaponName: '飞叶镖', weaponDescription: '高速追敌', weaponImage: 'assets/weapons/leaf-dart.png', animation: 'qingtuan',
+  },
+  shimo: {
+    name: '石墨', role: '肉盾 · 反击', description: '顶住敌潮，用铁盾撞开近身威胁。',
+    passive: '每 8 秒获得 8% 最大生命护盾，破盾时震开周围敌人。', weakness: '移动速度较慢',
+    portrait: 'assets/characters/shimo.png', weaponName: '铁竹盾', weaponDescription: '近战盾击', weaponImage: 'assets/weapons/iron-bamboo-shield.png', animation: 'shimo',
+  },
+}
 
 export const upgrades: Record<UpgradeId, { name: string; rarity: string; description: string; tag: string }> = {
   power: { name: '沉肩坠肘', rarity: '普通', description: '全部伤害 +12%', tag: '输出' },
@@ -19,6 +49,7 @@ export const items: Record<ItemId, { name: string; rarity: string; description: 
 }
 
 export type GameState = {
+  characterId: CharacterId
   seed: number
   time: number
   wave: number
@@ -29,6 +60,7 @@ export type GameState = {
   spawnTimer: number
   bambooCooldown: number
   leafCooldown: number
+  characterAttackCount: number
   gameOver: boolean
   pendingUpgrade: boolean
   shopOpen: boolean
@@ -63,6 +95,9 @@ export type GameState = {
     facingY: number
     hitCooldown: number
     dashBurstPending: boolean
+    shield: number
+    shieldMax: number
+    shieldTimer: number
   }
   enemies: Array<{
     id: number
@@ -78,9 +113,9 @@ export type GameState = {
   }>
   playerProjectiles: Array<{ id: number; x: number; y: number; vx: number; vy: number; damage: number; critical: boolean }>
   enemyProjectiles: Array<{ id: number; x: number; y: number; vx: number; vy: number }>
-  attacks: Array<{ id: number; x: number; y: number; life: number; radius: number; angle: number; critical: boolean }>
+  attacks: Array<{ id: number; x: number; y: number; life: number; radius: number; angle: number; arc: number; critical: boolean; kind: 'staff' | 'whirlwind' | 'shield' }>
   drops: Array<{ id: number; kind: 'xp' | 'coin' | 'heal'; x: number; y: number; value: number }>
-  effects: Array<{ id: number; kind: 'hit' | 'crit' | 'projectile-hit' | 'projectile-crit' | 'kill' | 'player-hit' | 'dash-burst'; x: number; y: number; value: number; life: number; angle: number }>
+  effects: Array<{ id: number; kind: 'hit' | 'crit' | 'projectile-hit' | 'projectile-crit' | 'kill' | 'player-hit' | 'dash-burst' | 'shield-break'; x: number; y: number; value: number; life: number; angle: number }>
 }
 
 export type PlayerInput = { x: number; y: number; dash: boolean }
@@ -90,7 +125,8 @@ const random = (state: GameState): number => {
   return state.seed / 4294967296
 }
 
-export const createGameState = (seed = 20260831): GameState => ({
+export const createGameState = (seed = 20260831, characterId: CharacterId = 'shanlan'): GameState => ({
+  characterId,
   seed,
   time: 0,
   wave: 1,
@@ -101,6 +137,7 @@ export const createGameState = (seed = 20260831): GameState => ({
   spawnTimer: 0.6,
   bambooCooldown: 0.2,
   leafCooldown: 0.45,
+  characterAttackCount: 0,
   gameOver: false,
   pendingUpgrade: false,
   shopOpen: false,
@@ -110,9 +147,15 @@ export const createGameState = (seed = 20260831): GameState => ({
   ownedItems: [],
   chosenUpgrades: [],
   player: {
-    x: 800, y: 500, hp: 110, maxHp: 110, level: 1, xp: 0, nextXp: 18, coins: 0,
-    damage: 1, meleeDamage: 1, attackSpeed: 1, armor: 0, moveSpeed: 1, projectileCount: 1, meleeRange: 82, rangedDamage: 1, projectileSpeed: 430,
+    x: 800, y: 500,
+    hp: characterId === 'qingtuan' ? 85 : characterId === 'shimo' ? 140 : 110,
+    maxHp: characterId === 'qingtuan' ? 85 : characterId === 'shimo' ? 140 : 110,
+    level: 1, xp: 0, nextXp: 18, coins: 0,
+    damage: 1, meleeDamage: characterId === 'shanlan' ? 1.15 : characterId === 'qingtuan' ? 0.8 : 1,
+    attackSpeed: 1, armor: characterId === 'shimo' ? 8 : 0, moveSpeed: characterId === 'qingtuan' ? 1.1 : characterId === 'shimo' ? 0.9 : 1,
+    projectileCount: 1, meleeRange: characterId === 'shanlan' ? 74 : 82, rangedDamage: 1, projectileSpeed: characterId === 'qingtuan' ? 516 : 430,
     dashCooldown: 0, dashTime: 0, dashX: 1, dashY: 0, facingX: 1, facingY: 0, hitCooldown: 0, dashBurstPending: false,
+    shield: 0, shieldMax: 0, shieldTimer: characterId === 'shimo' ? 8 : 0,
   },
   enemies: [], playerProjectiles: [], enemyProjectiles: [], attacks: [], drops: [], effects: [],
 })
@@ -184,6 +227,14 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
   const previousDashTime = state.player.dashTime
   state.player.dashTime = Math.max(0, state.player.dashTime - dt)
   state.player.hitCooldown = Math.max(0, state.player.hitCooldown - dt)
+  if (state.characterId === 'shimo') {
+    state.player.shieldTimer -= dt
+    if (state.player.shieldTimer <= 0) {
+      state.player.shieldMax = Math.ceil(state.player.maxHp * 0.08)
+      state.player.shield = state.player.shieldMax
+      state.player.shieldTimer = 8
+    }
+  }
   state.bambooCooldown -= dt
   state.leafCooldown -= dt
   state.spawnTimer -= dt
@@ -268,13 +319,29 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
     if (distance < 32 && state.player.hitCooldown === 0 && state.player.dashTime === 0) {
       const rawDamage = enemy.kind === 'dasher' && enemy.dashTime > 0 ? 7 : 3
       const damage = Math.max(1, Math.floor(rawDamage * (1 - state.player.armor / (state.player.armor + 60))))
-      state.player.hp -= damage
+      const shieldBefore = state.player.shield
+      const absorbed = Math.min(shieldBefore, damage)
+      state.player.shield -= absorbed
+      state.player.hp -= damage - absorbed
       state.player.hitCooldown = 1.15
       state.effects.push({ id: state.nextId++, kind: 'player-hit', x: state.player.x, y: state.player.y, value: damage, life: 0.35, angle: Math.atan2(dy, dx) })
+      if (shieldBefore > 0 && state.player.shield === 0) {
+        state.effects.push({ id: state.nextId++, kind: 'shield-break', x: state.player.x, y: state.player.y, value: 24, life: 0.42, angle: 0 })
+        for (const nearbyEnemy of state.enemies) {
+          const breakX = nearbyEnemy.x - state.player.x
+          const breakY = nearbyEnemy.y - state.player.y
+          const breakDistance = Math.max(0.001, Math.hypot(breakX, breakY))
+          if (breakDistance <= 110) {
+            nearbyEnemy.hp -= 24
+            nearbyEnemy.x += (breakX / breakDistance) * 48
+            nearbyEnemy.y += (breakY / breakDistance) * 48
+          }
+        }
+      }
     }
   }
 
-  if (state.bambooCooldown <= 0) {
+  if (state.characterId !== 'qingtuan' && state.bambooCooldown <= 0) {
     let target: GameState['enemies'][number] | undefined
     const attackRadius = state.player.meleeRange + 24
     let targetDistance = attackRadius
@@ -283,27 +350,36 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
       if (distance < targetDistance) { target = enemy; targetDistance = distance }
     }
     if (target) {
+      state.characterAttackCount += 1
       const angle = Math.atan2(target.y - state.player.y, target.x - state.player.x)
       const critical = random(state) < 0.1
-      const damage = Math.round(38 * state.player.damage * state.player.meleeDamage * (critical ? 1.75 : 1))
+      const whirlwind = state.characterId === 'shanlan' && state.characterAttackCount % 4 === 0
+      const arc = whirlwind ? Math.PI / 2 : state.characterId === 'shimo' ? Math.PI / 3 : Math.PI / 4
+      const damage = Math.round((state.characterId === 'shimo' ? 34 : 38) * state.player.damage * state.player.meleeDamage * (critical ? 1.75 : 1))
+      let hitCount = 0
       for (const enemy of state.enemies) {
         const dx = enemy.x - state.player.x
         const dy = enemy.y - state.player.y
         const distance = Math.max(0.001, Math.hypot(dx, dy))
         const angleDelta = Math.atan2(Math.sin(Math.atan2(dy, dx) - angle), Math.cos(Math.atan2(dy, dx) - angle))
-        if (distance <= attackRadius && Math.abs(angleDelta) <= Math.PI / 4) {
+        if (distance <= attackRadius && Math.abs(angleDelta) <= arc && hitCount < 8) {
+          hitCount += 1
           enemy.hp -= damage
           enemy.x = Math.min(1580, Math.max(20, enemy.x + (dx / distance) * (critical ? 22 : 14)))
           enemy.y = Math.min(980, Math.max(20, enemy.y + (dy / distance) * (critical ? 22 : 14)))
           state.effects.push({ id: state.nextId++, kind: critical ? 'crit' : 'hit', x: enemy.x, y: enemy.y - 28, value: damage, life: 0.42, angle })
         }
       }
-      state.attacks.push({ id: state.nextId++, x: state.player.x, y: state.player.y, life: 0.28, radius: attackRadius, angle, critical })
+      if (whirlwind) state.player.hp = Math.min(state.player.maxHp, state.player.hp + Math.max(1, Math.ceil(state.player.maxHp * 0.01)))
+      state.attacks.push({
+        id: state.nextId++, x: state.player.x, y: state.player.y, life: 0.28, radius: attackRadius, angle, arc, critical,
+        kind: whirlwind ? 'whirlwind' : state.characterId === 'shimo' ? 'shield' : 'staff',
+      })
     }
     state.bambooCooldown = 0.62 / state.player.attackSpeed
   }
 
-  if (state.leafCooldown <= 0 && state.enemies.length > 0) {
+  if (state.characterId === 'qingtuan' && state.leafCooldown <= 0 && state.enemies.length > 0) {
     let target = state.enemies[0]
     let targetDistance = Math.hypot(target.x - state.player.x, target.y - state.player.y)
     for (const enemy of state.enemies) {
@@ -311,13 +387,18 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
       if (distance < targetDistance) { target = enemy; targetDistance = distance }
     }
     for (let index = 0; index < state.player.projectileCount; index += 1) {
-      const angle = Math.atan2(target.y - state.player.y, target.x - state.player.x) + (index - (state.player.projectileCount - 1) / 2) * 0.16
+      state.characterAttackCount += 1
+      const baseAngle = Math.atan2(target.y - state.player.y, target.x - state.player.x) + (index - (state.player.projectileCount - 1) / 2) * 0.16
       const critical = random(state) < 0.1
-      state.playerProjectiles.push({
-        id: state.nextId++, x: state.player.x, y: state.player.y,
-        vx: Math.cos(angle) * state.player.projectileSpeed, vy: Math.sin(angle) * state.player.projectileSpeed,
-        damage: Math.round(24 * state.player.damage * state.player.rangedDamage * (critical ? 1.75 : 1)), critical,
-      })
+      const split = state.characterAttackCount % 6 === 0
+      for (const angleOffset of split ? [-0.22, 0, 0.22] : [0]) {
+        const angle = baseAngle + angleOffset
+        state.playerProjectiles.push({
+          id: state.nextId++, x: state.player.x, y: state.player.y,
+          vx: Math.cos(angle) * state.player.projectileSpeed, vy: Math.sin(angle) * state.player.projectileSpeed,
+          damage: Math.round(24 * state.player.damage * state.player.rangedDamage * (critical ? 1.75 : 1) * (split ? 0.45 : 1)), critical,
+        })
+      }
     }
     state.leafCooldown = 0.88 / state.player.attackSpeed
   }
@@ -339,10 +420,26 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
     projectile.y += projectile.vy * dt
     if (state.player.hitCooldown === 0 && state.player.dashTime === 0 && Math.hypot(state.player.x - projectile.x, state.player.y - projectile.y) < 25) {
       const damage = Math.max(1, Math.floor(3 * (1 - state.player.armor / (state.player.armor + 60))))
-      state.player.hp -= damage
+      const shieldBefore = state.player.shield
+      const absorbed = Math.min(shieldBefore, damage)
+      state.player.shield -= absorbed
+      state.player.hp -= damage - absorbed
       state.player.hitCooldown = 1.05
       state.effects.push({ id: state.nextId++, kind: 'player-hit', x: state.player.x, y: state.player.y, value: damage, life: 0.35, angle: Math.atan2(projectile.vy, projectile.vx) })
       projectile.x = -100
+      if (shieldBefore > 0 && state.player.shield === 0) {
+        state.effects.push({ id: state.nextId++, kind: 'shield-break', x: state.player.x, y: state.player.y, value: 24, life: 0.42, angle: 0 })
+        for (const enemy of state.enemies) {
+          const breakX = enemy.x - state.player.x
+          const breakY = enemy.y - state.player.y
+          const breakDistance = Math.max(0.001, Math.hypot(breakX, breakY))
+          if (breakDistance <= 110) {
+            enemy.hp -= 24
+            enemy.x += (breakX / breakDistance) * 48
+            enemy.y += (breakY / breakDistance) * 48
+          }
+        }
+      }
     }
   }
 
@@ -383,7 +480,9 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
     state.player.xp -= state.player.nextXp
     state.player.level += 1
     state.player.nextXp = Math.round(state.player.nextXp * 1.24 + 6)
-    const pool = Object.keys(upgrades) as UpgradeId[]
+    const pool = (Object.keys(upgrades) as UpgradeId[]).filter((id) => (
+      state.characterId === 'qingtuan' ? id !== 'wide-sweep' : id !== 'leaf-volley'
+    ))
     state.upgradeChoices = []
     while (state.upgradeChoices.length < 3) {
       const choice = pool[Math.floor(random(state) * pool.length)]
