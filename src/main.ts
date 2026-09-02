@@ -344,7 +344,10 @@ class BattleScene extends Phaser.Scene {
         this.effectTexts.set(effect.id, text)
       }
       const text = this.effectTexts.get(effect.id)
-      if (text) text.setPosition(effect.x, effect.y - (0.42 - effect.life) * 46).setAlpha(alpha)
+      if (text) text.setPosition(
+        Phaser.Math.Clamp(effect.x, 34, 1566),
+        Phaser.Math.Clamp(effect.y - (0.42 - effect.life) * 46, 28, 972),
+      ).setAlpha(alpha)
     }
     const liveEffectIds = new Set(this.state.effects.map((effect) => effect.id))
     for (const [id, text] of this.effectTexts) {
@@ -467,6 +470,7 @@ class BattleScene extends Phaser.Scene {
     if (dash) {
       dash.textContent = this.state.player.dashCooldown === 0 ? '闪避就绪' : `闪避 ${this.state.player.dashCooldown.toFixed(1)}s`
       dash.classList.toggle('ready', this.state.player.dashCooldown === 0)
+      dash.classList.toggle('near-player', this.state.player.x > 1400 && this.state.player.y < 180)
     }
     const hurtVignette = document.querySelector<HTMLElement>('#hurt-vignette')
     if (hurtVignette) hurtVignette.classList.toggle('active', this.state.effects.some((effect) => effect.kind === 'player-hit'))

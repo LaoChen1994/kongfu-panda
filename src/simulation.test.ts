@@ -9,7 +9,9 @@ stepGame(movement, { x: 0, y: 0, dash: true }, 0.05)
 if (movement.player.x - normalX < 20 || movement.player.dashCooldown <= 0) throw new Error('闪避应当加速并进入冷却')
 movement.spawnTimer = 99
 for (let tick = 0; tick < 100; tick += 1) stepGame(movement, { x: 1, y: 0, dash: false }, 0.05)
-if (movement.player.x !== 1580) throw new Error('玩家移动不得越过战场边界')
+if (movement.player.x !== 1550) throw new Error('玩家移动不得越过战场安全边界')
+for (let tick = 0; tick < 100; tick += 1) stepGame(movement, { x: 0, y: -1, dash: false }, 0.05)
+if (movement.player.y !== 75) throw new Error('玩家顶部边界必须保留完整精灵空间')
 
 const qingtuanStats = createGameState(2, 'qingtuan')
 if (qingtuanStats.player.maxHp !== 85 || qingtuanStats.player.moveSpeed !== 1.1 || qingtuanStats.player.projectileSpeed !== 516) throw new Error('青团初始属性应体现远程机动定位')
@@ -43,6 +45,18 @@ shopCheck.shopChoices = ['panda-roller', 'martial-belt', 'martial-belt', 'iron-b
 shopCheck.ownedItems.push('panda-roller')
 if (buyItem(shopCheck, 0)) throw new Error('唯一宝物已拥有时不得重复购买')
 if (!buyItem(shopCheck, 1) || !buyItem(shopCheck, 2)) throw new Error('普通数值宝物应允许重复购买')
+
+const uniqueLockCheck = createGameState(16)
+uniqueLockCheck.shopOpen = true
+uniqueLockCheck.player.coins = 1000
+uniqueLockCheck.shopChoices = ['panda-roller', 'panda-roller', 'martial-belt', 'iron-bracer']
+if (!toggleShopLock(uniqueLockCheck, 1) || !buyItem(uniqueLockCheck, 0)) throw new Error('应能购买未锁定的唯一宝物')
+if (uniqueLockCheck.lockedShopIndex !== null || uniqueLockCheck.shopChoices.slice(0, 2).some(Boolean)) throw new Error('购买唯一宝物后应清除同名商品和无效锁定')
+for (let refresh = 0; refresh < 12; refresh += 1) {
+  if (!refreshShop(uniqueLockCheck)) throw new Error('应能连续刷新商品')
+  const counts = uniqueLockCheck.shopChoices.map((id) => uniqueLockCheck.shopChoices.filter((choice) => choice === id).length)
+  if (Math.max(...counts) > 2 || new Set(uniqueLockCheck.shopChoices).size < 3 || uniqueLockCheck.shopChoices.includes('panda-roller')) throw new Error('商城应至少提供三种商品，且不得出现已拥有的唯一宝物')
+}
 
 const lockCarryCheck = createGameState(6)
 lockCarryCheck.shopOpen = true

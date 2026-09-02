@@ -192,8 +192,9 @@ export const buyItem = (state: GameState, index: number): boolean => {
   if (!state.shopOpen || state.player.coins < item.price || (item.unique && state.ownedItems.includes(id))) return false
   state.player.coins -= item.price
   state.ownedItems.push(id)
-  state.shopChoices[index] = null
-  if (state.lockedShopIndex === index) state.lockedShopIndex = null
+  const lockedId = state.lockedShopIndex === null ? null : state.shopChoices[state.lockedShopIndex]
+  state.shopChoices = state.shopChoices.map((choice, choiceIndex) => item.unique && choice === id || choiceIndex === index ? null : choice)
+  if (state.lockedShopIndex === index || lockedId === id) state.lockedShopIndex = null
   if (id === 'martial-belt') state.player.meleeDamage += 0.1
   if (id === 'wind-feather') {
     state.player.projectileSpeed *= 1.2
@@ -210,8 +211,15 @@ export const refreshShop = (state: GameState): boolean => {
   if (!state.shopOpen || state.player.coins < state.shopRefreshCost) return false
   state.player.coins -= state.shopRefreshCost
   state.shopRefreshCost += 2
-  const pool = Object.keys(items) as ItemId[]
-  state.shopChoices = state.shopChoices.map((id, index) => index === state.lockedShopIndex ? id : pool[Math.floor(random(state) * pool.length)])
+  const pool = (Object.keys(items) as ItemId[]).filter((id) => !items[id].unique || !state.ownedItems.includes(id))
+  const selected = state.lockedShopIndex === null || !state.shopChoices[state.lockedShopIndex] ? [] : [state.shopChoices[state.lockedShopIndex]]
+  state.shopChoices = state.shopChoices.map((id, index) => {
+    if (index === state.lockedShopIndex) return id
+    const available = pool.filter((candidate) => selected.length < 3 ? !selected.includes(candidate) : selected.filter((choice) => choice === candidate).length < 2)
+    const choice = available[Math.floor(random(state) * available.length)]
+    selected.push(choice)
+    return choice
+  })
   return true
 }
 
@@ -308,8 +316,8 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
     state.player.dashBurstPending = state.ownedItems.includes('panda-roller')
   }
   const speed = (state.player.dashTime > 0 ? 580 : 220) * state.player.moveSpeed
-  state.player.x = Math.min(1580, Math.max(20, state.player.x + (state.player.dashTime > 0 ? state.player.dashX : moveX) * speed * dt))
-  state.player.y = Math.min(980, Math.max(20, state.player.y + (state.player.dashTime > 0 ? state.player.dashY : moveY) * speed * dt))
+  state.player.x = Math.min(1550, Math.max(50, state.player.x + (state.player.dashTime > 0 ? state.player.dashX : moveX) * speed * dt))
+  state.player.y = Math.min(950, Math.max(75, state.player.y + (state.player.dashTime > 0 ? state.player.dashY : moveY) * speed * dt))
 
   if (state.spawnTimer <= 0 && state.enemies.length < 100) {
     const angle = random(state) * Math.PI * 2
@@ -317,8 +325,8 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
     const hp = (kind === 'dasher' ? 72 : kind === 'shooter' ? 48 : 56) * (1 + (state.wave - 1) * 0.12)
     state.enemies.push({
       id: state.nextId++, kind,
-      x: Math.min(1570, Math.max(30, state.player.x + Math.cos(angle) * 470)),
-      y: Math.min(970, Math.max(30, state.player.y + Math.sin(angle) * 470)),
+      x: Math.min(1550, Math.max(50, state.player.x + Math.cos(angle) * 470)),
+      y: Math.min(950, Math.max(75, state.player.y + Math.sin(angle) * 470)),
       hp, maxHp: hp, cooldown: kind === 'shooter' ? 1.2 : 1.8, dashTime: 0, vx: 0, vy: 0,
     })
     state.spawnTimer = Math.max(0.3, 1.05 - state.time * 0.0015 - (state.wave - 1) * 0.04)
@@ -354,8 +362,8 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
         enemy.cooldown = 1.85
       }
     }
-    enemy.x = Math.min(1580, Math.max(20, enemy.x))
-    enemy.y = Math.min(980, Math.max(20, enemy.y))
+    enemy.x = Math.min(1550, Math.max(50, enemy.x))
+    enemy.y = Math.min(950, Math.max(75, enemy.y))
     if (distance < 32 && state.player.hitCooldown === 0 && state.player.dashTime === 0) {
       const rawDamage = enemy.kind === 'dasher' && enemy.dashTime > 0 ? 7 : 3
       const damage = Math.max(1, Math.floor(rawDamage * (1 - state.player.armor / (state.player.armor + 60))))
@@ -406,8 +414,8 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
           hitCount += 1
           enemy.hp -= damage
           const knockback = state.characterId === 'shimo' ? critical ? 46 : 34 : critical ? 22 : 14
-          enemy.x = Math.min(1580, Math.max(20, enemy.x + (dx / distance) * knockback))
-          enemy.y = Math.min(980, Math.max(20, enemy.y + (dy / distance) * knockback))
+          enemy.x = Math.min(1550, Math.max(50, enemy.x + (dx / distance) * knockback))
+          enemy.y = Math.min(950, Math.max(75, enemy.y + (dy / distance) * knockback))
           state.effects.push({ id: state.nextId++, kind: critical ? 'crit' : 'hit', x: enemy.x, y: enemy.y - 28, value: damage, life: 0.42, angle })
         }
       }
@@ -531,8 +539,15 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
     }
     state.pendingUpgrade = true
   } else if (state.waveTime >= state.waveDuration) {
-    const pool = Object.keys(items) as ItemId[]
-    state.shopChoices = state.shopChoices.map((id, index) => index === state.lockedShopIndex ? id : pool[Math.floor(random(state) * pool.length)])
+    const pool = (Object.keys(items) as ItemId[]).filter((id) => !items[id].unique || !state.ownedItems.includes(id))
+    const selected = state.lockedShopIndex === null || !state.shopChoices[state.lockedShopIndex] ? [] : [state.shopChoices[state.lockedShopIndex]]
+    state.shopChoices = state.shopChoices.map((id, index) => {
+      if (index === state.lockedShopIndex) return id
+      const available = pool.filter((candidate) => selected.length < 3 ? !selected.includes(candidate) : selected.filter((choice) => choice === candidate).length < 2)
+      const choice = available[Math.floor(random(state) * available.length)]
+      selected.push(choice)
+      return choice
+    })
     state.shopOpen = true
   }
 
