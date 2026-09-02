@@ -101,6 +101,20 @@ shieldCheck.enemies.push({ id: 1, kind: 'chaser', x: 800, y: 500, hp: 50, maxHp:
 stepGame(shieldCheck, { x: 0, y: 0, dash: false }, 0.05)
 if (shieldCheck.player.shield !== 0 || !shieldCheck.effects.some((effect) => effect.kind === 'shield-break') || shieldCheck.enemies[0].hp !== 26) throw new Error('石墨护盾破裂时应吸收伤害并反击周围敌人')
 
+const shieldAttackCheck = createGameState(14, 'shimo')
+shieldAttackCheck.spawnTimer = 99
+shieldAttackCheck.bambooCooldown = 0
+shieldAttackCheck.enemies.push({ id: 1, kind: 'chaser', x: 880, y: 500, hp: 100, maxHp: 100, cooldown: 1, dashTime: 0, vx: 0, vy: 0 })
+stepGame(shieldAttackCheck, { x: 0, y: 0, dash: false }, 0.05)
+if (shieldAttackCheck.attacks[0]?.kind !== 'shield' || shieldAttackCheck.attacks[0].arc !== Math.PI / 5 || shieldAttackCheck.attacks[0].radius !== 90 || shieldAttackCheck.enemies[0].x < 908) throw new Error('铁竹盾应使用短距窄扇形并产生强击退')
+
+const enemyShotCheck = createGameState(15)
+enemyShotCheck.spawnTimer = 99
+enemyShotCheck.bambooCooldown = 99
+enemyShotCheck.enemies.push({ id: 1, kind: 'shooter', x: 1050, y: 500, hp: 100, maxHp: 100, cooldown: 0, dashTime: 0, vx: 0, vy: 0 })
+stepGame(enemyShotCheck, { x: 0, y: 0, dash: false }, 0.05)
+if (enemyShotCheck.enemyProjectiles.length !== 1 || !enemyShotCheck.effects.some((effect) => effect.kind === 'enemy-shot' && effect.id === -enemyShotCheck.enemyProjectiles[0].id) || enemyShotCheck.nextId !== 2) throw new Error('远程敌人发射反馈不得额外占用实体 ID')
+
 const defeatCheck = createGameState(11)
 defeatCheck.spawnTimer = 99
 defeatCheck.player.hp = 1

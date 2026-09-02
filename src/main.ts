@@ -257,11 +257,27 @@ class BattleScene extends Phaser.Scene {
       const alpha = Math.min(1, attack.life / 0.2)
       const start = attack.angle - attack.arc
       const end = attack.angle + attack.arc
-      const attackColor = attack.kind === 'shield' ? 0x66d6df : attack.kind === 'whirlwind' ? 0xffdf65 : 0x9bcb66
-      graphics.fillStyle(attackColor, alpha * (attack.kind === 'whirlwind' ? 0.25 : 0.18)).beginPath().moveTo(attack.x, attack.y).arc(attack.x, attack.y, attack.radius, start, end).closePath().fillPath()
-      graphics.lineStyle(attack.critical || attack.kind === 'whirlwind' ? 9 : 7, attack.critical ? 0xffdf65 : attack.kind === 'shield' ? 0x8ce8ec : 0xe3a83b, alpha).beginPath().arc(attack.x, attack.y, attack.radius, start, end).strokePath()
-      graphics.lineStyle(3, attack.kind === 'shield' ? 0xd5ffff : 0xcdf08a, alpha * 0.8).beginPath().arc(attack.x, attack.y, attack.radius * 0.72, start + 0.08, end - 0.08).strokePath()
-      graphics.lineStyle(2, 0xf3e6c8, alpha * 0.6).lineBetween(attack.x, attack.y, attack.x + Math.cos(start) * attack.radius, attack.y + Math.sin(start) * attack.radius).lineBetween(attack.x, attack.y, attack.x + Math.cos(end) * attack.radius, attack.y + Math.sin(end) * attack.radius)
+      if (attack.kind === 'shield') {
+        const impactX = attack.x + Math.cos(attack.angle) * attack.radius
+        const impactY = attack.y + Math.sin(attack.angle) * attack.radius
+        graphics.fillStyle(0x53b8b2, alpha * 0.24).beginPath().moveTo(attack.x, attack.y).arc(attack.x, attack.y, attack.radius, start, end).closePath().fillPath()
+        graphics.lineStyle(10, attack.critical ? 0xf3e6c8 : 0x8ce8ec, alpha).beginPath().arc(attack.x, attack.y, attack.radius, start, end).strokePath()
+        graphics.lineStyle(4, 0xd5ffff, alpha * 0.9).beginPath().arc(attack.x, attack.y, attack.radius * 0.72, start + 0.08, end - 0.08).strokePath()
+        graphics.fillStyle(0xf3e6c8, alpha).fillCircle(impactX, impactY, attack.critical ? 9 : 6)
+        for (let index = -1; index <= 1; index += 1) {
+          const angle = attack.angle + index * 0.42
+          graphics.lineStyle(4, index === 0 ? 0xf3e6c8 : 0x53b8b2, alpha * 0.9).lineBetween(impactX - Math.cos(angle) * 8, impactY - Math.sin(angle) * 8, impactX + Math.cos(angle) * 18, impactY + Math.sin(angle) * 18)
+        }
+      } else {
+        graphics.fillStyle(attack.kind === 'whirlwind' ? 0xffdf65 : 0x9bcb66, alpha * (attack.kind === 'whirlwind' ? 0.25 : 0.18)).beginPath().moveTo(attack.x, attack.y).arc(attack.x, attack.y, attack.radius, start, end).closePath().fillPath()
+        graphics.lineStyle(attack.critical || attack.kind === 'whirlwind' ? 9 : 7, attack.critical || attack.kind === 'whirlwind' ? 0xffdf65 : 0xe3a83b, alpha).beginPath().arc(attack.x, attack.y, attack.radius, start, end).strokePath()
+        graphics.lineStyle(3, 0xcdf08a, alpha * 0.8).beginPath().arc(attack.x, attack.y, attack.radius * 0.72, start + 0.08, end - 0.08).strokePath()
+        if (attack.kind === 'whirlwind') graphics.lineStyle(5, 0xe3a83b, alpha * 0.8).beginPath().arc(attack.x, attack.y, attack.radius * 0.86, start + 0.2, end - 0.2).strokePath()
+        for (let index = 0; index < (attack.kind === 'whirlwind' ? 5 : attack.radius > 110 ? 3 : 2); index += 1) {
+          const angle = start + (end - start) * ((index + 1) / (attack.kind === 'whirlwind' ? 6 : attack.radius > 110 ? 4 : 3))
+          graphics.lineStyle(3, index % 2 === 0 ? 0xf3e6c8 : 0x9bcb66, alpha * 0.72).lineBetween(attack.x + Math.cos(angle) * attack.radius * 0.78, attack.y + Math.sin(angle) * attack.radius * 0.78, attack.x + Math.cos(angle + 0.08) * attack.radius, attack.y + Math.sin(angle + 0.08) * attack.radius)
+        }
+      }
     }
     for (const effect of this.state.effects) {
       const alpha = Math.min(1, effect.life * 4)
@@ -276,6 +292,13 @@ class BattleScene extends Phaser.Scene {
       if (effect.kind === 'shield-break') {
         graphics.fillStyle(0x66d6df, alpha * 0.18).fillCircle(effect.x, effect.y, 110 * (1 - effect.life / 0.42))
         graphics.lineStyle(9, 0x8ce8ec, alpha).strokeCircle(effect.x, effect.y, 110 * (1 - effect.life / 0.42))
+      }
+      if (effect.kind === 'enemy-shot') {
+        const progress = 1 - effect.life / 0.24
+        const muzzleX = effect.x + Math.cos(effect.angle) * progress * 20
+        const muzzleY = effect.y + Math.sin(effect.angle) * progress * 20
+        graphics.fillStyle(0x7651a8, alpha * 0.24).fillCircle(muzzleX, muzzleY, 18 * (1 - progress))
+        graphics.lineStyle(3, 0xd9554d, alpha * 0.85).strokeCircle(muzzleX, muzzleY, 6 + progress * 8)
       }
       if (effect.kind === 'hit' || effect.kind === 'crit') {
         const centerY = effect.y + 26
@@ -339,7 +362,7 @@ class BattleScene extends Phaser.Scene {
       graphics.lineStyle(projectile.critical ? 5 : 3, projectile.critical ? 0xe3a83b : 0x9bcb66, 0.92).lineBetween(projectile.x - directionX * (projectile.critical ? 42 : 30), projectile.y - directionY * (projectile.critical ? 42 : 30), projectile.x, projectile.y)
       let sprite = this.leafSprites.get(projectile.id)
       if (!sprite) {
-        sprite = this.add.image(projectile.x, projectile.y, 'leaf-dart').setDisplaySize(projectile.critical ? 38 : 31, projectile.critical ? 38 : 31)
+        sprite = this.add.image(projectile.x, projectile.y, 'leaf-dart').setDisplaySize(projectile.critical ? 34 : 28, projectile.critical ? 34 : 28)
         this.leafSprites.set(projectile.id, sprite)
       }
       sprite.setPosition(projectile.x, projectile.y).setRotation(Math.atan2(projectile.vy, projectile.vx) + Math.PI / 4 + Math.sin(this.state.time * 18 + projectile.id) * 0.18).setDepth(projectile.y + 5)
@@ -349,9 +372,19 @@ class BattleScene extends Phaser.Scene {
     for (const [id, sprite] of this.leafSprites) if (!liveLeafIds.has(id)) { sprite.destroy(); this.leafSprites.delete(id) }
     for (const projectile of this.state.enemyProjectiles) {
       const length = Math.max(0.001, Math.hypot(projectile.vx, projectile.vy))
-      graphics.lineStyle(5, 0xd9554d, 0.7).lineBetween(projectile.x - projectile.vx / length * 18, projectile.y - projectile.vy / length * 18, projectile.x, projectile.y)
-      graphics.fillStyle(0x7651a8).fillCircle(projectile.x, projectile.y, 7)
-      graphics.lineStyle(2, 0xff958a, 0.9).strokeCircle(projectile.x, projectile.y, 11)
+      const directionX = projectile.vx / length
+      const directionY = projectile.vy / length
+      const angle = Math.atan2(projectile.vy, projectile.vx)
+      const sideX = -directionY
+      const sideY = directionX
+      graphics.lineStyle(7, 0x3f285d, 0.22).lineBetween(projectile.x - directionX * 34, projectile.y - directionY * 34, projectile.x, projectile.y)
+      graphics.lineStyle(3, 0xd9554d, 0.78).lineBetween(projectile.x - directionX * 28, projectile.y - directionY * 28, projectile.x, projectile.y)
+      graphics.lineStyle(1, 0xffb0a8, 0.9).lineBetween(projectile.x - directionX * 15, projectile.y - directionY * 15, projectile.x, projectile.y)
+      const pulse = Math.sin(this.state.time * 12 + projectile.id) * 1.5
+      graphics.fillStyle(0x7651a8, 0.96).beginPath().moveTo(projectile.x + directionX * (9 + pulse), projectile.y + directionY * (9 + pulse)).lineTo(projectile.x + sideX * 5, projectile.y + sideY * 5).lineTo(projectile.x - directionX * 8, projectile.y - directionY * 8).lineTo(projectile.x - sideX * 5, projectile.y - sideY * 5).closePath().fillPath()
+      graphics.lineStyle(2, 0xd9554d, 0.9).beginPath().moveTo(projectile.x + directionX * (9 + pulse), projectile.y + directionY * (9 + pulse)).lineTo(projectile.x + sideX * 5, projectile.y + sideY * 5).lineTo(projectile.x - directionX * 8, projectile.y - directionY * 8).lineTo(projectile.x - sideX * 5, projectile.y - sideY * 5).closePath().strokePath()
+      graphics.fillStyle(0xf3e6c8, 0.95).fillCircle(projectile.x + Math.cos(angle) * 2, projectile.y + Math.sin(angle) * 2, 2)
+      graphics.fillStyle(0xd9554d, 0.72).fillCircle(projectile.x + sideX * (8 + pulse), projectile.y + sideY * (8 + pulse), 2).fillCircle(projectile.x - sideX * (8 + pulse), projectile.y - sideY * (8 + pulse), 2)
     }
 
     const liveEnemyIds = new Set<number>()

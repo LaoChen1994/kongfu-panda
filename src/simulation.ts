@@ -18,17 +18,17 @@ export const characters: Record<CharacterId, {
   shanlan: {
     name: '山岚', role: '近战 · 爆发', description: '贴近敌群，用大范围横扫打出持续压制。',
     passive: '每第 4 次近战变为 180° 旋风，并恢复 1% 最大生命。', weakness: '攻击距离较短',
-    portrait: 'assets/characters/panda-wanderer.png', weaponName: '青竹杖', weaponDescription: '近战横扫', weaponImage: 'assets/weapons/bamboo-staff.png', animation: 'panda',
+    portrait: 'assets/characters/panda-wanderer.png', weaponName: '青竹杖', weaponDescription: '中距 90° 横扫', weaponImage: 'assets/weapons/bamboo-staff.png', animation: 'panda',
   },
   qingtuan: {
     name: '青团', role: '远程 · 机动', description: '保持距离，用高速飞叶穿梭清场。',
     passive: '每第 6 次射击分裂为 3 枚各造成 45% 伤害的飞叶。', weakness: '生命较低',
-    portrait: 'assets/characters/qingtuan.png', weaponName: '飞叶镖', weaponDescription: '高速追敌', weaponImage: 'assets/weapons/leaf-dart.png', animation: 'qingtuan',
+    portrait: 'assets/characters/qingtuan.png', weaponName: '飞叶镖', weaponDescription: '长距高速飞叶', weaponImage: 'assets/weapons/leaf-dart.png', animation: 'qingtuan',
   },
   shimo: {
     name: '石墨', role: '肉盾 · 反击', description: '顶住敌潮，用铁盾撞开近身威胁。',
     passive: '每 8 秒获得 8% 最大生命护盾，破盾时震开周围敌人。', weakness: '移动速度较慢',
-    portrait: 'assets/characters/shimo.png', weaponName: '铁竹盾', weaponDescription: '近战盾击', weaponImage: 'assets/weapons/iron-bamboo-shield.png', animation: 'shimo',
+    portrait: 'assets/characters/shimo.png', weaponName: '铁竹盾', weaponDescription: '短距 72° 盾击', weaponImage: 'assets/weapons/iron-bamboo-shield.png', animation: 'shimo',
   },
 }
 
@@ -116,7 +116,7 @@ export type GameState = {
   enemyProjectiles: Array<{ id: number; x: number; y: number; vx: number; vy: number }>
   attacks: Array<{ id: number; x: number; y: number; life: number; radius: number; angle: number; arc: number; critical: boolean; kind: 'staff' | 'whirlwind' | 'shield' }>
   drops: Array<{ id: number; kind: 'xp' | 'coin' | 'heal'; x: number; y: number; value: number }>
-  effects: Array<{ id: number; kind: 'hit' | 'crit' | 'projectile-hit' | 'projectile-crit' | 'kill' | 'player-hit' | 'dash-burst' | 'shield-break'; x: number; y: number; value: number; life: number; angle: number }>
+  effects: Array<{ id: number; kind: 'hit' | 'crit' | 'projectile-hit' | 'projectile-crit' | 'kill' | 'player-hit' | 'dash-burst' | 'shield-break' | 'enemy-shot'; x: number; y: number; value: number; life: number; angle: number }>
 }
 
 export type PlayerInput = { x: number; y: number; dash: boolean }
@@ -348,7 +348,9 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
       enemy.x += (dx / distance) * 58 * direction * dt
       enemy.y += (dy / distance) * 58 * direction * dt
       if (enemy.cooldown <= 0) {
-        state.enemyProjectiles.push({ id: state.nextId++, x: enemy.x, y: enemy.y, vx: (dx / distance) * 190, vy: (dy / distance) * 190 })
+        const projectileId = state.nextId++
+        state.enemyProjectiles.push({ id: projectileId, x: enemy.x, y: enemy.y, vx: (dx / distance) * 190, vy: (dy / distance) * 190 })
+        state.effects.push({ id: -projectileId, kind: 'enemy-shot', x: enemy.x, y: enemy.y - 24, value: 0, life: 0.24, angle: Math.atan2(dy, dx) })
         enemy.cooldown = 1.85
       }
     }
@@ -381,7 +383,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
 
   if (state.characterId !== 'qingtuan' && state.bambooCooldown <= 0) {
     let target: GameState['enemies'][number] | undefined
-    const attackRadius = state.player.meleeRange + 24
+    const attackRadius = state.player.meleeRange + (state.characterId === 'shimo' ? 8 : 24)
     let targetDistance = attackRadius
     for (const enemy of state.enemies) {
       const distance = Math.hypot(enemy.x - state.player.x, enemy.y - state.player.y)
@@ -392,7 +394,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
       const angle = Math.atan2(target.y - state.player.y, target.x - state.player.x)
       const critical = random(state) < 0.1
       const whirlwind = state.characterId === 'shanlan' && state.characterAttackCount % 4 === 0
-      const arc = whirlwind ? Math.PI / 2 : state.characterId === 'shimo' ? Math.PI / 3 : Math.PI / 4
+      const arc = whirlwind ? Math.PI / 2 : state.characterId === 'shimo' ? Math.PI / 5 : Math.PI / 4
       const damage = Math.round((state.characterId === 'shimo' ? 34 : 38) * state.player.damage * state.player.meleeDamage * (critical ? 1.75 : 1))
       let hitCount = 0
       for (const enemy of state.enemies) {
@@ -403,8 +405,9 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
         if (distance <= attackRadius && Math.abs(angleDelta) <= arc && hitCount < 8) {
           hitCount += 1
           enemy.hp -= damage
-          enemy.x = Math.min(1580, Math.max(20, enemy.x + (dx / distance) * (critical ? 22 : 14)))
-          enemy.y = Math.min(980, Math.max(20, enemy.y + (dy / distance) * (critical ? 22 : 14)))
+          const knockback = state.characterId === 'shimo' ? critical ? 46 : 34 : critical ? 22 : 14
+          enemy.x = Math.min(1580, Math.max(20, enemy.x + (dx / distance) * knockback))
+          enemy.y = Math.min(980, Math.max(20, enemy.y + (dy / distance) * knockback))
           state.effects.push({ id: state.nextId++, kind: critical ? 'crit' : 'hit', x: enemy.x, y: enemy.y - 28, value: damage, life: 0.42, angle })
         }
       }
