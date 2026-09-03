@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import './style.css'
-import { buyItem, characters, chooseUpgrade, continueWave, createGameState, isWeaponId, items, refreshShop, sellItem, sellWeapon, stepGame, toggleShopLock, upgrades, weaponIds, weapons, type CharacterId } from './simulation.js'
+import { buyItem, characters, chooseUpgrade, continueWave, createGameState, enemyDefinitions, isWeaponId, items, refreshShop, sellItem, sellWeapon, stepGame, toggleShopLock, upgrades, weaponIds, weapons, type CharacterId } from './simulation.js'
 
 const assetRoot = `${import.meta.env.BASE_URL}assets/`
 let selectedCharacter: CharacterId = 'shanlan'
@@ -20,6 +20,12 @@ const animationSets = [
   { key: 'violet-horn-dasher-attack', path: 'violet-horn-dasher/attack', frames: 6, frameRate: 15, repeat: 0 },
   { key: 'cyan-lantern-shooter-move', path: 'cyan-lantern-shooter/move', frames: 8, frameRate: 8, repeat: -1 },
   { key: 'cyan-lantern-shooter-attack', path: 'cyan-lantern-shooter/attack', frames: 6, frameRate: 15, repeat: 0 },
+  { key: 'shellback-boar-move', path: 'shellback-boar/move', frames: 6, frameRate: 7, repeat: -1 },
+  { key: 'shellback-boar-attack', path: 'shellback-boar/attack', frames: 4, frameRate: 12, repeat: 0 },
+  { key: 'weasel-assassin-move', path: 'weasel-assassin/move', frames: 6, frameRate: 12, repeat: -1 },
+  { key: 'weasel-assassin-attack', path: 'weasel-assassin/attack', frames: 4, frameRate: 16, repeat: 0 },
+  { key: 'fox-sorcerer-move', path: 'fox-sorcerer/move', frames: 6, frameRate: 7, repeat: -1 },
+  { key: 'fox-sorcerer-attack', path: 'fox-sorcerer/attack', frames: 4, frameRate: 12, repeat: 0 },
 ]
 
 class BattleScene extends Phaser.Scene {
@@ -32,6 +38,7 @@ class BattleScene extends Phaser.Scene {
   private leafSprites = new Map<number, Phaser.GameObjects.Image>()
   private firecrackerBlastSprites = new Map<number, Phaser.GameObjects.Image>()
   private wineFlameSprites = new Map<number, Phaser.GameObjects.Image>()
+  private enemyZoneSprites = new Map<number, Phaser.GameObjects.Image>()
   private turretSprites = new Map<number, Phaser.GameObjects.Image>()
   private bladeSprites = new Map<number, Phaser.GameObjects.Image>()
   private effectTexts = new Map<number, Phaser.GameObjects.Text>()
@@ -56,6 +63,7 @@ class BattleScene extends Phaser.Scene {
     this.load.image('bamboo-crossbow-turret', `${assetRoot}weapons/bamboo-crossbow-turret.png`)
     this.load.image('firecracker-blast', `${assetRoot}effects/firecracker-blast.png`)
     this.load.image('wine-flame-patch', `${assetRoot}effects/wine-flame-patch.png`)
+    this.load.image('fox-slowing-mist', `${assetRoot}effects/fox-slowing-mist.png`)
     this.load.image('corrupted-bamboo-giant', `${assetRoot}enemies/corrupted-bamboo-giant.png`)
     this.load.image('corrupted-root-warning', `${assetRoot}effects/corrupted-root-warning.png`)
     this.load.image('corrupted-root-burst', `${assetRoot}effects/corrupted-root-burst.png`)
@@ -93,6 +101,21 @@ class BattleScene extends Phaser.Scene {
         { id: this.state.nextId++, kind: 'chaser', x: 900, y: 500, hp: 2000, maxHp: 2000, cooldown: 99, dashTime: 0, vx: 0, vy: 0 },
         { id: this.state.nextId++, kind: 'dasher', x: 760, y: 620, hp: 2000, maxHp: 2000, cooldown: 99, dashTime: 0, vx: 0, vy: 0 },
         { id: this.state.nextId++, kind: 'shooter', x: 1010, y: 620, hp: 2000, maxHp: 2000, cooldown: 99, dashTime: 0, vx: 0, vy: 0 },
+      ]
+    } else if (import.meta.env.DEV && new URLSearchParams(location.search).has('playtest-enemy-wave')) {
+      this.state.wave = 6
+      this.state.waveTime = 18
+      this.state.spawnTimer = 99
+      this.state.threatBudget = 0
+      this.state.player.hp = 200
+      this.state.player.maxHp = 200
+      this.state.bambooCooldown = 99
+      this.state.leafCooldown = 99
+      this.state.enemies = [
+        { id: this.state.nextId++, kind: 'boar', x: 610, y: 500, hp: 280, maxHp: 280, cooldown: 99, dashTime: 0, vx: 0, vy: 0, facingX: 1, facingY: 0 },
+        { id: this.state.nextId++, kind: 'assassin', x: 920, y: 330, hp: 160, maxHp: 160, cooldown: 0, dashTime: 0, vx: 0, vy: 0, telegraph: 0 },
+        { id: this.state.nextId++, kind: 'sorcerer', x: 1060, y: 570, hp: 180, maxHp: 180, cooldown: 0, dashTime: 0, vx: 0, vy: 0 },
+        { id: this.state.nextId++, kind: 'chaser', x: 620, y: 730, hp: 360, maxHp: 360, cooldown: 0, dashTime: 0, vx: 0, vy: 0, telegraph: 0, elite: true },
       ]
     }
     if (import.meta.env.DEV && new URLSearchParams(location.search).has('playtest-boss')) {
@@ -396,6 +419,20 @@ class BattleScene extends Phaser.Scene {
     }
     for (const [id, sprite] of this.wineFlameSprites) if (!liveZoneIds.has(id)) { sprite.destroy(); this.wineFlameSprites.delete(id) }
 
+    const liveEnemyZoneIds = new Set<number>()
+    for (const zone of this.state.enemyZones) {
+      liveEnemyZoneIds.add(zone.id)
+      let sprite = this.enemyZoneSprites.get(zone.id)
+      if (!sprite) {
+        sprite = this.add.image(zone.x, zone.y, 'fox-slowing-mist').setRotation((zone.id % 7 - 3) * 0.12)
+        this.enemyZoneSprites.set(zone.id, sprite)
+      }
+      const fade = Math.min(1, zone.life * 2, (zone.duration - zone.life) * 4)
+      const pulse = 1 + Math.sin(this.state.time * 2.2 + zone.id) * 0.035
+      sprite.setPosition(zone.x, zone.y).setDisplaySize(zone.radius * 2.12 * pulse, zone.radius * 2.12 * pulse).setDepth(zone.y - 4).setAlpha(fade * 0.56)
+    }
+    for (const [id, sprite] of this.enemyZoneSprites) if (!liveEnemyZoneIds.has(id)) { sprite.destroy(); this.enemyZoneSprites.delete(id) }
+
     const liveTurretIds = new Set<number>()
     for (const turret of this.state.turrets) {
       liveTurretIds.add(turret.id)
@@ -474,6 +511,11 @@ class BattleScene extends Phaser.Scene {
         const progress = 1 - effect.life / 0.7
         graphics.fillStyle(0x7651a8, alpha * 0.24).fillCircle(effect.x, effect.y, 55 + progress * 70)
         graphics.lineStyle(7, 0xd9554d, alpha * 0.72).strokeCircle(effect.x, effect.y, 42 + progress * 95)
+      }
+      if (effect.kind === 'armor-block') {
+        const centerY = effect.y + 24
+        graphics.lineStyle(7, 0xe3a83b, alpha * 0.9).beginPath().arc(effect.x, centerY, 23, effect.angle - 0.72, effect.angle + 0.72).strokePath()
+        graphics.lineStyle(3, 0xf3e6c8, alpha).lineBetween(effect.x + Math.cos(effect.angle) * 14, centerY + Math.sin(effect.angle) * 14, effect.x + Math.cos(effect.angle) * 31, centerY + Math.sin(effect.angle) * 31)
       }
       if (effect.kind === 'firecracker-blast') {
         const progress = 1 - effect.life / 0.38
@@ -586,8 +628,34 @@ class BattleScene extends Phaser.Scene {
     for (const enemy of this.state.enemies) {
       liveEnemyIds.add(enemy.id)
       let sprite = this.enemySprites.get(enemy.id)
-      const size = enemy.kind === 'boss' ? 176 : enemy.kind === 'chaser' ? 54 : enemy.kind === 'dasher' ? 62 : 58
-      const family = enemy.kind === 'chaser' ? 'redfang-chaser' : enemy.kind === 'dasher' ? 'violet-horn-dasher' : 'cyan-lantern-shooter'
+      const definition = enemy.kind === 'boss' ? null : enemyDefinitions[enemy.kind]
+      const size = enemy.kind === 'boss' ? 176 : (definition?.size ?? 54) + (enemy.elite ? 14 : 0)
+      const family = definition?.animation ?? ''
+      if ((enemy.kind === 'assassin' || enemy.elite) && (enemy.telegraph ?? 0) > 0) {
+        const directionX = enemy.vx || (this.state.player.x - enemy.x) / Math.max(1, Math.hypot(this.state.player.x - enemy.x, this.state.player.y - enemy.y))
+        const directionY = enemy.vy || (this.state.player.y - enemy.y) / Math.max(1, Math.hypot(this.state.player.x - enemy.x, this.state.player.y - enemy.y))
+        const sideX = -directionY
+        const sideY = directionX
+        const length = enemy.elite ? 260 : 220
+        const width = enemy.elite ? 34 : 24
+        const progress = 1 - (enemy.telegraph ?? 0) / (enemy.elite ? 0.9 : 0.7)
+        graphics.fillStyle(enemy.elite ? 0xe3a83b : 0xd9554d, 0.1 + progress * 0.12).fillTriangle(enemy.x + sideX * width, enemy.y + sideY * width, enemy.x - sideX * width, enemy.y - sideY * width, enemy.x + directionX * length, enemy.y + directionY * length)
+        for (let index = 0; index < 3; index += 1) {
+          const start = 32 + index * 62
+          graphics.lineStyle(index === 1 ? 6 : 3, enemy.elite ? 0xe3a83b : 0xd9554d, 0.42 + progress * 0.42).lineBetween(enemy.x + directionX * start + sideX * (index - 1) * 9, enemy.y + directionY * start + sideY * (index - 1) * 9, enemy.x + directionX * (start + 31), enemy.y + directionY * (start + 31))
+        }
+      }
+      if (enemy.elite) {
+        const facingX = enemy.facingX ?? 1
+        const facingY = enemy.facingY ?? 0
+        const sideX = -facingY
+        const sideY = facingX
+        for (let index = -1; index <= 1; index += 1) {
+          const centerX = enemy.x - facingX * 29 + sideX * index * 17
+          const centerY = enemy.y - facingY * 29 + sideY * index * 17 - 8
+          graphics.fillStyle(index === 0 ? 0xe3a83b : 0xd9554d, 0.82).fillTriangle(centerX + facingX * 12, centerY + facingY * 12, centerX - facingX * 8 + sideX * 6, centerY - facingY * 8 + sideY * 6, centerX - facingX * 8 - sideX * 6, centerY - facingY * 8 - sideY * 6)
+        }
+      }
       if (!sprite) {
         sprite = enemy.kind === 'boss'
           ? this.add.sprite(enemy.x, enemy.y, 'corrupted-bamboo-giant').setOrigin(0.5, 1).setDisplaySize(size, size)
@@ -595,14 +663,16 @@ class BattleScene extends Phaser.Scene {
         this.enemySprites.set(enemy.id, sprite)
       }
       const flashing = this.state.effects.some((effect) => (effect.kind === 'hit' || effect.kind === 'crit' || effect.kind === 'projectile-hit' || effect.kind === 'projectile-crit' || effect.kind === 'firecracker-hit' || effect.kind === 'firecracker-crit') && Math.abs(effect.x - enemy.x) < 24 && Math.abs(effect.y + 28 - enemy.y) < 24)
-      const attacking = enemy.kind === 'chaser' ? Math.hypot(this.state.player.x - enemy.x, this.state.player.y - enemy.y) < 42 : enemy.kind === 'dasher' ? enemy.dashTime > 0 : enemy.cooldown > 1.45
-      if (enemy.kind !== 'boss') sprite.play(`${family}-${attacking ? 'attack' : 'move'}`, true).setFlipX(this.state.player.x < enemy.x)
-      const actionScale = enemy.kind === 'boss' ? 1 + Math.sin(this.state.time * (enemy.enraged ? 6 : 3)) * 0.018 : (enemy.kind === 'dasher' && enemy.dashTime > 0 ? 1.12 : 1) * (
+      const attacking = enemy.kind === 'chaser' ? enemy.elite ? (enemy.telegraph ?? 0) > 0 || enemy.dashTime > 0 : Math.hypot(this.state.player.x - enemy.x, this.state.player.y - enemy.y) < 42 : enemy.kind === 'dasher' || enemy.kind === 'assassin' ? enemy.dashTime > 0 || (enemy.telegraph ?? 0) > 0 : enemy.kind === 'boar' ? Math.hypot(this.state.player.x - enemy.x, this.state.player.y - enemy.y) < 48 : enemy.cooldown > (enemy.kind === 'sorcerer' ? 3.65 : 1.45)
+      if (enemy.kind !== 'boss') sprite.play(`${family}-${attacking ? 'attack' : 'move'}`, true).setFlipX((enemy.facingX ?? this.state.player.x - enemy.x) < 0)
+      const generatedEnemy = enemy.kind === 'boar' || enemy.kind === 'assassin' || enemy.kind === 'sorcerer'
+      const actionScale = enemy.kind === 'boss' ? 1 + Math.sin(this.state.time * (enemy.enraged ? 6 : 3)) * 0.018 : generatedEnemy ? enemy.kind === 'assassin' && enemy.dashTime > 0 ? 1.06 : 1 : (enemy.kind === 'dasher' && enemy.dashTime > 0 ? 1.12 : 1) * (
         attacking ? enemy.kind === 'chaser' ? 0.9 : enemy.kind === 'dasher' ? 0.625 : 0.51 : 1
       )
       const baseScale = enemy.kind === 'boss' ? size / 512 : size / 96
       sprite.setPosition(enemy.x, enemy.y).setDepth(enemy.y).setScale(baseScale * actionScale * (flashing ? 1.04 : 1), baseScale * actionScale * (flashing ? 0.96 : 1))
       if (enemy.kind === 'boss' && enemy.phase === 2) sprite.setTint(enemy.enraged ? 0xff8c92 : 0xd9a8ff)
+      else if (enemy.elite) sprite.setTint(0xffc477)
       else sprite.clearTint()
       sprite.setBlendMode(flashing ? Phaser.BlendModes.ADD : Phaser.BlendModes.NORMAL)
       if (enemy.kind !== 'boss' && enemy.hp < enemy.maxHp) {
