@@ -2,7 +2,8 @@ export type EnemyKind = 'chaser' | 'dasher' | 'shooter' | 'boss'
 export type CharacterId = 'shanlan' | 'qingtuan' | 'shimo'
 export type UpgradeId = 'power' | 'haste' | 'vitality' | 'footwork' | 'leaf-volley' | 'wide-sweep'
 export type ItemId = 'martial-belt' | 'wind-feather' | 'iron-bracer' | 'panda-roller'
-export type WeaponId = 'iron-pot-gauntlets' | 'firecracker-launcher'
+export const weaponIds = ['iron-pot-gauntlets', 'firecracker-launcher', 'spinning-bamboo-blade', 'panda-wine-gourd', 'bamboo-crossbow-turret'] as const
+export type WeaponId = typeof weaponIds[number]
 export type ShopProductId = ItemId | WeaponId
 
 export const characters: Record<CharacterId, {
@@ -53,6 +54,9 @@ export const items: Record<ItemId, { name: string; rarity: string; description: 
 export const weapons: Record<WeaponId, { name: string; rarity: string; description: string; preview: string; price: number; image: string }> = {
   'iron-pot-gauntlets': { name: '铁锅拳套', rarity: '普通', description: '极短距离快速拳击，Lv.3 起追加第二拳', preview: '升级提高伤害与拳风范围', price: 22, image: 'assets/weapons/iron-pot-gauntlets.png' },
   'firecracker-launcher': { name: '爆竹筒', rarity: '稀有', description: '发射慢速爆竹，命中造成范围爆炸', preview: '升级扩大爆炸，Lv.3 起双弹齐射', price: 42, image: 'assets/weapons/firecracker-launcher.png' },
+  'spinning-bamboo-blade': { name: '旋转竹刃', rarity: '普通', description: '竹刃绕身切割近身敌人，Lv.3 起增加第二把', preview: '升级增加伤害、轨道与竹刃数量', price: 24, image: 'assets/weapons/spinning-bamboo-blade.png' },
+  'panda-wine-gourd': { name: '熊猫酒葫芦', rarity: '稀有', description: '投出酒焰灼烧一片区域，Lv.3 起同时点燃两处', preview: '升级扩大酒焰并延长持续时间', price: 44, image: 'assets/weapons/panda-wine-gourd.png' },
+  'bamboo-crossbow-turret': { name: '竹弩机关', rarity: '稀有', description: '部署自动索敌的竹弩台，Lv.3 起同时部署两台', preview: '升级增加箭伤、射速与机关数量', price: 48, image: 'assets/weapons/bamboo-crossbow-turret.png' },
 }
 
 export const isWeaponId = (id: ShopProductId): id is WeaponId => id in weapons
@@ -71,6 +75,9 @@ export type GameState = {
   leafCooldown: number
   gauntletCooldown: number
   firecrackerCooldown: number
+  orbitCooldown: number
+  gourdCooldown: number
+  turretDeployCooldown: number
   characterAttackCount: number
   gameOver: boolean
   victory: boolean
@@ -131,9 +138,11 @@ export type GameState = {
     enraged?: boolean
   }>
   bossHazards: Array<{ id: number; kind: 'root' | 'shockwave'; x: number; y: number; radius: number; life: number; duration: number; triggered: boolean }>
-  playerProjectiles: Array<{ id: number; kind: 'leaf' | 'firecracker'; x: number; y: number; vx: number; vy: number; damage: number; critical: boolean; blastRadius: number }>
+  playerProjectiles: Array<{ id: number; kind: 'leaf' | 'firecracker' | 'bolt'; x: number; y: number; vx: number; vy: number; damage: number; critical: boolean; blastRadius: number }>
   enemyProjectiles: Array<{ id: number; x: number; y: number; vx: number; vy: number }>
   attacks: Array<{ id: number; x: number; y: number; life: number; radius: number; angle: number; arc: number; critical: boolean; kind: 'staff' | 'whirlwind' | 'shield' | 'fists' }>
+  groundZones: Array<{ id: number; x: number; y: number; radius: number; life: number; duration: number; tickCooldown: number; damage: number }>
+  turrets: Array<{ id: number; x: number; y: number; life: number; cooldown: number; level: number; angle: number }>
   drops: Array<{ id: number; kind: 'xp' | 'coin' | 'heal'; x: number; y: number; value: number }>
   effects: Array<{ id: number; kind: 'hit' | 'crit' | 'projectile-hit' | 'projectile-crit' | 'firecracker-hit' | 'firecracker-crit' | 'firecracker-blast' | 'kill' | 'player-hit' | 'dash-burst' | 'shield-break' | 'enemy-shot' | 'boss-summon'; x: number; y: number; value: number; life: number; angle: number }>
 }
@@ -159,6 +168,9 @@ export const createGameState = (seed = 20260831, characterId: CharacterId = 'sha
   leafCooldown: 0.45,
   gauntletCooldown: 0.15,
   firecrackerCooldown: 0.6,
+  orbitCooldown: 0.2,
+  gourdCooldown: 0.8,
+  turretDeployCooldown: 0.5,
   characterAttackCount: 0,
   gameOver: false,
   victory: false,
@@ -185,7 +197,7 @@ export const createGameState = (seed = 20260831, characterId: CharacterId = 'sha
     dashCooldown: 0, dashTime: 0, dashX: 1, dashY: 0, facingX: 1, facingY: 0, hitCooldown: 0, dashBurstPending: false,
     shield: 0, shieldMax: 0, shieldTimer: characterId === 'shimo' ? 8 : 0,
   },
-  enemies: [], playerProjectiles: [], enemyProjectiles: [], bossHazards: [], attacks: [], drops: [], effects: [],
+  enemies: [], playerProjectiles: [], enemyProjectiles: [], bossHazards: [], attacks: [], groundZones: [], turrets: [], drops: [], effects: [],
 })
 
 export const chooseUpgrade = (state: GameState, id: UpgradeId): boolean => {
@@ -244,7 +256,7 @@ export const refreshShop = (state: GameState): boolean => {
   if (!state.shopOpen || state.player.coins < state.shopRefreshCost || state.shopChoices.every((id, index) => id !== null && state.lockedShopIndices.includes(index))) return false
   state.player.coins -= state.shopRefreshCost
   state.shopRefreshCost += 2
-  const pool: ShopProductId[] = [...Object.keys(items) as ItemId[], ...Object.keys(weapons) as WeaponId[]].filter((id) => (
+  const pool: ShopProductId[] = [...Object.keys(items) as ItemId[], ...weaponIds].filter((id) => (
     isWeaponId(id) ? (state.weaponLevels[id] ?? 0) < 5 : !items[id].unique || !state.ownedItems.includes(id)
   ))
   const selected = state.lockedShopIndices.map((index) => state.shopChoices[index]).filter((id): id is ShopProductId => id !== null)
@@ -283,6 +295,20 @@ export const sellItem = (state: GameState, index: number): boolean => {
   return true
 }
 
+export const sellWeapon = (state: GameState, id: WeaponId): boolean => {
+  const level = state.weaponLevels[id] ?? 0
+  if (!state.shopOpen || level === 0) return false
+  state.player.coins += Math.floor(weapons[id].price * level * 0.6)
+  delete state.weaponLevels[id]
+  if (id === 'panda-wine-gourd') state.groundZones = []
+  if (id === 'bamboo-crossbow-turret') {
+    state.turrets = []
+    state.playerProjectiles = state.playerProjectiles.filter((projectile) => projectile.kind !== 'bolt')
+  }
+  if (id === 'firecracker-launcher') state.playerProjectiles = state.playerProjectiles.filter((projectile) => projectile.kind !== 'firecracker')
+  return true
+}
+
 export const continueWave = (state: GameState): boolean => {
   if (!state.shopOpen) return false
   state.shopOpen = false
@@ -295,6 +321,8 @@ export const continueWave = (state: GameState): boolean => {
   state.playerProjectiles = []
   state.enemyProjectiles = []
   state.attacks = []
+  state.groundZones = []
+  state.turrets = []
   state.drops = []
   state.effects = []
   state.bossHazards = []
@@ -338,6 +366,9 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
   state.leafCooldown -= dt
   state.gauntletCooldown -= dt
   state.firecrackerCooldown -= dt
+  state.orbitCooldown -= dt
+  state.gourdCooldown -= dt
+  state.turretDeployCooldown -= dt
   state.spawnTimer -= dt
   for (const effect of state.effects) effect.life -= dt
 
@@ -639,6 +670,94 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
     state.firecrackerCooldown = 1.65 / state.player.attackSpeed
   }
 
+  const bladeLevel = state.weaponLevels['spinning-bamboo-blade'] ?? 0
+  if (bladeLevel > 0 && state.orbitCooldown <= 0) {
+    const radius = 58 + bladeLevel * 5
+    const damage = Math.round((8 + bladeLevel * 3) * state.player.damage * state.player.meleeDamage)
+    const bladeCount = bladeLevel >= 5 ? 3 : bladeLevel >= 3 ? 2 : 1
+    for (const enemy of state.enemies) {
+      const distance = Math.hypot(enemy.x - state.player.x, enemy.y - state.player.y)
+      const enemyAngle = Math.atan2(enemy.y - state.player.y, enemy.x - state.player.x)
+      let bladeIsPassing = false
+      for (let index = 0; index < bladeCount; index += 1) {
+        const bladeAngle = state.time * 5.4 + index * Math.PI * 2 / bladeCount
+        const angleDelta = Math.atan2(Math.sin(enemyAngle - bladeAngle), Math.cos(enemyAngle - bladeAngle))
+        if (Math.abs(angleDelta) <= 0.72) bladeIsPassing = true
+      }
+      if (Math.abs(distance - radius) <= 24 && bladeIsPassing) {
+        enemy.hp -= damage
+        state.effects.push({ id: state.nextId++, kind: 'hit', x: enemy.x, y: enemy.y - 28, value: damage, life: 0.36, angle: enemyAngle })
+      }
+    }
+    state.orbitCooldown = 0.42 / state.player.attackSpeed
+  }
+
+  const gourdLevel = state.weaponLevels['panda-wine-gourd'] ?? 0
+  if (gourdLevel > 0 && state.gourdCooldown <= 0 && state.enemies.length > 0) {
+    let target = state.enemies[0]
+    let targetDistance = Math.hypot(target.x - state.player.x, target.y - state.player.y)
+    for (const enemy of state.enemies) {
+      const distance = Math.hypot(enemy.x - state.player.x, enemy.y - state.player.y)
+      if (distance < targetDistance) { target = enemy; targetDistance = distance }
+    }
+    const zoneCount = gourdLevel >= 3 ? 2 : 1
+    const targetAngle = Math.atan2(target.y - state.player.y, target.x - state.player.x)
+    for (let index = 0; index < zoneCount; index += 1) {
+      const offset = zoneCount === 1 ? 0 : (index === 0 ? -1 : 1) * 44
+      const x = Math.min(1530, Math.max(70, target.x + Math.cos(targetAngle + Math.PI / 2) * offset))
+      const y = Math.min(930, Math.max(95, target.y + Math.sin(targetAngle + Math.PI / 2) * offset))
+      state.groundZones.push({
+        id: state.nextId++, x, y, radius: 48 + gourdLevel * 6,
+        life: 2.4 + gourdLevel * 0.15, duration: 2.4 + gourdLevel * 0.15,
+        tickCooldown: 0, damage: Math.round((5 + gourdLevel * 2) * state.player.damage * state.player.rangedDamage),
+      })
+    }
+    state.gourdCooldown = 2.4 / state.player.attackSpeed
+  }
+
+  for (const zone of state.groundZones) {
+    zone.life -= dt
+    zone.tickCooldown -= dt
+    if (zone.tickCooldown <= 0) {
+      for (const enemy of state.enemies) {
+        if (Math.hypot(enemy.x - zone.x, enemy.y - zone.y) <= zone.radius) {
+          enemy.hp -= zone.damage
+          state.effects.push({ id: state.nextId++, kind: 'firecracker-hit', x: enemy.x, y: enemy.y - 28, value: zone.damage, life: 0.42, angle: Math.atan2(enemy.y - zone.y, enemy.x - zone.x) })
+        }
+      }
+      zone.tickCooldown = 0.45
+    }
+  }
+
+  const turretLevel = state.weaponLevels['bamboo-crossbow-turret'] ?? 0
+  const turretCount = turretLevel >= 5 ? 3 : turretLevel >= 3 ? 2 : 1
+  if (turretLevel > 0 && state.turretDeployCooldown <= 0 && state.turrets.length < turretCount) {
+    for (let index = state.turrets.length; index < turretCount; index += 1) {
+      const angle = state.time * 0.7 + index * Math.PI * 2 / turretCount
+      state.turrets.push({ id: state.nextId++, x: state.player.x + Math.cos(angle) * 62, y: state.player.y + Math.sin(angle) * 42, life: 12, cooldown: index * 0.16, level: turretLevel, angle })
+    }
+    state.turretDeployCooldown = 8
+  }
+  for (const turret of state.turrets) {
+    turret.life -= dt
+    turret.cooldown -= dt
+    if (turret.cooldown <= 0 && state.enemies.length > 0) {
+      let target = state.enemies[0]
+      let targetDistance = Math.hypot(target.x - turret.x, target.y - turret.y)
+      for (const enemy of state.enemies) {
+        const distance = Math.hypot(enemy.x - turret.x, enemy.y - turret.y)
+        if (distance < targetDistance) { target = enemy; targetDistance = distance }
+      }
+      turret.angle = Math.atan2(target.y - turret.y, target.x - turret.x)
+      state.playerProjectiles.push({
+        id: state.nextId++, kind: 'bolt', x: turret.x, y: turret.y,
+        vx: Math.cos(turret.angle) * 520, vy: Math.sin(turret.angle) * 520,
+        damage: Math.round((10 + turret.level * 3) * state.player.damage * state.player.rangedDamage), critical: false, blastRadius: 0,
+      })
+      turret.cooldown = Math.max(0.42, 0.95 - turret.level * 0.08) / state.player.attackSpeed
+    }
+  }
+
   for (const projectile of state.playerProjectiles) {
     projectile.x += projectile.vx * dt
     projectile.y += projectile.vy * dt
@@ -728,6 +847,8 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
   }
   state.enemies = state.enemies.filter((enemy) => enemy.hp > 0)
   state.playerProjectiles = state.playerProjectiles.filter((projectile) => projectile.damage > 0 && projectile.x > 0 && projectile.x < 1600 && projectile.y > 0 && projectile.y < 1000)
+  state.groundZones = state.groundZones.filter((zone) => zone.life > 0)
+  state.turrets = state.turrets.filter((turret) => turret.life > 0)
   state.enemyProjectiles = state.enemyProjectiles.filter((projectile) => projectile.x > 0 && projectile.x < 1600 && projectile.y > 0 && projectile.y < 1000)
   state.bossHazards = state.bossHazards.filter((hazard) => hazard.life > -0.28)
   state.attacks = state.attacks.filter((attack) => attack.life > 0)
@@ -751,7 +872,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
     const boss = state.enemies.find((enemy) => enemy.kind === 'boss')
     if (boss) boss.enraged = true
   } else if (!state.victory && state.waveTime >= state.waveDuration) {
-    const pool: ShopProductId[] = [...Object.keys(items) as ItemId[], ...Object.keys(weapons) as WeaponId[]].filter((id) => (
+    const pool: ShopProductId[] = [...Object.keys(items) as ItemId[], ...weaponIds].filter((id) => (
       isWeaponId(id) ? (state.weaponLevels[id] ?? 0) < 5 : !items[id].unique || !state.ownedItems.includes(id)
     ))
     const selected = state.lockedShopIndices.map((index) => state.shopChoices[index]).filter((id): id is ShopProductId => id !== null)

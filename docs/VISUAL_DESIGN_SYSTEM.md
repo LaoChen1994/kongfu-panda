@@ -1,6 +1,6 @@
 # 《竹林守卫：熊猫乱斗》视觉设计系统
 
-> 版本：v1.4
+> 版本：v1.5
 > 状态：M0 起强制执行  
 > 更新日期：2026-09-02
 
@@ -93,6 +93,9 @@
 - 飞叶弹道：复用标准化飞叶主体，运行时主体保持约 18–22 像素可见尺寸；使用深墨外拖尾与嫩竹绿内芯，暴击改为铜金内芯，不使用敌方气功青。
 - 飞叶命中：沿飞行方向释放 3 条短叶痕，普通命中控制在 26 像素内，暴击控制在 38 像素内。
 - 爆竹命中：使用不闭合的暖金纸屑、朱红火瓣、墨灰烟团和少量竹屑形成不规则爆发；主体按实际爆炸半径缩放，不使用完整爆炸圆、规则放射线或几何星形。
+- 旋转竹刃：竹刃沿角色近身轨道旋转，轨迹只使用 2–3 段错开的嫩竹绿风痕，不画闭合圆环；Lv.3 增加第二把对称竹刃，Lv.5 增加第三把，实际命中带与可见轨迹一致。
+- 熊猫酒葫芦：落地点使用不规则琥珀酒渍、朱红火舌和少量墨灰烟边，边缘自然断开并淡出；Lv.3 同时形成两处酒焰，不使用纯色透明圆表示范围。
+- 竹弩机关：机关为竹木与铜件组成的低矮弩台，朝当前目标转向；弹道使用细竹箭身、铜金箭头与短促嫩竹尾痕，Lv.3 同时部署两台，禁止使用粗光柱或敌方妖紫色。
 - 普通命中停顿不超过 20ms，重型暴击停顿不超过 45ms；普通攻击不产生大幅镜头震动。
 - 敌方弹幕以 8–12 像素妖紫菱形核心、危险红渐细拖尾和米白高光点表达敌意；飞行时允许小幅旋转或双侧妖气火花，碰撞半径不得依赖发光外圈。与玩家嫩竹绿/铜金叶形弹道保持形状和颜色双重差异。
 - 同屏特效按“危险预警 > 敌方弹幕 > 玩家弹道 > 命中数字 > 装饰粒子”排序；高密度时先减少装饰叶片，不削弱危险信息。
@@ -124,10 +127,14 @@ public/assets/
   effects/corrupted-root-burst.png
   effects/ink-shield-aura.png
   effects/firecracker-blast.png
+  effects/wine-flame-patch.png
   weapons/bamboo-staff.png
   weapons/leaf-dart.png
   weapons/iron-pot-gauntlets.png
   weapons/firecracker-launcher.png
+  weapons/spinning-bamboo-blade.png
+  weapons/panda-wine-gourd.png
+  weapons/bamboo-crossbow-turret.png
   environments/bamboo-ground.png
   ui/rice-paper-texture.png
 ```
