@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import './style.css'
-import { buyItem, characters, chooseUpgrade, continueWave, createGameState, isWeaponId, items, refreshShop, sellItem, stepGame, toggleShopLock, upgrades, weapons, type CharacterId } from './simulation.js'
+import { buyItem, characters, chooseUpgrade, continueWave, createGameState, isWeaponId, items, refreshShop, sellItem, sellWeapon, stepGame, toggleShopLock, upgrades, weaponIds, weapons, type CharacterId } from './simulation.js'
 
 const assetRoot = `${import.meta.env.BASE_URL}assets/`
 let selectedCharacter: CharacterId = 'shanlan'
@@ -31,6 +31,9 @@ class BattleScene extends Phaser.Scene {
   private shieldAura!: Phaser.GameObjects.Image
   private leafSprites = new Map<number, Phaser.GameObjects.Image>()
   private firecrackerBlastSprites = new Map<number, Phaser.GameObjects.Image>()
+  private wineFlameSprites = new Map<number, Phaser.GameObjects.Image>()
+  private turretSprites = new Map<number, Phaser.GameObjects.Image>()
+  private bladeSprites = new Map<number, Phaser.GameObjects.Image>()
   private effectTexts = new Map<number, Phaser.GameObjects.Text>()
   private seenEffects = new Set<number>()
   private keys!: Record<'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd', Phaser.Input.Keyboard.Key>
@@ -48,7 +51,11 @@ class BattleScene extends Phaser.Scene {
     this.load.image('bamboo-ground', `${assetRoot}environments/bamboo-ground.png`)
     this.load.image('leaf-dart', `${assetRoot}weapons/leaf-dart.png`)
     this.load.image('firecracker-launcher', `${assetRoot}weapons/firecracker-launcher.png`)
+    this.load.image('spinning-bamboo-blade', `${assetRoot}weapons/spinning-bamboo-blade.png`)
+    this.load.image('panda-wine-gourd', `${assetRoot}weapons/panda-wine-gourd.png`)
+    this.load.image('bamboo-crossbow-turret', `${assetRoot}weapons/bamboo-crossbow-turret.png`)
     this.load.image('firecracker-blast', `${assetRoot}effects/firecracker-blast.png`)
+    this.load.image('wine-flame-patch', `${assetRoot}effects/wine-flame-patch.png`)
     this.load.image('corrupted-bamboo-giant', `${assetRoot}enemies/corrupted-bamboo-giant.png`)
     this.load.image('corrupted-root-warning', `${assetRoot}effects/corrupted-root-warning.png`)
     this.load.image('corrupted-root-burst', `${assetRoot}effects/corrupted-root-burst.png`)
@@ -68,10 +75,25 @@ class BattleScene extends Phaser.Scene {
       this.state.upgradeChoices = ['vitality', 'power', 'haste']
     } else if (import.meta.env.DEV && new URLSearchParams(location.search).has('playtest-weapons-combat')) {
       this.state.weaponLevels = { 'iron-pot-gauntlets': 3, 'firecracker-launcher': 4 }
+    } else if (import.meta.env.DEV && new URLSearchParams(location.search).has('playtest-complete-weapons-shop')) {
+      this.state.shopOpen = true
+      this.state.player.coins = 500
+      this.state.weaponLevels = { 'spinning-bamboo-blade': 3, 'panda-wine-gourd': 3, 'bamboo-crossbow-turret': 3 }
+      this.state.shopChoices = ['iron-pot-gauntlets', 'firecracker-launcher', 'iron-bracer', 'panda-roller']
     } else if (import.meta.env.DEV && new URLSearchParams(location.search).has('playtest-weapons')) {
       this.state.shopOpen = true
       this.state.player.coins = 500
       this.state.shopChoices = ['iron-pot-gauntlets', 'firecracker-launcher', 'iron-bracer', 'panda-roller']
+    } else if (import.meta.env.DEV && new URLSearchParams(location.search).has('playtest-complete-weapons')) {
+      this.state.weaponLevels = { 'spinning-bamboo-blade': 3, 'panda-wine-gourd': 3, 'bamboo-crossbow-turret': 3 }
+      this.state.player.hp = 200
+      this.state.player.maxHp = 200
+      this.state.spawnTimer = 99
+      this.state.enemies = [
+        { id: this.state.nextId++, kind: 'chaser', x: 900, y: 500, hp: 2000, maxHp: 2000, cooldown: 99, dashTime: 0, vx: 0, vy: 0 },
+        { id: this.state.nextId++, kind: 'dasher', x: 760, y: 620, hp: 2000, maxHp: 2000, cooldown: 99, dashTime: 0, vx: 0, vy: 0 },
+        { id: this.state.nextId++, kind: 'shooter', x: 1010, y: 620, hp: 2000, maxHp: 2000, cooldown: 99, dashTime: 0, vx: 0, vy: 0 },
+      ]
     }
     if (import.meta.env.DEV && new URLSearchParams(location.search).has('playtest-boss')) {
       this.state.wave = 9
@@ -252,10 +274,24 @@ class BattleScene extends Phaser.Scene {
         article.append(buyButton, lockButton)
         shopCards.append(article)
       })
-      shopWeapons.innerHTML = Object.entries(this.state.weaponLevels).length ? Object.entries(this.state.weaponLevels).map(([id, level]) => {
-        const weapon = weapons[id === 'iron-pot-gauntlets' ? 'iron-pot-gauntlets' : 'firecracker-launcher']
-        return `<div class="shop-weapon"><img src="${import.meta.env.BASE_URL}${weapon.image}" alt=""><span><strong>${weapon.name} · Lv.${level}</strong><small>${weapon.description}</small></span></div>`
-      }).join('') : '<p>尚未获得通用武器</p>'
+      shopWeapons.innerHTML = ''
+      const ownedWeaponIds = weaponIds.filter((id) => (this.state.weaponLevels[id] ?? 0) > 0)
+      if (ownedWeaponIds.length === 0) shopWeapons.innerHTML = '<p>尚未获得通用武器</p>'
+      ownedWeaponIds.forEach((id) => {
+        const weapon = weapons[id]
+        const level = this.state.weaponLevels[id] ?? 0
+        const row = document.createElement('div')
+        const sellButton = document.createElement('button')
+        row.className = 'shop-weapon'
+        row.innerHTML = `<img src="${import.meta.env.BASE_URL}${weapon.image}" alt=""><span><strong>${weapon.name} · Lv.${level}</strong><small>${weapon.description}</small></span>`
+        sellButton.type = 'button'
+        sellButton.textContent = `出售 +${Math.floor(weapon.price * level * 0.6)}`
+        sellButton.addEventListener('click', () => {
+          if (sellWeapon(this.state, id)) this.overlayMode = ''
+        })
+        row.append(sellButton)
+        shopWeapons.append(row)
+      })
       shopInventory.innerHTML = ''
       if (this.state.ownedItems.length === 0) shopInventory.innerHTML = '<p>尚未获得宝物</p>'
       this.state.ownedItems.forEach((id, index) => {
@@ -326,6 +362,52 @@ class BattleScene extends Phaser.Scene {
       }
     }
     for (const [id, sprite] of this.bossHazardSprites) if (!liveHazardIds.has(id)) { sprite.destroy(); this.bossHazardSprites.delete(id) }
+
+    const bladeLevel = this.state.weaponLevels['spinning-bamboo-blade'] ?? 0
+    const bladeCount = bladeLevel >= 5 ? 3 : bladeLevel >= 3 ? 2 : bladeLevel > 0 ? 1 : 0
+    const bladeRadius = 58 + bladeLevel * 5
+    for (let index = 0; index < bladeCount; index += 1) {
+      const angle = this.state.time * 5.4 + index * Math.PI * 2 / bladeCount
+      const x = this.state.player.x + Math.cos(angle) * bladeRadius
+      const y = this.state.player.y + Math.sin(angle) * bladeRadius
+      graphics.lineStyle(5, 0x9bcb66, 0.45).beginPath().arc(this.state.player.x, this.state.player.y, bladeRadius, angle - 0.72, angle - 0.18).strokePath()
+      graphics.lineStyle(2, 0xf3e6c8, 0.72).beginPath().arc(this.state.player.x, this.state.player.y, bladeRadius - 7, angle - 0.58, angle - 0.28).strokePath()
+      let sprite = this.bladeSprites.get(index)
+      if (!sprite) {
+        sprite = this.add.image(x, y, 'spinning-bamboo-blade')
+        this.bladeSprites.set(index, sprite)
+      }
+      sprite.setPosition(x, y).setDisplaySize(42, 42).setRotation(angle + Math.PI / 2).setDepth(y + 4).setVisible(true)
+    }
+    for (const [index, sprite] of this.bladeSprites) {
+      if (index >= bladeCount) { sprite.destroy(); this.bladeSprites.delete(index) }
+    }
+
+    const liveZoneIds = new Set<number>()
+    for (const zone of this.state.groundZones) {
+      liveZoneIds.add(zone.id)
+      let sprite = this.wineFlameSprites.get(zone.id)
+      if (!sprite) {
+        sprite = this.add.image(zone.x, zone.y, 'wine-flame-patch').setRotation((zone.id % 9 - 4) * 0.08)
+        this.wineFlameSprites.set(zone.id, sprite)
+      }
+      const fade = Math.min(1, zone.life * 2, (zone.duration - zone.life) * 5)
+      sprite.setPosition(zone.x, zone.y).setDisplaySize(zone.radius * 2.25, zone.radius * 1.7).setDepth(zone.y - 2).setAlpha(fade * 0.86)
+    }
+    for (const [id, sprite] of this.wineFlameSprites) if (!liveZoneIds.has(id)) { sprite.destroy(); this.wineFlameSprites.delete(id) }
+
+    const liveTurretIds = new Set<number>()
+    for (const turret of this.state.turrets) {
+      liveTurretIds.add(turret.id)
+      let sprite = this.turretSprites.get(turret.id)
+      if (!sprite) {
+        sprite = this.add.image(turret.x, turret.y, 'bamboo-crossbow-turret')
+        this.turretSprites.set(turret.id, sprite)
+      }
+      const deployScale = Math.min(1, (12 - turret.life) * 5)
+      sprite.setPosition(turret.x, turret.y).setDisplaySize(50 * deployScale, 50 * deployScale).setRotation(turret.angle + Math.PI / 4).setDepth(turret.y + 2).setAlpha(Math.min(1, turret.life * 2))
+    }
+    for (const [id, sprite] of this.turretSprites) if (!liveTurretIds.has(id)) { sprite.destroy(); this.turretSprites.delete(id) }
 
     for (const drop of this.state.drops) {
       const color = drop.kind === 'xp' ? 0xb8ed72 : drop.kind === 'coin' ? 0xf0b844 : 0x63d889
@@ -464,14 +546,21 @@ class BattleScene extends Phaser.Scene {
       const length = Math.max(0.001, Math.hypot(projectile.vx, projectile.vy))
       const directionX = projectile.vx / length
       const directionY = projectile.vy / length
-      graphics.lineStyle(projectile.critical ? 9 : 7, 0x202622, 0.48).lineBetween(projectile.x - directionX * 34, projectile.y - directionY * 34, projectile.x, projectile.y)
-      graphics.lineStyle(projectile.critical ? 5 : 3, projectile.critical ? 0xffdf65 : projectile.kind === 'firecracker' ? 0xd9554d : 0x9bcb66, 0.92).lineBetween(projectile.x - directionX * (projectile.critical ? 42 : 30), projectile.y - directionY * (projectile.critical ? 42 : 30), projectile.x, projectile.y)
+      graphics.lineStyle(projectile.kind === 'bolt' ? 4 : projectile.critical ? 9 : 7, 0x202622, 0.48).lineBetween(projectile.x - directionX * 34, projectile.y - directionY * 34, projectile.x, projectile.y)
+      graphics.lineStyle(projectile.kind === 'bolt' ? 2 : projectile.critical ? 5 : 3, projectile.critical ? 0xffdf65 : projectile.kind === 'firecracker' ? 0xd9554d : projectile.kind === 'bolt' ? 0xe3a83b : 0x9bcb66, 0.92).lineBetween(projectile.x - directionX * (projectile.kind === 'bolt' ? 22 : projectile.critical ? 42 : 30), projectile.y - directionY * (projectile.kind === 'bolt' ? 22 : projectile.critical ? 42 : 30), projectile.x, projectile.y)
+      if (projectile.kind === 'bolt') {
+        const sideX = -directionY
+        const sideY = directionX
+        graphics.fillStyle(0xe3a83b, 0.96).fillTriangle(projectile.x + directionX * 8, projectile.y + directionY * 8, projectile.x - directionX * 3 + sideX * 4, projectile.y - directionY * 3 + sideY * 4, projectile.x - directionX * 3 - sideX * 4, projectile.y - directionY * 3 - sideY * 4)
+        continue
+      }
       let sprite = this.leafSprites.get(projectile.id)
       if (!sprite) {
         sprite = this.add.image(projectile.x, projectile.y, projectile.kind === 'firecracker' ? 'firecracker-launcher' : 'leaf-dart')
         this.leafSprites.set(projectile.id, sprite)
       }
-      sprite.setTexture(projectile.kind === 'firecracker' ? 'firecracker-launcher' : 'leaf-dart').setDisplaySize(projectile.kind === 'firecracker' ? 32 : projectile.critical ? 34 : 28, projectile.kind === 'firecracker' ? 32 : projectile.critical ? 34 : 28).setPosition(projectile.x, projectile.y).setRotation(Math.atan2(projectile.vy, projectile.vx) + Math.PI / 4 + Math.sin(this.state.time * 18 + projectile.id) * 0.18).setDepth(projectile.y + 5)
+      const projectileSize = projectile.kind === 'firecracker' ? 32 : projectile.critical ? 34 : 28
+      sprite.setTexture(projectile.kind === 'firecracker' ? 'firecracker-launcher' : 'leaf-dart').setDisplaySize(projectileSize, projectileSize).setPosition(projectile.x, projectile.y).setRotation(Math.atan2(projectile.vy, projectile.vx) + Math.PI / 4 + Math.sin(this.state.time * 18 + projectile.id) * 0.18).setDepth(projectile.y + 5)
       if (projectile.critical) sprite.setTint(0xffdf65)
       else sprite.clearTint()
     }
@@ -535,7 +624,7 @@ class BattleScene extends Phaser.Scene {
       this.playerSprite.setFlipX(Math.cos(latestAttack.angle) < 0).play(`${playerAnimation}-attack`)
     }
     const latestProjectile = this.state.playerProjectiles.at(-1)
-    if (latestProjectile && latestProjectile.id > this.lastPlayerProjectileId) {
+    if (latestProjectile && latestProjectile.kind !== 'bolt' && latestProjectile.id > this.lastPlayerProjectileId) {
       this.lastPlayerProjectileId = latestProjectile.id
       this.playerSprite.setFlipX(latestProjectile.vx < 0).play(`${playerAnimation}-attack`)
     }
@@ -577,9 +666,14 @@ class BattleScene extends Phaser.Scene {
     if (weaponStrip && weaponHudMode !== this.weaponHudMode) {
       this.weaponHudMode = weaponHudMode
       const character = characters[this.state.characterId]
-      weaponStrip.innerHTML = `<span class="weapon-slot"><img src="${import.meta.env.BASE_URL}${character.weaponImage}" alt="${character.weaponName}"><span><b>${character.weaponName} · 专属</b><small>${character.weaponDescription}</small></span></span>${Object.entries(this.state.weaponLevels).map(([id, level]) => {
-        const weapon = weapons[id === 'iron-pot-gauntlets' ? 'iron-pot-gauntlets' : 'firecracker-launcher']
-        const detail = id === 'iron-pot-gauntlets' ? `${level >= 3 ? '双段' : '单段'}快拳 · 范围 ${62 + level * 4}` : `${level >= 3 ? '双弹' : '单弹'}爆破 · 范围 ${48 + level * 8}`
+      weaponStrip.innerHTML = `<span class="weapon-slot"><img src="${import.meta.env.BASE_URL}${character.weaponImage}" alt="${character.weaponName}"><span><b>${character.weaponName} · 专属</b><small>${character.weaponDescription}</small></span></span>${weaponIds.filter((id) => (this.state.weaponLevels[id] ?? 0) > 0).map((id) => {
+        const weapon = weapons[id]
+        const level = this.state.weaponLevels[id] ?? 0
+        let detail = `${level >= 3 ? '双段' : '单段'}快拳 · 范围 ${62 + level * 4}`
+        if (id === 'firecracker-launcher') detail = `${level >= 3 ? '双弹' : '单弹'}爆破 · 范围 ${48 + level * 8}`
+        if (id === 'spinning-bamboo-blade') detail = `${level >= 5 ? 3 : level >= 3 ? 2 : 1} 刃环身 · 轨道 ${58 + level * 5}`
+        if (id === 'panda-wine-gourd') detail = `${level >= 3 ? '双区' : '单区'}酒焰 · 持续 ${(2.4 + level * 0.15).toFixed(1)}秒`
+        if (id === 'bamboo-crossbow-turret') detail = `${level >= 5 ? 3 : level >= 3 ? 2 : 1} 台竹弩 · 自动索敌`
         return `<span class="weapon-slot"><img src="${import.meta.env.BASE_URL}${weapon.image}" alt="${weapon.name}"><span><b>${weapon.name} · Lv.${level}</b><small>${detail}</small></span></span>`
       }).join('')}`
     }

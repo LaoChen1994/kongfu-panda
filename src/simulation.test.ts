@@ -1,4 +1,4 @@
-import { buyItem, chooseUpgrade, continueWave, createGameState, refreshShop, sellItem, stepGame, toggleShopLock } from './simulation.js'
+import { buyItem, chooseUpgrade, continueWave, createGameState, refreshShop, sellItem, sellWeapon, stepGame, toggleShopLock, weaponIds } from './simulation.js'
 
 const movement = createGameState(1)
 stepGame(movement, { x: 1, y: 0, dash: false }, 0.05)
@@ -86,6 +86,13 @@ weaponShopCheck.shopChoices[0] = 'iron-pot-gauntlets'
 if (buyItem(weaponShopCheck, 0)) throw new Error('Lv.5 武器不得继续购买')
 weaponShopCheck.shopChoices[0] = 'firecracker-launcher'
 if (!buyItem(weaponShopCheck, 0) || weaponShopCheck.weaponLevels['firecracker-launcher'] !== 1) throw new Error('首次购买爆竹筒应加入通用武器栏')
+if (weaponIds.length !== 5) throw new Error('MVP 必须提供 5 件通用武器，与 3 件专属武器组成 8 件武器')
+weaponShopCheck.shopChoices = ['spinning-bamboo-blade', 'panda-wine-gourd', 'bamboo-crossbow-turret', 'martial-belt']
+if (!buyItem(weaponShopCheck, 0)) throw new Error('旋转竹刃应能加入通用武器栏')
+if (buyItem(weaponShopCheck, 1)) throw new Error('拥有 3 件通用武器后不得购买第 4 件')
+const coinsBeforeWeaponSale = weaponShopCheck.player.coins
+if (!sellWeapon(weaponShopCheck, 'iron-pot-gauntlets') || weaponShopCheck.player.coins !== coinsBeforeWeaponSale + 66 || weaponShopCheck.weaponLevels['iron-pot-gauntlets']) throw new Error('出售 Lv.5 通用武器应返还总投入的 60% 并空出武器栏')
+if (!buyItem(weaponShopCheck, 1)) throw new Error('出售通用武器后应能购买新的武器')
 
 const gauntletCheck = createGameState(20)
 gauntletCheck.spawnTimer = 99
@@ -110,12 +117,50 @@ firecrackerCheck.enemies.push(
 for (let tick = 0; tick < 12 && firecrackerCheck.enemies[0].hp === 200; tick += 1) stepGame(firecrackerCheck, { x: 0, y: 0, dash: false }, 0.05)
 if (firecrackerCheck.enemies.some((enemy) => enemy.hp >= 200) || !firecrackerCheck.effects.some((effect) => effect.kind === 'firecracker-blast')) throw new Error('爆竹筒命中后应对范围内敌人造成爆炸伤害')
 
+const bladeCheck = createGameState(26)
+bladeCheck.spawnTimer = 99
+bladeCheck.bambooCooldown = 99
+bladeCheck.leafCooldown = 99
+bladeCheck.weaponLevels['spinning-bamboo-blade'] = 3
+bladeCheck.orbitCooldown = 0
+bladeCheck.enemies.push({ id: 1, kind: 'chaser', x: 873, y: 500, hp: 200, maxHp: 200, cooldown: 99, dashTime: 0, vx: 0, vy: 0 })
+stepGame(bladeCheck, { x: 0, y: 0, dash: false }, 0.05)
+if (bladeCheck.enemies[0].hp >= 200 || bladeCheck.orbitCooldown <= 0) throw new Error('旋转竹刃应在可见轨道命中近身敌人')
+
+const gourdCheck = createGameState(27)
+gourdCheck.spawnTimer = 99
+gourdCheck.bambooCooldown = 99
+gourdCheck.leafCooldown = 99
+gourdCheck.weaponLevels['panda-wine-gourd'] = 3
+gourdCheck.gourdCooldown = 0
+gourdCheck.enemies.push({ id: 1, kind: 'chaser', x: 900, y: 500, hp: 200, maxHp: 200, cooldown: 99, dashTime: 0, vx: 0, vy: 0 })
+stepGame(gourdCheck, { x: 0, y: 0, dash: false }, 0.05)
+if (gourdCheck.groundZones.length !== 2 || gourdCheck.enemies[0].hp >= 200) throw new Error('Lv.3 熊猫酒葫芦应同时生成两处持续伤害酒焰')
+
+const turretCheck = createGameState(28)
+turretCheck.spawnTimer = 99
+turretCheck.bambooCooldown = 99
+turretCheck.leafCooldown = 99
+turretCheck.weaponLevels['bamboo-crossbow-turret'] = 3
+turretCheck.turretDeployCooldown = 0
+turretCheck.enemies.push({ id: 1, kind: 'chaser', x: 1100, y: 500, hp: 200, maxHp: 200, cooldown: 99, dashTime: 0, vx: 0, vy: 0 })
+stepGame(turretCheck, { x: 0, y: 0, dash: false }, 0.05)
+if (turretCheck.turrets.length !== 2 || turretCheck.playerProjectiles.filter((projectile) => projectile.kind === 'bolt').length !== 1) throw new Error('Lv.3 竹弩机关应部署两台，并由已就绪的机关自动射击')
+turretCheck.shopOpen = true
+const turretSaleCoins = turretCheck.player.coins
+if (!sellWeapon(turretCheck, 'bamboo-crossbow-turret') || turretCheck.turrets.some(Boolean) || turretCheck.playerProjectiles.some((projectile) => projectile.kind === 'bolt') || turretCheck.player.coins !== turretSaleCoins + 86) throw new Error('出售竹弩机关应返还 60% 总投入并清理机关与弩箭')
+
 const pausedWeaponCheck = createGameState(22)
 pausedWeaponCheck.weaponLevels['iron-pot-gauntlets'] = 1
 pausedWeaponCheck.gauntletCooldown = 0.2
 pausedWeaponCheck.shopOpen = true
 stepGame(pausedWeaponCheck, { x: 0, y: 0, dash: false }, 0.05)
 if (pausedWeaponCheck.gauntletCooldown !== 0.2) throw new Error('商城打开时武器冷却必须暂停')
+pausedWeaponCheck.gourdCooldown = 0.4
+pausedWeaponCheck.groundZones.push({ id: 99, x: 800, y: 500, radius: 54, life: 2, duration: 2, tickCooldown: 0.2, damage: 5 })
+pausedWeaponCheck.turrets.push({ id: 100, x: 840, y: 500, life: 8, cooldown: 0.3, level: 1, angle: 0 })
+stepGame(pausedWeaponCheck, { x: 0, y: 0, dash: false }, 0.05)
+if (pausedWeaponCheck.gourdCooldown !== 0.4 || pausedWeaponCheck.groundZones[0].life !== 2 || pausedWeaponCheck.turrets[0].life !== 8) throw new Error('商城打开时酒焰、机关和新武器冷却必须暂停')
 
 const lockCarryCheck = createGameState(6)
 lockCarryCheck.shopOpen = true
