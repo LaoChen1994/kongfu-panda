@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import './style.css'
-import { buyItem, characters, chooseUpgrade, continueWave, createGameState, items, refreshShop, sellItem, stepGame, toggleShopLock, upgrades, type CharacterId } from './simulation.js'
+import { buyItem, characters, chooseUpgrade, continueWave, createGameState, isWeaponId, items, refreshShop, sellItem, stepGame, toggleShopLock, upgrades, weapons, type CharacterId } from './simulation.js'
 
 const assetRoot = `${import.meta.env.BASE_URL}assets/`
 let selectedCharacter: CharacterId = 'shanlan'
@@ -30,6 +30,7 @@ class BattleScene extends Phaser.Scene {
   private bossHazardSprites = new Map<number, Phaser.GameObjects.Image>()
   private shieldAura!: Phaser.GameObjects.Image
   private leafSprites = new Map<number, Phaser.GameObjects.Image>()
+  private firecrackerBlastSprites = new Map<number, Phaser.GameObjects.Image>()
   private effectTexts = new Map<number, Phaser.GameObjects.Text>()
   private seenEffects = new Set<number>()
   private keys!: Record<'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd', Phaser.Input.Keyboard.Key>
@@ -41,10 +42,13 @@ class BattleScene extends Phaser.Scene {
   private hitStop = 0
   private lastAttackId = 0
   private lastPlayerProjectileId = 0
+  private weaponHudMode = ''
 
   preload(): void {
     this.load.image('bamboo-ground', `${assetRoot}environments/bamboo-ground.png`)
     this.load.image('leaf-dart', `${assetRoot}weapons/leaf-dart.png`)
+    this.load.image('firecracker-launcher', `${assetRoot}weapons/firecracker-launcher.png`)
+    this.load.image('firecracker-blast', `${assetRoot}effects/firecracker-blast.png`)
     this.load.image('corrupted-bamboo-giant', `${assetRoot}enemies/corrupted-bamboo-giant.png`)
     this.load.image('corrupted-root-warning', `${assetRoot}effects/corrupted-root-warning.png`)
     this.load.image('corrupted-root-burst', `${assetRoot}effects/corrupted-root-burst.png`)
@@ -58,6 +62,17 @@ class BattleScene extends Phaser.Scene {
   }
 
   create(): void {
+    if (import.meta.env.DEV && new URLSearchParams(location.search).has('playtest-upgrade')) {
+      this.state.player.hp = Math.min(6, this.state.player.maxHp)
+      this.state.pendingUpgrade = true
+      this.state.upgradeChoices = ['vitality', 'power', 'haste']
+    } else if (import.meta.env.DEV && new URLSearchParams(location.search).has('playtest-weapons-combat')) {
+      this.state.weaponLevels = { 'iron-pot-gauntlets': 3, 'firecracker-launcher': 4 }
+    } else if (import.meta.env.DEV && new URLSearchParams(location.search).has('playtest-weapons')) {
+      this.state.shopOpen = true
+      this.state.player.coins = 500
+      this.state.shopChoices = ['iron-pot-gauntlets', 'firecracker-launcher', 'iron-bracer', 'panda-roller']
+    }
     if (import.meta.env.DEV && new URLSearchParams(location.search).has('playtest-boss')) {
       this.state.wave = 9
       this.state.shopOpen = true
@@ -151,12 +166,13 @@ class BattleScene extends Phaser.Scene {
     const continueButton = document.querySelector<HTMLButtonElement>('#continue-wave')
     const shopLayout = document.querySelector<HTMLElement>('#shop-layout')
     const shopCards = document.querySelector<HTMLElement>('#shop-cards')
+    const shopWeapons = document.querySelector<HTMLElement>('#shop-weapons')
     const shopInventory = document.querySelector<HTMLElement>('#shop-inventory')
     const shopStats = document.querySelector<HTMLElement>('#shop-stats')
     const refreshButton = document.querySelector<HTMLButtonElement>('#refresh-shop')
-    if (!overlay || !cards || !title || !kicker || !copy || !continueButton || !shopLayout || !shopCards || !shopInventory || !shopStats || !refreshButton) return
+    if (!overlay || !cards || !title || !kicker || !copy || !continueButton || !shopLayout || !shopCards || !shopWeapons || !shopInventory || !shopStats || !refreshButton) return
 
-    const mode = this.state.pendingUpgrade ? `upgrade-${this.state.player.level}` : this.state.shopOpen ? `shop-${this.state.wave}-${this.state.player.coins}-${this.state.shopChoices.join('-')}-${this.state.lockedShopIndex}-${this.state.ownedItems.join('-')}` : ''
+    const mode = this.state.pendingUpgrade ? `upgrade-${this.state.player.level}` : this.state.shopOpen ? `shop-${this.state.wave}-${this.state.player.coins}-${this.state.shopChoices.join('-')}-${this.state.lockedShopIndices.join('-')}-${this.state.ownedItems.join('-')}-${Object.entries(this.state.weaponLevels).join('-')}` : ''
     overlay.hidden = !mode
     if (!mode || mode === this.overlayMode) return
     this.overlayMode = mode
@@ -187,8 +203,9 @@ class BattleScene extends Phaser.Scene {
       copy.textContent = `现有 ${this.state.player.coins} 铜钱 · 商品可重复购买，唯一宝物除外`
       continueButton.hidden = false
       continueButton.onclick = () => continueWave(this.state)
-      refreshButton.textContent = `刷新商品 · ${this.state.shopRefreshCost} 铜钱`
-      refreshButton.disabled = this.state.player.coins < this.state.shopRefreshCost
+      const allProductsLocked = this.state.shopChoices.every((id, index) => id !== null && this.state.lockedShopIndices.includes(index))
+      refreshButton.textContent = allProductsLocked ? '全部商品已锁定' : `刷新商品 · ${this.state.shopRefreshCost} 铜钱`
+      refreshButton.disabled = allProductsLocked || this.state.player.coins < this.state.shopRefreshCost
       refreshButton.onclick = () => {
         if (refreshShop(this.state)) this.overlayMode = ''
       }
@@ -207,23 +224,21 @@ class BattleScene extends Phaser.Scene {
       this.state.shopChoices.forEach((id, index) => {
         const article = document.createElement('article')
         article.className = 'shop-card'
-        if (!id) {
-          article.classList.add('empty')
-          article.innerHTML = '<span>商品已购入</span><small>刷新后补充</small>'
-          shopCards.append(article)
-          return
-        }
-        const item = items[id]
-        const uniqueOwned = Boolean(item.unique && this.state.ownedItems.includes(id))
+        if (!id) return
+        const product = isWeaponId(id) ? weapons[id] : items[id]
+        const weaponLevel = isWeaponId(id) ? this.state.weaponLevels[id] ?? 0 : 0
+        const uniqueOwned = Boolean(!isWeaponId(id) && items[id].unique && this.state.ownedItems.includes(id))
+        const weaponFull = isWeaponId(id) && weaponLevel === 0 && Object.keys(this.state.weaponLevels).length >= 3
+        const maxLevel = isWeaponId(id) && weaponLevel >= 5
         const buyButton = document.createElement('button')
         const lockButton = document.createElement('button')
-        const locked = this.state.lockedShopIndex === index
-        article.dataset.rarity = item.rarity
-        article.innerHTML = `<kbd>${index + 1}</kbd><img src="${import.meta.env.BASE_URL}${item.image}" alt=""><small>${item.rarity} · 宝物</small><strong>${item.name}</strong><span>${item.description}</span><em>${item.preview}</em>`
+        const locked = this.state.lockedShopIndices.includes(index)
+        article.dataset.rarity = product.rarity
+        article.innerHTML = `<kbd>${index + 1}</kbd><img src="${import.meta.env.BASE_URL}${product.image}" alt=""><small>${product.rarity} · ${isWeaponId(id) ? `武器 · ${weaponLevel >= 5 ? 'Lv.5 · 已满级' : weaponLevel > 0 ? `Lv.${weaponLevel} → Lv.${weaponLevel + 1}` : '新武器'}` : '宝物'}</small><strong>${product.name}</strong><span>${product.description}</span><em>${product.preview}</em>`
         buyButton.type = 'button'
         buyButton.className = 'shop-buy'
-        buyButton.disabled = uniqueOwned || this.state.player.coins < item.price
-        buyButton.textContent = uniqueOwned ? '已拥有' : this.state.player.coins < item.price ? `缺少 ${item.price - this.state.player.coins} 铜钱` : `${item.price} 铜钱 · 购买`
+        buyButton.disabled = uniqueOwned || weaponFull || maxLevel || this.state.player.coins < product.price
+        buyButton.textContent = uniqueOwned ? '已拥有' : weaponFull ? '通用武器栏已满' : maxLevel ? '已达 Lv.5' : this.state.player.coins < product.price ? `缺少 ${product.price - this.state.player.coins} 铜钱` : `${product.price} 铜钱 · ${weaponLevel > 0 ? '合成升级' : '购买'}`
         buyButton.addEventListener('click', () => {
           if (buyItem(this.state, index)) this.overlayMode = ''
         })
@@ -237,6 +252,10 @@ class BattleScene extends Phaser.Scene {
         article.append(buyButton, lockButton)
         shopCards.append(article)
       })
+      shopWeapons.innerHTML = Object.entries(this.state.weaponLevels).length ? Object.entries(this.state.weaponLevels).map(([id, level]) => {
+        const weapon = weapons[id === 'iron-pot-gauntlets' ? 'iron-pot-gauntlets' : 'firecracker-launcher']
+        return `<div class="shop-weapon"><img src="${import.meta.env.BASE_URL}${weapon.image}" alt=""><span><strong>${weapon.name} · Lv.${level}</strong><small>${weapon.description}</small></span></div>`
+      }).join('') : '<p>尚未获得通用武器</p>'
       shopInventory.innerHTML = ''
       if (this.state.ownedItems.length === 0) shopInventory.innerHTML = '<p>尚未获得宝物</p>'
       this.state.ownedItems.forEach((id, index) => {
@@ -317,7 +336,14 @@ class BattleScene extends Phaser.Scene {
       const alpha = Math.min(1, attack.life / 0.2)
       const start = attack.angle - attack.arc
       const end = attack.angle + attack.arc
-      if (attack.kind === 'shield') {
+      if (attack.kind === 'fists') {
+        const impactX = attack.x + Math.cos(attack.angle) * attack.radius
+        const impactY = attack.y + Math.sin(attack.angle) * attack.radius
+        graphics.lineStyle(10, 0x8f5b2f, alpha * 0.78).beginPath().arc(attack.x, attack.y, attack.radius * 0.78, start + 0.1, end - 0.1).strokePath()
+        graphics.lineStyle(5, attack.critical ? 0xffdf65 : 0xe3a83b, alpha).beginPath().arc(attack.x, attack.y, attack.radius, start, end).strokePath()
+        graphics.fillStyle(0xf3e6c8, alpha * 0.9).fillCircle(impactX, impactY, attack.critical ? 9 : 6)
+        graphics.lineStyle(4, 0xe3a83b, alpha).lineBetween(impactX - Math.cos(attack.angle) * 14, impactY - Math.sin(attack.angle) * 14, impactX + Math.cos(attack.angle) * 12, impactY + Math.sin(attack.angle) * 12)
+      } else if (attack.kind === 'shield') {
         const impactX = attack.x + Math.cos(attack.angle) * attack.radius
         const impactY = attack.y + Math.sin(attack.angle) * attack.radius
         graphics.lineStyle(12, 0x286d72, alpha * 0.78).beginPath().arc(attack.x, attack.y, attack.radius * 0.82, start + 0.16, end - 0.16).strokePath()
@@ -367,6 +393,15 @@ class BattleScene extends Phaser.Scene {
         graphics.fillStyle(0x7651a8, alpha * 0.24).fillCircle(effect.x, effect.y, 55 + progress * 70)
         graphics.lineStyle(7, 0xd9554d, alpha * 0.72).strokeCircle(effect.x, effect.y, 42 + progress * 95)
       }
+      if (effect.kind === 'firecracker-blast') {
+        const progress = 1 - effect.life / 0.38
+        let sprite = this.firecrackerBlastSprites.get(effect.id)
+        if (!sprite) {
+          sprite = this.add.image(effect.x, effect.y, 'firecracker-blast').setRotation((effect.id % 8) * Math.PI / 12)
+          this.firecrackerBlastSprites.set(effect.id, sprite)
+        }
+        sprite.setPosition(effect.x, effect.y).setDisplaySize(effect.value * (1.45 + progress * 0.65), effect.value * (1.45 + progress * 0.65)).setDepth(effect.y + 8).setAlpha(alpha * 0.92)
+      }
       if (effect.kind === 'hit' || effect.kind === 'crit') {
         const centerY = effect.y + 26
         graphics.fillStyle(effect.kind === 'crit' ? 0xffdf65 : 0xf3e6c8, alpha).fillCircle(effect.x, centerY, effect.kind === 'crit' ? 9 : 5)
@@ -382,7 +417,7 @@ class BattleScene extends Phaser.Scene {
       }
       if (!this.seenEffects.has(effect.id)) {
         this.seenEffects.add(effect.id)
-        if (effect.kind === 'crit' || effect.kind === 'projectile-crit') {
+        if (effect.kind === 'crit' || effect.kind === 'projectile-crit' || effect.kind === 'firecracker-crit') {
           this.hitStop = 0.04
           this.cameras.main.shake(75, 0.0025)
           this.playTone(155, 0.08, 0.035)
@@ -392,7 +427,7 @@ class BattleScene extends Phaser.Scene {
         } else if (effect.kind === 'shield-break') {
           this.cameras.main.shake(130, 0.006)
           this.playTone(92, 0.14, 0.06)
-        } else if ((effect.kind === 'hit' || effect.kind === 'projectile-hit') && performance.now() - this.lastHitSound > 70) {
+        } else if ((effect.kind === 'hit' || effect.kind === 'projectile-hit' || effect.kind === 'firecracker-hit') && performance.now() - this.lastHitSound > 70) {
           this.hitStop = effect.kind === 'hit' ? 0.018 : 0.012
           this.lastHitSound = performance.now()
           this.playTone(effect.kind === 'hit' ? 105 : 130, 0.045, 0.018)
@@ -401,8 +436,8 @@ class BattleScene extends Phaser.Scene {
           this.playTone(210, 0.045, 0.018)
         }
       }
-      if ((effect.kind === 'hit' || effect.kind === 'crit' || effect.kind === 'projectile-hit' || effect.kind === 'projectile-crit' || effect.kind === 'player-hit') && !this.effectTexts.has(effect.id)) {
-        const critical = effect.kind === 'crit' || effect.kind === 'projectile-crit'
+      if ((effect.kind === 'hit' || effect.kind === 'crit' || effect.kind === 'projectile-hit' || effect.kind === 'projectile-crit' || effect.kind === 'firecracker-hit' || effect.kind === 'firecracker-crit' || effect.kind === 'player-hit') && !this.effectTexts.has(effect.id)) {
+        const critical = effect.kind === 'crit' || effect.kind === 'projectile-crit' || effect.kind === 'firecracker-crit'
         const text = this.add.text(effect.x, effect.y, `${effect.kind === 'player-hit' ? '-' : ''}${effect.value}`, {
           fontFamily: 'PingFang SC, sans-serif', fontSize: critical ? '24px' : '17px',
           fontStyle: 'bold', color: critical ? '#ffe06a' : effect.kind === 'player-hit' ? '#ff766d' : '#fff0c5',
@@ -420,6 +455,7 @@ class BattleScene extends Phaser.Scene {
     for (const [id, text] of this.effectTexts) {
       if (!liveEffectIds.has(id)) { text.destroy(); this.effectTexts.delete(id) }
     }
+    for (const [id, sprite] of this.firecrackerBlastSprites) if (!liveEffectIds.has(id)) { sprite.destroy(); this.firecrackerBlastSprites.delete(id) }
     this.seenEffects = new Set([...this.seenEffects].filter((id) => liveEffectIds.has(id)))
 
     const liveLeafIds = new Set<number>()
@@ -429,13 +465,13 @@ class BattleScene extends Phaser.Scene {
       const directionX = projectile.vx / length
       const directionY = projectile.vy / length
       graphics.lineStyle(projectile.critical ? 9 : 7, 0x202622, 0.48).lineBetween(projectile.x - directionX * 34, projectile.y - directionY * 34, projectile.x, projectile.y)
-      graphics.lineStyle(projectile.critical ? 5 : 3, projectile.critical ? 0xe3a83b : 0x9bcb66, 0.92).lineBetween(projectile.x - directionX * (projectile.critical ? 42 : 30), projectile.y - directionY * (projectile.critical ? 42 : 30), projectile.x, projectile.y)
+      graphics.lineStyle(projectile.critical ? 5 : 3, projectile.critical ? 0xffdf65 : projectile.kind === 'firecracker' ? 0xd9554d : 0x9bcb66, 0.92).lineBetween(projectile.x - directionX * (projectile.critical ? 42 : 30), projectile.y - directionY * (projectile.critical ? 42 : 30), projectile.x, projectile.y)
       let sprite = this.leafSprites.get(projectile.id)
       if (!sprite) {
-        sprite = this.add.image(projectile.x, projectile.y, 'leaf-dart').setDisplaySize(projectile.critical ? 34 : 28, projectile.critical ? 34 : 28)
+        sprite = this.add.image(projectile.x, projectile.y, projectile.kind === 'firecracker' ? 'firecracker-launcher' : 'leaf-dart')
         this.leafSprites.set(projectile.id, sprite)
       }
-      sprite.setPosition(projectile.x, projectile.y).setRotation(Math.atan2(projectile.vy, projectile.vx) + Math.PI / 4 + Math.sin(this.state.time * 18 + projectile.id) * 0.18).setDepth(projectile.y + 5)
+      sprite.setTexture(projectile.kind === 'firecracker' ? 'firecracker-launcher' : 'leaf-dart').setDisplaySize(projectile.kind === 'firecracker' ? 32 : projectile.critical ? 34 : 28, projectile.kind === 'firecracker' ? 32 : projectile.critical ? 34 : 28).setPosition(projectile.x, projectile.y).setRotation(Math.atan2(projectile.vy, projectile.vx) + Math.PI / 4 + Math.sin(this.state.time * 18 + projectile.id) * 0.18).setDepth(projectile.y + 5)
       if (projectile.critical) sprite.setTint(0xffdf65)
       else sprite.clearTint()
     }
@@ -469,7 +505,7 @@ class BattleScene extends Phaser.Scene {
           : this.add.sprite(enemy.x, enemy.y, `${family}-move-01`).setOrigin(0.5, 1).setScale(size / 96).play(`${family}-move`)
         this.enemySprites.set(enemy.id, sprite)
       }
-      const flashing = this.state.effects.some((effect) => (effect.kind === 'hit' || effect.kind === 'crit' || effect.kind === 'projectile-hit' || effect.kind === 'projectile-crit') && Math.abs(effect.x - enemy.x) < 24 && Math.abs(effect.y + 28 - enemy.y) < 24)
+      const flashing = this.state.effects.some((effect) => (effect.kind === 'hit' || effect.kind === 'crit' || effect.kind === 'projectile-hit' || effect.kind === 'projectile-crit' || effect.kind === 'firecracker-hit' || effect.kind === 'firecracker-crit') && Math.abs(effect.x - enemy.x) < 24 && Math.abs(effect.y + 28 - enemy.y) < 24)
       const attacking = enemy.kind === 'chaser' ? Math.hypot(this.state.player.x - enemy.x, this.state.player.y - enemy.y) < 42 : enemy.kind === 'dasher' ? enemy.dashTime > 0 : enemy.cooldown > 1.45
       if (enemy.kind !== 'boss') sprite.play(`${family}-${attacking ? 'attack' : 'move'}`, true).setFlipX(this.state.player.x < enemy.x)
       const actionScale = enemy.kind === 'boss' ? 1 + Math.sin(this.state.time * (enemy.enraged ? 6 : 3)) * 0.018 : (enemy.kind === 'dasher' && enemy.dashTime > 0 ? 1.12 : 1) * (
@@ -535,6 +571,17 @@ class BattleScene extends Phaser.Scene {
     for (const [selector, value] of Object.entries(values)) {
       const element = document.querySelector<HTMLElement>(selector)
       if (element) element.textContent = value
+    }
+    const weaponStrip = document.querySelector<HTMLElement>('#weapon-strip')
+    const weaponHudMode = `${this.state.characterId}-${Object.entries(this.state.weaponLevels).join('-')}`
+    if (weaponStrip && weaponHudMode !== this.weaponHudMode) {
+      this.weaponHudMode = weaponHudMode
+      const character = characters[this.state.characterId]
+      weaponStrip.innerHTML = `<span class="weapon-slot"><img src="${import.meta.env.BASE_URL}${character.weaponImage}" alt="${character.weaponName}"><span><b>${character.weaponName} · 专属</b><small>${character.weaponDescription}</small></span></span>${Object.entries(this.state.weaponLevels).map(([id, level]) => {
+        const weapon = weapons[id === 'iron-pot-gauntlets' ? 'iron-pot-gauntlets' : 'firecracker-launcher']
+        const detail = id === 'iron-pot-gauntlets' ? `${level >= 3 ? '双段' : '单段'}快拳 · 范围 ${62 + level * 4}` : `${level >= 3 ? '双弹' : '单弹'}爆破 · 范围 ${48 + level * 8}`
+        return `<span class="weapon-slot"><img src="${import.meta.env.BASE_URL}${weapon.image}" alt="${weapon.name}"><span><b>${weapon.name} · Lv.${level}</b><small>${detail}</small></span></span>`
+      }).join('')}`
     }
     const boss = this.state.enemies.find((enemy) => enemy.kind === 'boss')
     const bossBar = document.querySelector<HTMLElement>('#boss-bar')
@@ -602,7 +649,8 @@ document.querySelectorAll<HTMLButtonElement>('[data-character]').forEach((button
     const weaponCopy = document.querySelector<HTMLElement>('#weapon-copy')
     if (characterSelect) characterSelect.hidden = true
     if (characterName) characterName.textContent = character.name
-    if (healthText) healthText.textContent = `${characterId === 'qingtuan' ? 85 : characterId === 'shimo' ? 140 : 110} / ${characterId === 'qingtuan' ? 85 : characterId === 'shimo' ? 140 : 110}`
+    const maxHp = characterId === 'qingtuan' ? 10 : characterId === 'shimo' ? 30 : 20
+    if (healthText) healthText.textContent = `${maxHp} / ${maxHp}`
     if (weaponImage) {
       weaponImage.src = `${import.meta.env.BASE_URL}${character.weaponImage}`
       weaponImage.alt = character.weaponName

@@ -78,13 +78,15 @@
               <section class="shop-market" aria-label="补给商品">
                 <div id="shop-cards" class="shop-cards"></div>
               </section>
-              <aside class="shop-column shop-inventory" aria-label="宝物栏">
-                <h3>宝物栏 <small>点击出售</small></h3>
+              <aside class="shop-column shop-inventory" aria-label="武器与宝物栏">
+                <h3>通用武器 <small>3 槽</small></h3>
+                <div id="shop-weapons"></div>
+                <h3 class="treasure-heading">宝物栏 <small>点击出售</small></h3>
                 <div id="shop-inventory"></div>
               </aside>
               <div class="shop-actions">
                 <button id="refresh-shop" type="button">刷新商品 · 4 铜钱</button>
-                <span>锁定最多 1 件 · 出售返还 60%</span>
+                <span>商品可分别锁定 · 出售返还 60%</span>
               </div>
             </div>
             <button id="continue-wave" class="continue-wave" type="button" hidden>整备完毕 · 进入下一波</button>
@@ -100,7 +102,7 @@
           <div class="health-card">
             <span><b id="character-name">山岚</b> · Lv.<b id="level">1</b></span>
             <div class="health-track"><i id="health-fill"></i></div>
-            <b id="health-text">110 / 110</b>
+            <b id="health-text">20 / 20</b>
             <div id="shield-row" class="shield-row" hidden>
               <div class="shield-track"><i id="shield-fill"></i></div>
               <small>护盾 <b id="shield-text">0 / 12</b></small>
@@ -116,7 +118,7 @@
           </div>
           <div id="dash" class="dash ready">闪避就绪</div>
         </div>
-        <div class="weapon-strip">
+        <div id="weapon-strip" class="weapon-strip">
           <span class="weapon-slot"><img id="weapon-image" src="/assets/weapons/bamboo-staff.png" alt="青竹杖" /><span><b id="weapon-name">青竹杖</b><small id="weapon-copy">中距 90° 横扫</small></span></span>
         </div>
         <aside class="build-panel" aria-label="当前构筑">
