@@ -87,7 +87,7 @@ kbd { padding: 4px 7px; border: 1px solid #637969; border-bottom-width: 3px; bor
 .dash.ready { color: #e9ffbe; border-color: #b9e37766; }
 .dash.near-player { opacity: .28; }
 
-.weapon-strip { position: absolute; left: 18px; bottom: 16px; gap: 8px; padding: 7px; border-radius: 12px 9px 13px 9px; color: #d8dfd5; pointer-events: none; }
+.weapon-strip { position: absolute; left: 18px; bottom: 16px; max-width: calc(100% - 330px); gap: 8px; padding: 7px; border-radius: 12px 9px 13px 9px; color: #d8dfd5; pointer-events: none; }
 .weapon-slot { gap: 8px; min-width: 150px; padding: 6px 10px 6px 6px; border-radius: 9px 7px 10px 8px; background-color: #07150dc7; }
 .weapon-slot img { width: 36px; height: 36px; object-fit: contain; filter: drop-shadow(0 2px 2px #000b); }
 .weapon-slot span { display: grid; }
@@ -166,11 +166,16 @@ kbd { padding: 4px 7px; border: 1px solid #637969; border-bottom-width: 3px; bor
 .shop-lock { color: #67502c; background: #ead9b7; }
 .shop-lock.locked { color: #fff3c9; background: #a86b2f; }
 .shop-buy:disabled, .shop-actions button:disabled { cursor: not-allowed; filter: grayscale(.7); opacity: .58; }
-.shop-card.empty { place-content: center; min-height: 145px; border-style: dashed; color: #817661; text-align: center; box-shadow: none; }
-.shop-card.empty small { font-size: 14px; }
 .shop-inventory { min-height: 308px; }
+#shop-weapons { display: grid; gap: 6px; }
+#shop-weapons > p, #shop-inventory > p { margin: 12px 0; color: #807663; font: 14px 'PingFang SC', sans-serif; text-align: center; }
+.shop-weapon { display: grid; grid-template-columns: 36px 1fr; align-items: center; gap: 7px; padding: 5px 7px; border: 1px solid #8f6d3e66; border-radius: 7px 9px 7px 8px; background: #f4e5c3; }
+.shop-weapon img { width: 36px; height: 36px; object-fit: contain; }
+.shop-weapon span { display: grid; }
+.shop-weapon strong { color: #3f3527; font-size: 14px; }
+.shop-weapon small { color: #66705f; font: 14px/1.35 'PingFang SC', sans-serif; }
+.treasure-heading { margin-top: 12px !important; padding-top: 10px; border-top: 1px solid #7d633744; }
 #shop-inventory { display: grid; max-height: 265px; gap: 6px; overflow-y: auto; }
-#shop-inventory > p { margin: 20px 0; color: #807663; font: 14px 'PingFang SC', sans-serif; text-align: center; }
 .shop-inventory button { display: flex; align-items: center; gap: 7px; padding: 5px 7px; color: #3f3527; text-align: left; background: #f4e5c3; }
 .shop-inventory button:hover, .shop-inventory button:focus-visible { border-color: #b66e36; outline: none; }
 .shop-inventory button img { width: 36px; height: 36px; object-fit: contain; }
