@@ -1,4 +1,4 @@
-import { buyItem, chooseUpgrade, continueWave, createGameState, refreshShop, sellItem, sellWeapon, stepGame, toggleShopLock, weaponIds } from './simulation.js'
+import { buyItem, chooseUpgrade, continueWave, createGameState, enemyDefinitions, refreshShop, regularEnemyIds, sellItem, sellWeapon, stepGame, toggleShopLock, weaponIds } from './simulation.js'
 
 const movement = createGameState(1)
 stepGame(movement, { x: 1, y: 0, dash: false }, 0.05)
@@ -196,6 +196,95 @@ const lateDamageHp = lateEnemyCheck.player.hp
 stepGame(lateEnemyCheck, { x: 0, y: 0, dash: false }, 0.05)
 if (lateDamageHp - lateEnemyCheck.player.hp <= 2) throw new Error('普通敌人接触伤害应随波次提升')
 
+if (regularEnemyIds.length !== 6 || enemyDefinitions.boar.unlockWave !== 3 || enemyDefinitions.assassin.unlockWave !== 4 || enemyDefinitions.sorcerer.unlockWave !== 5) throw new Error('第一批敌人必须按第 3/4/5 波依次开放')
+const budgetSpawnCheck = createGameState(29)
+budgetSpawnCheck.wave = 1
+budgetSpawnCheck.spawnTimer = 0
+budgetSpawnCheck.threatBudget = 10
+budgetSpawnCheck.bambooCooldown = 99
+stepGame(budgetSpawnCheck, { x: 0, y: 0, dash: false }, 0.05)
+if (budgetSpawnCheck.enemies.length !== 1 || budgetSpawnCheck.enemies[0].kind !== 'chaser' || budgetSpawnCheck.threatBudget >= 10) throw new Error('第 1 波只能按预算生成竹鼠并消耗威胁值')
+
+const eliteSpawnCheck = createGameState(30)
+eliteSpawnCheck.wave = 6
+eliteSpawnCheck.waveTime = 15
+eliteSpawnCheck.spawnTimer = 0
+eliteSpawnCheck.threatBudget = 12
+eliteSpawnCheck.bambooCooldown = 99
+stepGame(eliteSpawnCheck, { x: 0, y: 0, dash: false }, 0.05)
+if (eliteSpawnCheck.enemies.filter((enemy) => enemy.elite).length !== 1 || eliteSpawnCheck.eliteSpawns !== 1) throw new Error('第 6 波起应生成一只拥有额外行为的赤纹精英')
+eliteSpawnCheck.spawnTimer = 0
+eliteSpawnCheck.threatBudget = 12
+stepGame(eliteSpawnCheck, { x: 0, y: 0, dash: false }, 0.05)
+if (eliteSpawnCheck.enemies.filter((enemy) => enemy.elite).length !== 1) throw new Error('同一波最多只能生成一只精英')
+
+const pressureCapCheck = createGameState(37)
+pressureCapCheck.wave = 7
+pressureCapCheck.bambooCooldown = 99
+pressureCapCheck.leafCooldown = 99
+pressureCapCheck.threatBudget = 500
+for (let spawn = 0; spawn < 80; spawn += 1) {
+  pressureCapCheck.spawnTimer = 0
+  stepGame(pressureCapCheck, { x: 0, y: 0, dash: false }, 0.05)
+}
+if (pressureCapCheck.enemies.filter((enemy) => enemy.kind === 'dasher').length > 4 || pressureCapCheck.enemies.filter((enemy) => enemy.kind === 'boar').length > 4 || pressureCapCheck.enemies.filter((enemy) => enemy.kind === 'assassin').length > 3 || pressureCapCheck.enemies.filter((enemy) => enemy.kind === 'sorcerer').length > 2) throw new Error('高压敌人必须遵守各自的同屏上限')
+
+const boarFrontCheck = createGameState(31)
+boarFrontCheck.spawnTimer = 99
+boarFrontCheck.bambooCooldown = 99
+boarFrontCheck.leafCooldown = 99
+boarFrontCheck.enemies.push({ id: 1, kind: 'boar', x: 900, y: 500, hp: 200, maxHp: 200, cooldown: 99, dashTime: 0, vx: 0, vy: 0, facingX: -1, facingY: 0 })
+boarFrontCheck.playerProjectiles.push({ id: 2, kind: 'leaf', x: 880, y: 500, vx: 0, vy: 0, damage: 100, critical: false, blastRadius: 0 })
+stepGame(boarFrontCheck, { x: 0, y: 0, dash: false }, 0.05)
+if (boarFrontCheck.enemies[0].hp !== 155 || !boarFrontCheck.effects.some((effect) => effect.kind === 'armor-block')) throw new Error('甲壳野猪正面应只承受 45% 伤害并显示格挡反馈')
+const boarBackCheck = createGameState(32)
+boarBackCheck.spawnTimer = 99
+boarBackCheck.bambooCooldown = 99
+boarBackCheck.leafCooldown = 99
+boarBackCheck.enemies.push({ id: 1, kind: 'boar', x: 900, y: 500, hp: 200, maxHp: 200, cooldown: 99, dashTime: 0, vx: 0, vy: 0, facingX: -1, facingY: 0 })
+boarBackCheck.playerProjectiles.push({ id: 2, kind: 'leaf', x: 920, y: 500, vx: 0, vy: 0, damage: 100, critical: false, blastRadius: 0 })
+stepGame(boarBackCheck, { x: 0, y: 0, dash: false }, 0.05)
+if (boarBackCheck.enemies[0].hp !== 100 || boarBackCheck.effects.some((effect) => effect.kind === 'armor-block')) throw new Error('从背后攻击甲壳野猪应造成完整伤害')
+
+const assassinCheck = createGameState(33)
+assassinCheck.spawnTimer = 99
+assassinCheck.bambooCooldown = 99
+assassinCheck.enemies.push({ id: 1, kind: 'assassin', x: 1100, y: 500, hp: 200, maxHp: 200, cooldown: 0, dashTime: 0, vx: 0, vy: 0, telegraph: 0 })
+stepGame(assassinCheck, { x: 0, y: 0, dash: false }, 0.05)
+if ((assassinCheck.enemies[0].telegraph ?? 0) < 0.69 || assassinCheck.enemies[0].dashTime !== 0) throw new Error('鼬鼠刺客冲刺前必须先进入 0.7 秒预警')
+for (let tick = 0; tick < 15; tick += 1) stepGame(assassinCheck, { x: 0, y: 0, dash: false }, 0.05)
+if (assassinCheck.enemies[0].dashTime <= 0 || assassinCheck.enemies[0].x >= 1100) throw new Error('预警结束后鼬鼠刺客必须沿锁定方向冲刺')
+
+const slowCheck = createGameState(34)
+slowCheck.spawnTimer = 99
+slowCheck.bambooCooldown = 99
+slowCheck.enemyZones.push({ id: 1, x: 800, y: 500, radius: 76, life: 3, duration: 3 })
+stepGame(slowCheck, { x: 1, y: 0, dash: false }, 0.05)
+const slowedDistance = slowCheck.player.x - 800
+slowCheck.enemyZones = []
+const normalStart = slowCheck.player.x
+stepGame(slowCheck, { x: 1, y: 0, dash: false }, 0.05)
+if (Math.abs(slowedDistance - 6.05) > 0.01 || Math.abs(slowCheck.player.x - normalStart - 11) > 0.01) throw new Error('进入狐妖妖雾应减速 45%，离开后立即恢复')
+
+const sorcererCheck = createGameState(36)
+sorcererCheck.spawnTimer = 99
+sorcererCheck.bambooCooldown = 99
+sorcererCheck.enemies.push({ id: 1, kind: 'sorcerer', x: 1100, y: 500, hp: 200, maxHp: 200, cooldown: 0, dashTime: 0, vx: 0, vy: 0 })
+stepGame(sorcererCheck, { x: 0, y: 0, dash: false }, 0.05)
+if (sorcererCheck.enemyZones.length !== 1 || sorcererCheck.enemyZones[0].duration !== 3.2) throw new Error('狐妖术士应周期性生成持续 3.2 秒的减速妖雾')
+sorcererCheck.shopOpen = true
+const pausedZoneLife = sorcererCheck.enemyZones[0].life
+const pausedSorcererCooldown = sorcererCheck.enemies[0].cooldown
+stepGame(sorcererCheck, { x: 0, y: 0, dash: false }, 0.05)
+if (sorcererCheck.enemyZones[0].life !== pausedZoneLife || sorcererCheck.enemies[0].cooldown !== pausedSorcererCooldown) throw new Error('商城或覆盖层打开时妖雾与敌人行为必须暂停')
+
+const eliteDropCheck = createGameState(35)
+eliteDropCheck.spawnTimer = 99
+eliteDropCheck.bambooCooldown = 99
+eliteDropCheck.enemies.push({ id: 1, kind: 'chaser', x: 1000, y: 500, hp: 0, maxHp: 300, cooldown: 99, dashTime: 0, vx: 0, vy: 0, elite: true })
+stepGame(eliteDropCheck, { x: 0, y: 0, dash: false }, 0.05)
+if (!eliteDropCheck.drops.some((drop) => drop.kind === 'coin' && drop.value === 12)) throw new Error('精英击杀必须保证掉落铜钱')
+
 const sweepCheck = createGameState(9)
 sweepCheck.spawnTimer = 99
 sweepCheck.bambooCooldown = 0
@@ -308,7 +397,7 @@ for (let tick = 0; tick < 12_000; tick += 1) {
   if (endurance.pendingUpgrade) chooseUpgrade(endurance, endurance.upgradeChoices[0])
   if (endurance.shopOpen) continueWave(endurance)
 }
-if (!['chaser', 'dasher', 'shooter'].every((kind) => seen.has(kind))) throw new Error('十分钟模拟应出现三类普通敌人')
+if (!regularEnemyIds.every((kind) => seen.has(kind))) throw new Error('十分钟模拟应出现当前全部普通敌人')
 if (endurance.enemies.length > 100) throw new Error('敌人数量不得突破上限')
 if (endurance.wave === 10 && endurance.enemies.filter((enemy) => enemy.kind !== 'boss').length > 9) throw new Error('Boss 战普通增援不得超过 9 只')
 if (endurance.playerProjectiles.length + endurance.enemyProjectiles.length > 500) throw new Error('投射物疑似无限增长')

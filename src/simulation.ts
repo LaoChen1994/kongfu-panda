@@ -1,10 +1,21 @@
-export type EnemyKind = 'chaser' | 'dasher' | 'shooter' | 'boss'
+export const regularEnemyIds = ['chaser', 'dasher', 'shooter', 'boar', 'assassin', 'sorcerer'] as const
+export type RegularEnemyKind = typeof regularEnemyIds[number]
+export type EnemyKind = RegularEnemyKind | 'boss'
 export type CharacterId = 'shanlan' | 'qingtuan' | 'shimo'
 export type UpgradeId = 'power' | 'haste' | 'vitality' | 'footwork' | 'leaf-volley' | 'wide-sweep'
 export type ItemId = 'martial-belt' | 'wind-feather' | 'iron-bracer' | 'panda-roller'
 export const weaponIds = ['iron-pot-gauntlets', 'firecracker-launcher', 'spinning-bamboo-blade', 'panda-wine-gourd', 'bamboo-crossbow-turret'] as const
 export type WeaponId = typeof weaponIds[number]
 export type ShopProductId = ItemId | WeaponId
+
+export const enemyDefinitions: Record<RegularEnemyKind, { name: string; unlockWave: number; threat: number; baseHp: number; size: number; animation: string }> = {
+  chaser: { name: '竹鼠', unlockWave: 1, threat: 1, baseHp: 30, size: 54, animation: 'redfang-chaser' },
+  dasher: { name: '山猴', unlockWave: 2, threat: 2, baseHp: 38, size: 62, animation: 'violet-horn-dasher' },
+  shooter: { name: '毒蜂', unlockWave: 2, threat: 2, baseHp: 26, size: 58, animation: 'cyan-lantern-shooter' },
+  boar: { name: '甲壳野猪', unlockWave: 3, threat: 3, baseHp: 68, size: 68, animation: 'shellback-boar' },
+  assassin: { name: '鼬鼠刺客', unlockWave: 4, threat: 3, baseHp: 34, size: 58, animation: 'weasel-assassin' },
+  sorcerer: { name: '狐妖术士', unlockWave: 5, threat: 4, baseHp: 42, size: 62, animation: 'fox-sorcerer' },
+}
 
 export const characters: Record<CharacterId, {
   name: string
@@ -71,6 +82,8 @@ export type GameState = {
   kills: number
   nextId: number
   spawnTimer: number
+  threatBudget: number
+  eliteSpawns: number
   bambooCooldown: number
   leafCooldown: number
   gauntletCooldown: number
@@ -134,6 +147,10 @@ export type GameState = {
     dashTime: number
     vx: number
     vy: number
+    telegraph?: number
+    facingX?: number
+    facingY?: number
+    elite?: boolean
     phase?: 1 | 2
     enraged?: boolean
   }>
@@ -142,9 +159,10 @@ export type GameState = {
   enemyProjectiles: Array<{ id: number; x: number; y: number; vx: number; vy: number }>
   attacks: Array<{ id: number; x: number; y: number; life: number; radius: number; angle: number; arc: number; critical: boolean; kind: 'staff' | 'whirlwind' | 'shield' | 'fists' }>
   groundZones: Array<{ id: number; x: number; y: number; radius: number; life: number; duration: number; tickCooldown: number; damage: number }>
+  enemyZones: Array<{ id: number; x: number; y: number; radius: number; life: number; duration: number }>
   turrets: Array<{ id: number; x: number; y: number; life: number; cooldown: number; level: number; angle: number }>
   drops: Array<{ id: number; kind: 'xp' | 'coin' | 'heal'; x: number; y: number; value: number }>
-  effects: Array<{ id: number; kind: 'hit' | 'crit' | 'projectile-hit' | 'projectile-crit' | 'firecracker-hit' | 'firecracker-crit' | 'firecracker-blast' | 'kill' | 'player-hit' | 'dash-burst' | 'shield-break' | 'enemy-shot' | 'boss-summon'; x: number; y: number; value: number; life: number; angle: number }>
+  effects: Array<{ id: number; kind: 'hit' | 'crit' | 'projectile-hit' | 'projectile-crit' | 'firecracker-hit' | 'firecracker-crit' | 'firecracker-blast' | 'kill' | 'player-hit' | 'dash-burst' | 'shield-break' | 'enemy-shot' | 'boss-summon' | 'armor-block'; x: number; y: number; value: number; life: number; angle: number }>
 }
 
 export type PlayerInput = { x: number; y: number; dash: boolean }
@@ -152,6 +170,23 @@ export type PlayerInput = { x: number; y: number; dash: boolean }
 const random = (state: GameState): number => {
   state.seed = (state.seed * 1664525 + 1013904223) >>> 0
   return state.seed / 4294967296
+}
+
+const dealEnemyDamage = (state: GameState, enemy: GameState['enemies'][number], rawDamage: number, sourceX: number, sourceY: number): number => {
+  let damage = rawDamage
+  if (enemy.kind === 'boar') {
+    const sourceDistance = Math.max(0.001, Math.hypot(sourceX - enemy.x, sourceY - enemy.y))
+    const sourceXDirection = (sourceX - enemy.x) / sourceDistance
+    const sourceYDirection = (sourceY - enemy.y) / sourceDistance
+    const facingX = enemy.facingX ?? 1
+    const facingY = enemy.facingY ?? 0
+    if (sourceXDirection * facingX + sourceYDirection * facingY > 0.2) {
+      damage = Math.max(1, Math.round(rawDamage * 0.45))
+      state.effects.push({ id: state.nextId++, kind: 'armor-block', x: enemy.x, y: enemy.y - 24, value: damage, life: 0.28, angle: Math.atan2(sourceY - enemy.y, sourceX - enemy.x) })
+    }
+  }
+  enemy.hp -= damage
+  return damage
 }
 
 export const createGameState = (seed = 20260831, characterId: CharacterId = 'shanlan'): GameState => ({
@@ -164,6 +199,8 @@ export const createGameState = (seed = 20260831, characterId: CharacterId = 'sha
   kills: 0,
   nextId: 1,
   spawnTimer: 0.6,
+  threatBudget: 3,
+  eliteSpawns: 0,
   bambooCooldown: 0.2,
   leafCooldown: 0.45,
   gauntletCooldown: 0.15,
@@ -197,7 +234,7 @@ export const createGameState = (seed = 20260831, characterId: CharacterId = 'sha
     dashCooldown: 0, dashTime: 0, dashX: 1, dashY: 0, facingX: 1, facingY: 0, hitCooldown: 0, dashBurstPending: false,
     shield: 0, shieldMax: 0, shieldTimer: characterId === 'shimo' ? 8 : 0,
   },
-  enemies: [], playerProjectiles: [], enemyProjectiles: [], bossHazards: [], attacks: [], groundZones: [], turrets: [], drops: [], effects: [],
+  enemies: [], playerProjectiles: [], enemyProjectiles: [], bossHazards: [], attacks: [], groundZones: [], enemyZones: [], turrets: [], drops: [], effects: [],
 })
 
 export const chooseUpgrade = (state: GameState, id: UpgradeId): boolean => {
@@ -322,11 +359,14 @@ export const continueWave = (state: GameState): boolean => {
   state.enemyProjectiles = []
   state.attacks = []
   state.groundZones = []
+  state.enemyZones = []
   state.turrets = []
   state.drops = []
   state.effects = []
   state.bossHazards = []
   state.spawnTimer = 0.8
+  state.threatBudget = 2.5 + state.wave * 0.5
+  state.eliteSpawns = 0
   state.bossAttackCount = 0
   state.bossIntroTime = state.wave === 10 ? 2.6 : 0
   state.corruptionInset = 0
@@ -370,7 +410,9 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
   state.gourdCooldown -= dt
   state.turretDeployCooldown -= dt
   state.spawnTimer -= dt
+  state.threatBudget += (0.7 + state.wave * 0.15) * dt
   for (const effect of state.effects) effect.life -= dt
+  for (const zone of state.enemyZones) zone.life -= dt
 
   if (previousDashTime > 0 && state.player.dashTime === 0 && state.player.dashBurstPending) {
     state.player.dashBurstPending = false
@@ -380,7 +422,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
       const dy = enemy.y - state.player.y
       const distance = Math.max(0.001, Math.hypot(dx, dy))
       if (distance < 118) {
-        enemy.hp -= 32
+        dealEnemyDamage(state, enemy, 32, state.player.x, state.player.y)
         if (enemy.kind !== 'boss') {
           enemy.x += (dx / distance) * 42
           enemy.y += (dy / distance) * 42
@@ -403,21 +445,37 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
     state.player.dashY = inputLength > 0 ? moveY : state.player.facingY
     state.player.dashBurstPending = state.ownedItems.includes('panda-roller')
   }
-  const speed = (state.player.dashTime > 0 ? 580 : 220) * state.player.moveSpeed
+  const slowed = state.enemyZones.some((zone) => Math.hypot(state.player.x - zone.x, state.player.y - zone.y) <= zone.radius)
+  const speed = (state.player.dashTime > 0 ? 580 : 220) * state.player.moveSpeed * (slowed && state.player.dashTime === 0 ? 0.55 : 1)
   state.player.x = Math.min(1550 - state.corruptionInset, Math.max(50 + state.corruptionInset, state.player.x + (state.player.dashTime > 0 ? state.player.dashX : moveX) * speed * dt))
   state.player.y = Math.min(950 - state.corruptionInset, Math.max(75 + state.corruptionInset, state.player.y + (state.player.dashTime > 0 ? state.player.dashY : moveY) * speed * dt))
 
-  if (state.wave < 10 && state.spawnTimer <= 0 && state.enemies.length < 100) {
-    const angle = random(state) * Math.PI * 2
-    const kind: EnemyKind = state.nextId % 3 === 1 ? 'chaser' : state.nextId % 3 === 2 ? 'dasher' : 'shooter'
-    const hp = Math.round((kind === 'dasher' ? 38 : kind === 'shooter' ? 26 : 30) * (1 + (state.wave - 1) * 0.25))
-    state.enemies.push({
-      id: state.nextId++, kind,
-      x: Math.min(1550, Math.max(50, state.player.x + Math.cos(angle) * 470)),
-      y: Math.min(950, Math.max(75, state.player.y + Math.sin(angle) * 470)),
-      hp, maxHp: hp, cooldown: kind === 'shooter' ? 1.2 : 1.8, dashTime: 0, vx: 0, vy: 0,
-    })
-    state.spawnTimer = Math.max(0.3, 1.05 - state.time * 0.0015 - (state.wave - 1) * 0.04)
+  if (state.wave < 10 && state.spawnTimer <= 0 && state.enemies.length < 80) {
+    const elite = state.wave >= 6 && state.waveTime >= 15 && state.eliteSpawns === 0 && state.threatBudget >= 6
+    const availableKinds = regularEnemyIds.filter((kind) => (
+      enemyDefinitions[kind].unlockWave <= state.wave
+      && enemyDefinitions[kind].threat <= state.threatBudget
+      && (kind !== 'dasher' || state.enemies.filter((enemy) => enemy.kind === 'dasher').length < 4)
+      && (kind !== 'boar' || state.enemies.filter((enemy) => enemy.kind === 'boar').length < 4)
+      && (kind !== 'assassin' || state.enemies.filter((enemy) => enemy.kind === 'assassin').length < 3)
+      && (kind !== 'sorcerer' || state.enemies.filter((enemy) => enemy.kind === 'sorcerer').length < 2)
+    ))
+    const kind = elite ? 'chaser' : availableKinds[Math.floor(random(state) * availableKinds.length)]
+    if (kind) {
+      const angle = random(state) * Math.PI * 2
+      const definition = enemyDefinitions[kind]
+      const hp = Math.round(definition.baseHp * (1 + (state.wave - 1) * 0.25) * (elite ? 3 : 1))
+      state.enemies.push({
+        id: state.nextId++, kind,
+        x: Math.min(1550, Math.max(50, state.player.x + Math.cos(angle) * 540)),
+        y: Math.min(950, Math.max(75, state.player.y + Math.sin(angle) * 540)),
+        hp, maxHp: hp, cooldown: elite ? 2.4 : kind === 'shooter' ? 1.2 : kind === 'sorcerer' ? 1.6 : 1.8,
+        dashTime: 0, vx: 0, vy: 0, telegraph: 0, facingX: -Math.cos(angle), facingY: -Math.sin(angle), elite,
+      })
+      state.threatBudget -= elite ? 6 : definition.threat
+      if (elite) state.eliteSpawns += 1
+    }
+    state.spawnTimer = availableKinds.length > 0 || elite ? 0.28 : 0.12
   }
 
   for (const enemy of state.enemies) {
@@ -425,6 +483,8 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
     const dy = state.player.y - enemy.y
     const distance = Math.max(0.001, Math.hypot(dx, dy))
     enemy.cooldown -= dt
+    const previousTelegraph = enemy.telegraph ?? 0
+    enemy.telegraph = Math.max(0, previousTelegraph - dt)
     if (enemy.kind === 'boss') {
       enemy.phase = enemy.hp <= enemy.maxHp * 0.5 ? 2 : 1
       state.corruptionInset = enemy.phase === 2 ? 90 : 0
@@ -456,6 +516,25 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
         }
         enemy.cooldown = enemy.enraged ? 1.7 : enemy.phase === 2 ? 2.7 : 3.8
       }
+    } else if (enemy.kind === 'assassin' || enemy.kind === 'chaser' && enemy.elite) {
+      enemy.dashTime = Math.max(0, enemy.dashTime - dt)
+      if (previousTelegraph > 0 && enemy.telegraph === 0) enemy.dashTime = enemy.elite ? 0.5 : 0.38
+      if (enemy.telegraph > 0) {
+        enemy.facingX = enemy.vx
+        enemy.facingY = enemy.vy
+      } else if (enemy.dashTime > 0) {
+        const dashSpeed = enemy.elite ? 340 : 410
+        enemy.x += enemy.vx * dashSpeed * dt
+        enemy.y += enemy.vy * dashSpeed * dt
+      } else if (enemy.cooldown <= 0) {
+        enemy.vx = dx / distance
+        enemy.vy = dy / distance
+        enemy.telegraph = enemy.elite ? 0.9 : 0.7
+        enemy.cooldown = enemy.elite ? 4.2 : 3.4
+      } else {
+        enemy.x += (dx / distance) * (enemy.elite ? 54 : 72) * dt
+        enemy.y += (dy / distance) * (enemy.elite ? 54 : 72) * dt
+      }
     } else if (enemy.kind === 'chaser') {
       enemy.x += (dx / distance) * (66 + state.wave * 2) * dt
       enemy.y += (dy / distance) * (66 + state.wave * 2) * dt
@@ -480,11 +559,24 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
         state.effects.push({ id: -projectileId, kind: 'enemy-shot', x: enemy.x, y: enemy.y - 24, value: 0, life: 0.24, angle: Math.atan2(dy, dx) })
         enemy.cooldown = 1.85
       }
+    } else if (enemy.kind === 'boar') {
+      enemy.facingX = dx / distance
+      enemy.facingY = dy / distance
+      enemy.x += enemy.facingX * (42 + state.wave) * dt
+      enemy.y += enemy.facingY * (42 + state.wave) * dt
+    } else if (enemy.kind === 'sorcerer') {
+      const direction = distance > 390 ? 1 : distance < 280 ? -1 : 0
+      enemy.x += (dx / distance) * 50 * direction * dt
+      enemy.y += (dy / distance) * 50 * direction * dt
+      if (enemy.cooldown <= 0) {
+        state.enemyZones.push({ id: state.nextId++, x: state.player.x + state.player.facingX * 34, y: state.player.y + state.player.facingY * 34, radius: 76, life: 3.2, duration: 3.2 })
+        enemy.cooldown = 4.1
+      }
     }
     enemy.x = Math.min(1550, Math.max(50, enemy.x))
     enemy.y = Math.min(950, Math.max(75, enemy.y))
     if (distance < (enemy.kind === 'boss' ? 82 : 32) && state.player.hitCooldown === 0 && state.player.dashTime === 0) {
-      const rawDamage = enemy.kind === 'boss' ? 10 : enemy.kind === 'dasher' && enemy.dashTime > 0 ? 4 + Math.floor((state.wave - 1) / 2) : 2 + Math.floor((state.wave - 1) / 3)
+      const rawDamage = enemy.kind === 'boss' ? 10 : (enemy.kind === 'dasher' || enemy.kind === 'assassin' || enemy.elite) && enemy.dashTime > 0 ? 4 + Math.floor((state.wave - 1) / 2) : enemy.kind === 'boar' ? 3 + Math.floor((state.wave - 1) / 3) : 2 + Math.floor((state.wave - 1) / 3)
       const damage = Math.max(1, Math.floor(rawDamage * (1 - state.player.armor / (state.player.armor + 60))))
       const shieldBefore = state.player.shield
       const absorbed = Math.min(shieldBefore, damage)
@@ -499,7 +591,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
           const breakY = nearbyEnemy.y - state.player.y
           const breakDistance = Math.max(0.001, Math.hypot(breakX, breakY))
           if (breakDistance <= 110) {
-            nearbyEnemy.hp -= 24
+            dealEnemyDamage(state, nearbyEnemy, 24, state.player.x, state.player.y)
             if (nearbyEnemy.kind !== 'boss') {
               nearbyEnemy.x += (breakX / breakDistance) * 48
               nearbyEnemy.y += (breakY / breakDistance) * 48
@@ -532,7 +624,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
             const breakY = enemy.y - state.player.y
             const breakDistance = Math.max(0.001, Math.hypot(breakX, breakY))
             if (breakDistance <= 110) {
-              enemy.hp -= 24
+              dealEnemyDamage(state, enemy, 24, state.player.x, state.player.y)
               if (enemy.kind !== 'boss') {
                 enemy.x += (breakX / breakDistance) * 48
                 enemy.y += (breakY / breakDistance) * 48
@@ -567,13 +659,13 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
         const angleDelta = Math.atan2(Math.sin(Math.atan2(dy, dx) - angle), Math.cos(Math.atan2(dy, dx) - angle))
         if (distance <= attackRadius && Math.abs(angleDelta) <= arc && hitCount < 8) {
           hitCount += 1
-          enemy.hp -= damage
+          const appliedDamage = dealEnemyDamage(state, enemy, damage, state.player.x, state.player.y)
           if (enemy.kind !== 'boss') {
             const knockback = state.characterId === 'shimo' ? critical ? 46 : 34 : critical ? 22 : 14
             enemy.x = Math.min(1550, Math.max(50, enemy.x + (dx / distance) * knockback))
             enemy.y = Math.min(950, Math.max(75, enemy.y + (dy / distance) * knockback))
           }
-          state.effects.push({ id: state.nextId++, kind: critical ? 'crit' : 'hit', x: enemy.x, y: enemy.y - 28, value: damage, life: 0.42, angle })
+          state.effects.push({ id: state.nextId++, kind: critical ? 'crit' : 'hit', x: enemy.x, y: enemy.y - 28, value: appliedDamage, life: 0.42, angle })
         }
       }
       if (whirlwind) state.player.hp = Math.min(state.player.maxHp, state.player.hp + Math.max(1, Math.ceil(state.player.maxHp * 0.01)))
@@ -633,12 +725,12 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
           const angleDelta = Math.atan2(Math.sin(Math.atan2(dy, dx) - angle), Math.cos(Math.atan2(dy, dx) - angle))
           if (distance <= radius && Math.abs(angleDelta) <= Math.PI / 7 && hitCount < 3) {
             hitCount += 1
-            enemy.hp -= damage
+            const appliedDamage = dealEnemyDamage(state, enemy, damage, state.player.x, state.player.y)
             if (enemy.kind !== 'boss') {
               enemy.x = Math.min(1550, Math.max(50, enemy.x + dx / distance * 8))
               enemy.y = Math.min(950, Math.max(75, enemy.y + dy / distance * 8))
             }
-            state.effects.push({ id: state.nextId++, kind: critical ? 'crit' : 'hit', x: enemy.x, y: enemy.y - 28, value: damage, life: 0.36, angle })
+            state.effects.push({ id: state.nextId++, kind: critical ? 'crit' : 'hit', x: enemy.x, y: enemy.y - 28, value: appliedDamage, life: 0.36, angle })
           }
         }
         state.attacks.push({ id: state.nextId++, x: state.player.x, y: state.player.y, life: 0.18, radius, angle, arc: Math.PI / 7, critical, kind: 'fists' })
@@ -685,8 +777,8 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
         if (Math.abs(angleDelta) <= 0.72) bladeIsPassing = true
       }
       if (Math.abs(distance - radius) <= 24 && bladeIsPassing) {
-        enemy.hp -= damage
-        state.effects.push({ id: state.nextId++, kind: 'hit', x: enemy.x, y: enemy.y - 28, value: damage, life: 0.36, angle: enemyAngle })
+        const appliedDamage = dealEnemyDamage(state, enemy, damage, state.player.x, state.player.y)
+        state.effects.push({ id: state.nextId++, kind: 'hit', x: enemy.x, y: enemy.y - 28, value: appliedDamage, life: 0.36, angle: enemyAngle })
       }
     }
     state.orbitCooldown = 0.42 / state.player.attackSpeed
@@ -721,8 +813,8 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
     if (zone.tickCooldown <= 0) {
       for (const enemy of state.enemies) {
         if (Math.hypot(enemy.x - zone.x, enemy.y - zone.y) <= zone.radius) {
-          enemy.hp -= zone.damage
-          state.effects.push({ id: state.nextId++, kind: 'firecracker-hit', x: enemy.x, y: enemy.y - 28, value: zone.damage, life: 0.42, angle: Math.atan2(enemy.y - zone.y, enemy.x - zone.x) })
+          const appliedDamage = dealEnemyDamage(state, enemy, zone.damage, zone.x, zone.y)
+          state.effects.push({ id: state.nextId++, kind: 'firecracker-hit', x: enemy.x, y: enemy.y - 28, value: appliedDamage, life: 0.42, angle: Math.atan2(enemy.y - zone.y, enemy.x - zone.x) })
         }
       }
       zone.tickCooldown = 0.45
@@ -767,13 +859,13 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
           state.effects.push({ id: state.nextId++, kind: 'firecracker-blast', x: projectile.x, y: projectile.y, value: projectile.blastRadius, life: 0.38, angle: 0 })
           for (const blastTarget of state.enemies) {
             if (Math.hypot(blastTarget.x - projectile.x, blastTarget.y - projectile.y) <= projectile.blastRadius) {
-              blastTarget.hp -= projectile.damage
-              state.effects.push({ id: state.nextId++, kind: projectile.critical ? 'firecracker-crit' : 'firecracker-hit', x: blastTarget.x, y: blastTarget.y - 28, value: projectile.damage, life: 0.42, angle: Math.atan2(blastTarget.y - projectile.y, blastTarget.x - projectile.x) })
+              const appliedDamage = dealEnemyDamage(state, blastTarget, projectile.damage, projectile.x, projectile.y)
+              state.effects.push({ id: state.nextId++, kind: projectile.critical ? 'firecracker-crit' : 'firecracker-hit', x: blastTarget.x, y: blastTarget.y - 28, value: appliedDamage, life: 0.42, angle: Math.atan2(blastTarget.y - projectile.y, blastTarget.x - projectile.x) })
             }
           }
         } else {
-          enemy.hp -= projectile.damage
-          state.effects.push({ id: state.nextId++, kind: projectile.critical ? 'projectile-crit' : 'projectile-hit', x: enemy.x, y: enemy.y - 28, value: projectile.damage, life: 0.42, angle: Math.atan2(projectile.vy, projectile.vx) })
+          const appliedDamage = dealEnemyDamage(state, enemy, projectile.damage, projectile.x - projectile.vx * dt, projectile.y - projectile.vy * dt)
+          state.effects.push({ id: state.nextId++, kind: projectile.critical ? 'projectile-crit' : 'projectile-hit', x: enemy.x, y: enemy.y - 28, value: appliedDamage, life: 0.42, angle: Math.atan2(projectile.vy, projectile.vx) })
         }
         projectile.damage = 0
         break
@@ -800,7 +892,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
           const breakY = enemy.y - state.player.y
           const breakDistance = Math.max(0.001, Math.hypot(breakX, breakY))
           if (breakDistance <= 110) {
-            enemy.hp -= 24
+            dealEnemyDamage(state, enemy, 24, state.player.x, state.player.y)
             if (enemy.kind !== 'boss') {
               enemy.x += (breakX / breakDistance) * 48
               enemy.y += (breakY / breakDistance) * 48
@@ -835,11 +927,16 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
         state.corruptionInset = 0
         state.enemyProjectiles = []
         state.bossHazards = []
+        state.enemyZones = []
         state.effects.push({ id: state.nextId++, kind: 'kill', x: enemy.x, y: enemy.y, value: 0, life: 0.8, angle: 0 })
         continue
       }
       state.kills += 1
-      state.drops.push({ id: state.nextId++, kind: 'xp', x: enemy.x, y: enemy.y, value: 4 })
+      state.drops.push({ id: state.nextId++, kind: 'xp', x: enemy.x, y: enemy.y, value: enemy.elite ? 10 : 4 })
+      if (enemy.elite) {
+        state.drops.push({ id: state.nextId++, kind: 'coin', x: enemy.x + 10, y: enemy.y, value: 12 })
+        if (random(state) < 0.35) state.drops.push({ id: state.nextId++, kind: 'heal', x: enemy.x - 10, y: enemy.y, value: 10 })
+      }
       if (state.kills % 2 === 0) state.drops.push({ id: state.nextId++, kind: 'coin', x: enemy.x + 8, y: enemy.y, value: 2 })
       if (state.kills % 8 === 0) state.drops.push({ id: state.nextId++, kind: 'heal', x: enemy.x - 8, y: enemy.y, value: 10 })
       state.effects.push({ id: state.nextId++, kind: 'kill', x: enemy.x, y: enemy.y, value: 0, life: 0.36, angle: 0 })
@@ -848,6 +945,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
   state.enemies = state.enemies.filter((enemy) => enemy.hp > 0)
   state.playerProjectiles = state.playerProjectiles.filter((projectile) => projectile.damage > 0 && projectile.x > 0 && projectile.x < 1600 && projectile.y > 0 && projectile.y < 1000)
   state.groundZones = state.groundZones.filter((zone) => zone.life > 0)
+  state.enemyZones = state.enemyZones.filter((zone) => zone.life > 0).slice(-6)
   state.turrets = state.turrets.filter((turret) => turret.life > 0)
   state.enemyProjectiles = state.enemyProjectiles.filter((projectile) => projectile.x > 0 && projectile.x < 1600 && projectile.y > 0 && projectile.y < 1000)
   state.bossHazards = state.bossHazards.filter((hazard) => hazard.life > -0.28)
