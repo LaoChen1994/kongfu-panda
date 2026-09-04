@@ -58,6 +58,18 @@
             </div>
           </div>
         </div>
+        <div id="loading-overlay" class="loading-overlay" hidden>
+          <div class="loading-card">
+            <p class="choice-kicker">灵竹谷 · 启程</p>
+            <img id="loading-portrait" alt="" />
+            <h2 id="loading-title">正在准备战场</h2>
+            <p id="loading-message" role="status">正在加载场景与招式，请稍候</p>
+            <progress id="loading-progress" max="100" value="0" aria-label="战场资源加载进度"></progress>
+            <span id="loading-percent">0%</span>
+            <p class="loading-tip">首次进入需要加载资源；准备完成后才会开始计时。</p>
+            <button id="loading-retry" type="button" hidden>重新加载</button>
+          </div>
+        </div>
         <div id="pause-overlay" class="overlay" hidden>
           <div class="overlay-card">
             <strong id="overlay-title">竹息凝神</strong>

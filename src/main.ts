@@ -4,6 +4,33 @@ import { buyItem, characters, chooseUpgrade, continueWave, createGameState, enem
 
 const assetRoot = `${import.meta.env.BASE_URL}assets/`
 let selectedCharacter: CharacterId = 'shanlan'
+let gameStarting = false
+const loadingOverlay = document.querySelector<HTMLElement>('#loading-overlay')!
+const loadingMessage = document.querySelector<HTMLElement>('#loading-message')!
+const loadingProgress = document.querySelector<HTMLProgressElement>('#loading-progress')!
+const loadingPercent = document.querySelector<HTMLElement>('#loading-percent')!
+const loadingRetry = document.querySelector<HTMLButtonElement>('#loading-retry')!
+loadingRetry.addEventListener('click', () => window.location.reload())
+const buildStatFields = [
+  { key: 'maxHp', label: '生命上限', scale: 1, unit: '' },
+  { key: 'shieldPower', label: '护盾效果·石墨', scale: 100, unit: '%' },
+  { key: 'armor', label: '护甲', scale: 1, unit: '' },
+  { key: 'damage', label: '全部伤害', scale: 100, unit: '%' },
+  { key: 'normalDamage', label: '普通敌人伤害', scale: 100, unit: '%' },
+  { key: 'eliteDamage', label: '精英/Boss伤害', scale: 100, unit: '%' },
+  { key: 'meleeDamage', label: '近战伤害', scale: 100, unit: '%' },
+  { key: 'rangedDamage', label: '远程伤害', scale: 100, unit: '%' },
+  { key: 'attackSpeed', label: '攻击速度', scale: 100, unit: '%' },
+  { key: 'criticalChance', label: '暴击率', scale: 100, unit: '%' },
+  { key: 'moveSpeed', label: '移动速度', scale: 100, unit: '%' },
+  { key: 'meleeRange', label: '杖/盾攻击范围', scale: 1, unit: '' },
+  { key: 'projectileCount', label: '飞叶数量·青团', scale: 1, unit: '' },
+  { key: 'projectileSpeed', label: '飞叶速度·青团', scale: 1, unit: '' },
+  { key: 'pickupRange', label: '拾取范围', scale: 1, unit: '' },
+  { key: 'coinGain', label: '铜钱获取', scale: 100, unit: '%' },
+  { key: 'enemyPressure', label: '敌潮压力', scale: 100, unit: '%' },
+  { key: 'waveHealing', label: '额外波次恢复', scale: 100, unit: '%' },
+] as const
 const animationSets = [
   { key: 'panda-idle', path: 'panda-wanderer/idle', frames: 6, frameRate: 7, repeat: -1 },
   { key: 'panda-run', path: 'panda-wanderer/run', frames: 8, frameRate: 13, repeat: -1 },
@@ -53,8 +80,21 @@ class BattleScene extends Phaser.Scene {
   private lastAttackId = 0
   private lastPlayerProjectileId = 0
   private weaponHudMode = ''
+  private loading = true
+  private loadFailed = false
 
   preload(): void {
+    this.load.on('progress', (progress: number) => {
+      if (this.loadFailed) return
+      loadingProgress.value = Math.floor(progress * 100)
+      loadingPercent.textContent = `${loadingProgress.value}%`
+      if (progress === 1) loadingMessage.textContent = '资源已就绪，正在布置战场…'
+    })
+    this.load.on('loaderror', () => {
+      this.loadFailed = true
+      loadingMessage.textContent = '部分资源加载失败，请检查网络后重新加载。'
+      loadingRetry.hidden = false
+    })
     this.load.image('bamboo-ground', `${assetRoot}environments/bamboo-ground.png`)
     this.load.image('leaf-dart', `${assetRoot}weapons/leaf-dart.png`)
     this.load.image('firecracker-launcher', `${assetRoot}weapons/firecracker-launcher.png`)
@@ -69,6 +109,7 @@ class BattleScene extends Phaser.Scene {
     this.load.image('corrupted-root-burst', `${assetRoot}effects/corrupted-root-burst.png`)
     this.load.image('ink-shield-aura', `${assetRoot}effects/ink-shield-aura.png`)
     for (const animation of animationSets) {
+      if (['panda', 'qingtuan', 'shimo'].some((prefix) => animation.key.startsWith(`${prefix}-`) && prefix !== characters[selectedCharacter].animation)) continue
       for (let index = 1; index <= animation.frames; index += 1) {
         const frame = String(index).padStart(2, '0')
         this.load.image(`${animation.key}-${frame}`, `${assetRoot}animations/${animation.path}/${frame}.png`)
@@ -77,6 +118,7 @@ class BattleScene extends Phaser.Scene {
   }
 
   create(): void {
+    if (this.loadFailed) return
     if (import.meta.env.DEV && new URLSearchParams(location.search).has('playtest-upgrade')) {
       this.state.player.hp = Math.min(6, this.state.player.maxHp)
       this.state.pendingUpgrade = true
@@ -136,6 +178,7 @@ class BattleScene extends Phaser.Scene {
     worldGraphics.lineStyle(8, 0x513d22, 0.7).strokeRect(5, 5, 1590, 990)
     this.actorGraphics = this.add.graphics().setDepth(3000)
     for (const animation of animationSets) {
+      if (['panda', 'qingtuan', 'shimo'].some((prefix) => animation.key.startsWith(`${prefix}-`) && prefix !== characters[selectedCharacter].animation)) continue
       this.anims.create({
         key: animation.key,
         frames: Array.from({ length: animation.frames }, (_, index) => ({ key: `${animation.key}-${String(index + 1).padStart(2, '0')}` })),
@@ -147,6 +190,11 @@ class BattleScene extends Phaser.Scene {
     this.playerSprite = this.add.sprite(this.state.player.x, this.state.player.y, `${playerAnimation}-idle-01`).setOrigin(0.5, 1).setScale(68 / 96).play(`${playerAnimation}-idle`)
     this.shieldAura = this.add.image(this.state.player.x, this.state.player.y - 26, 'ink-shield-aura').setDisplaySize(104, 104).setVisible(false)
     this.cameras.main.setBounds(0, 0, 1600, 1000)
+    this.cameras.main.centerOn(this.state.player.x, this.state.player.y)
+    this.game.events.once(Phaser.Core.Events.POST_RENDER, () => {
+      this.loading = false
+      loadingOverlay.hidden = true
+    })
     const keyboard = this.input.keyboard
     if (!keyboard) throw new Error('浏览器不支持键盘输入')
     this.keys = {
@@ -158,7 +206,7 @@ class BattleScene extends Phaser.Scene {
     window.addEventListener('keydown', (event) => {
       if (event.repeat) return
       if (event.code === 'Space' || event.code === 'Escape' || event.code === 'KeyR') event.preventDefault()
-      if (!this.audioContext) this.audioContext = new AudioContext()
+      if (!this.audioContext && new URLSearchParams(window.location.search).get('muted') !== '1') this.audioContext = new AudioContext()
       if (event.code === 'Space' && !this.state.pendingUpgrade && !this.state.shopOpen) this.dashQueued = true
       if (this.state.pendingUpgrade && ['Digit1', 'Digit2', 'Digit3'].includes(event.code)) {
         const choice = this.state.upgradeChoices[Number(event.code.slice(-1)) - 1]
@@ -261,24 +309,8 @@ class BattleScene extends Phaser.Scene {
         <div class="shop-character"><img src="${import.meta.env.BASE_URL}${character.portrait}" alt=""><strong>${character.name}</strong><span>${character.role}</span></div>
         <dl>
           <div><dt>生命</dt><dd>${Math.ceil(this.state.player.hp)} / ${this.state.player.maxHp}</dd></div>
-          <div><dt>护盾效果</dt><dd>${Math.round(this.state.player.shieldPower * 100)}%</dd></div>
-          <div><dt>护甲</dt><dd>${this.state.player.armor}</dd></div>
-          <div><dt>全部伤害</dt><dd>+${Math.round((this.state.player.damage - 1) * 100)}%</dd></div>
-          <div><dt>普通敌人伤害</dt><dd>${Math.round(this.state.player.normalDamage * 100)}%</dd></div>
-          <div><dt>精英 / Boss 伤害</dt><dd>${Math.round(this.state.player.eliteDamage * 100)}%</dd></div>
-          <div><dt>近战伤害</dt><dd>${Math.round(this.state.player.meleeDamage * 100)}%</dd></div>
-          <div><dt>远程伤害</dt><dd>${Math.round(this.state.player.rangedDamage * 100)}%</dd></div>
-          <div><dt>攻击速度</dt><dd>${Math.round(this.state.player.attackSpeed * 100)}%</dd></div>
-          <div><dt>暴击率</dt><dd>${Math.round(this.state.player.criticalChance * 100)}%</dd></div>
-          <div><dt>移动速度</dt><dd>${Math.round(this.state.player.moveSpeed * 100)}%</dd></div>
-          <div><dt>近战范围</dt><dd>${this.state.player.meleeRange}</dd></div>
-          <div><dt>投射物数量</dt><dd>${this.state.player.projectileCount}</dd></div>
-          <div><dt>投射物速度</dt><dd>${Math.round(this.state.player.projectileSpeed)}</dd></div>
-          <div><dt>拾取范围</dt><dd>${Math.round(this.state.player.pickupRange)}</dd></div>
-          <div><dt>铜钱获取</dt><dd>${Math.round(this.state.player.coinGain * 100)}%</dd></div>
-          <div><dt>敌潮压力</dt><dd>${Math.round(this.state.player.enemyPressure * 100)}%</dd></div>
-          <div><dt>波次恢复</dt><dd>${Math.round((0.35 + this.state.player.waveHealing) * 100)}%</dd></div>
-        </dl>`
+          ${buildStatFields.filter(({ key }) => key !== 'maxHp').map(({ key, label, scale, unit }) => `<div><dt>${label}</dt><dd>${key === 'shieldPower' && this.state.characterId !== 'shimo' || (key === 'projectileCount' || key === 'projectileSpeed') && this.state.characterId !== 'qingtuan' || key === 'meleeRange' && this.state.characterId === 'qingtuan' ? '不适用' : `${Math.round(this.state.player[key] * scale)}${unit}`}</dd></div>`).join('')}
+        </dl><p class="stat-help">伤害与速度百分比为当前倍率；基础波次恢复 35%。近战作用于杖、盾、拳套和竹刃；远程作用于飞叶、爆竹、酒焰和竹弩。暴击仅作用于杖、盾、飞叶、拳套和爆竹。行囊合计为这组宝物的净贡献，已计入上下限与天赋。</p>`
       shopCards.innerHTML = ''
       this.state.shopChoices.forEach((id, index) => {
         const article = document.createElement('article')
@@ -294,6 +326,25 @@ class BattleScene extends Phaser.Scene {
         const locked = this.state.lockedShopIndices.includes(index)
         article.dataset.rarity = product.rarity
         article.innerHTML = `<kbd>${index + 1}</kbd><img src="${import.meta.env.BASE_URL}${product.image}" alt=""><small>${product.rarity} · ${isWeaponId(id) ? `武器 · ${weaponLevel >= 5 ? 'Lv.5 · 已满级' : weaponLevel > 0 ? `Lv.${weaponLevel} → Lv.${weaponLevel + 1}` : '新武器'}` : '宝物'}</small><strong>${product.name}</strong><span>${product.description}</span><em>${product.preview}</em>`
+        if (!isWeaponId(id)) {
+          const preview = structuredClone(this.state)
+          preview.player.coins = Math.max(preview.player.coins, product.price)
+          const available = buyItem(preview, index)
+          const changes = buildStatFields.filter(({ key }) => Math.abs(preview.player[key] - this.state.player[key]) > 1e-8)
+          article.querySelector('em')!.textContent = available ? changes.map(({ key, label, scale, unit }) => `${label} ${Math.round(this.state.player[key] * scale)}${unit} → ${Math.round(preview.player[key] * scale)}${unit}`).join('；') || product.preview : '唯一宝物 · 已拥有，不能重复购买'
+          const notice = document.createElement('small')
+          notice.className = 'shop-limit'
+          notice.textContent = [
+            id === 'jade-eyepatch' ? '生命下限 1；暴击上限 100%，溢出不再增加' : '',
+            id === 'mountain-stone' || id === 'spirit-bamboo-tube' || id === 'iron-bracer' ? '移动速度下限 50%' : '',
+            id === 'tiger-seal' ? '普通敌人伤害下限 50%' : '',
+            id === 'mountain-stone' && this.state.characterId !== 'shimo' ? '当前角色无护盾，护盾加成不生效' : '',
+            id === 'wind-feather' ? '弹速仅作用于青团飞叶；远程伤害作用于所有远程武器' : '',
+            id === 'bamboo-dew-pill' ? `立即恢复 ${Math.max(0, Math.round(preview.player.hp - this.state.player.hp))} 生命` : '',
+            id === 'food-god-lunchbox' ? `整备恢复 ${Math.round((0.35 + this.state.player.waveHealing) * 100)}% → ${Math.round((0.35 + preview.player.waveHealing) * 100)}%，不超过生命上限` : '',
+          ].filter(Boolean).join('；')
+          if (notice.textContent) article.append(notice)
+        }
         buyButton.type = 'button'
         buyButton.className = 'shop-buy'
         buyButton.disabled = uniqueOwned || weaponFull || maxLevel || this.state.player.coins < product.price
@@ -338,7 +389,13 @@ class BattleScene extends Phaser.Scene {
         const count = this.state.ownedItems.filter((ownedId) => ownedId === id).length
         const button = document.createElement('button')
         button.type = 'button'
-        button.innerHTML = `<img src="${import.meta.env.BASE_URL}${item.image}" alt=""><span><strong>${item.name}${count > 1 ? ` ×${count}` : ''}</strong><small>${item.description}</small><em>出售一件 +${Math.floor(item.price * 0.6)} 铜钱</em></span>`
+        const withoutItem = structuredClone(this.state)
+        while (withoutItem.ownedItems.includes(id)) sellItem(withoutItem, withoutItem.ownedItems.indexOf(id))
+        const total = buildStatFields.filter(({ key }) => Math.abs(this.state.player[key] - withoutItem.player[key]) > 1e-8).map(({ key, label, scale, unit }) => {
+          const delta = Math.round((this.state.player[key] - withoutItem.player[key]) * scale)
+          return `${label} ${delta > 0 ? '+' : ''}${delta}${unit === '%' ? '百分点' : unit}`
+        }).join('；')
+        button.innerHTML = `<img src="${import.meta.env.BASE_URL}${item.image}" alt=""><span><strong>${item.name} ×${count}</strong><small>单件：${item.description}</small><small>当前合计：${id === 'panda-roller' ? '闪避结束震击 32 伤害（唯一）' : total || '已受属性上下限约束'}${id === 'bamboo-dew-pill' ? '；即时治疗不累计' : ''}</small><em>出售一件 +${Math.floor(item.price * 0.6)} 铜钱</em></span>`
         button.addEventListener('click', () => {
           if (sellItem(this.state, this.state.ownedItems.indexOf(id))) this.overlayMode = ''
         })
@@ -348,6 +405,7 @@ class BattleScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    if (this.loading) return
     if (!this.paused) {
       if (this.hitStop > 0) this.hitStop = Math.max(0, this.hitStop - delta / 1000)
       else {
@@ -818,8 +876,10 @@ class BattleScene extends Phaser.Scene {
 
 document.querySelectorAll<HTMLButtonElement>('[data-character]').forEach((button) => {
   button.addEventListener('click', () => {
+    if (gameStarting) return
     const characterId = button.dataset.character
     if (characterId !== 'shanlan' && characterId !== 'qingtuan' && characterId !== 'shimo') return
+    gameStarting = true
     selectedCharacter = characterId
     const character = characters[characterId]
     const characterSelect = document.querySelector<HTMLElement>('#character-select')
@@ -828,6 +888,11 @@ document.querySelectorAll<HTMLButtonElement>('[data-character]').forEach((button
     const weaponImage = document.querySelector<HTMLImageElement>('#weapon-image')
     const weaponName = document.querySelector<HTMLElement>('#weapon-name')
     const weaponCopy = document.querySelector<HTMLElement>('#weapon-copy')
+    const loadingPortrait = document.querySelector<HTMLImageElement>('#loading-portrait')!
+    loadingPortrait.src = `${import.meta.env.BASE_URL}${character.portrait}`
+    loadingPortrait.alt = character.name
+    document.querySelector<HTMLElement>('#loading-title')!.textContent = `${character.name} · 即将出战`
+    loadingOverlay.hidden = false
     if (characterSelect) characterSelect.hidden = true
     if (characterName) characterName.textContent = character.name
     const maxHp = characterId === 'qingtuan' ? 10 : characterId === 'shimo' ? 30 : 20
@@ -840,6 +905,7 @@ document.querySelectorAll<HTMLButtonElement>('[data-character]').forEach((button
     if (weaponCopy) weaponCopy.textContent = character.weaponDescription
     new Phaser.Game({
       type: Phaser.AUTO, parent: 'game', width: 960, height: 540, backgroundColor: '#173527', scene: BattleScene,
+      loader: { timeout: 15000 },
       render: { antialias: true }, scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
     })
   })
