@@ -213,14 +213,16 @@ class BattleScene extends Phaser.Scene {
     const shopCards = document.querySelector<HTMLElement>('#shop-cards')
     const shopWeapons = document.querySelector<HTMLElement>('#shop-weapons')
     const shopInventory = document.querySelector<HTMLElement>('#shop-inventory')
+    const shopItemCount = document.querySelector<HTMLElement>('#shop-item-count')
     const shopStats = document.querySelector<HTMLElement>('#shop-stats')
     const refreshButton = document.querySelector<HTMLButtonElement>('#refresh-shop')
-    if (!overlay || !cards || !title || !kicker || !copy || !continueButton || !shopLayout || !shopCards || !shopWeapons || !shopInventory || !shopStats || !refreshButton) return
+    if (!overlay || !cards || !title || !kicker || !copy || !continueButton || !shopLayout || !shopCards || !shopWeapons || !shopInventory || !shopItemCount || !shopStats || !refreshButton) return
 
     const mode = this.state.pendingUpgrade ? `upgrade-${this.state.player.level}` : this.state.shopOpen ? `shop-${this.state.wave}-${this.state.player.coins}-${this.state.shopChoices.join('-')}-${this.state.lockedShopIndices.join('-')}-${this.state.ownedItems.join('-')}-${Object.entries(this.state.weaponLevels).join('-')}` : ''
     overlay.hidden = !mode
     if (!mode || mode === this.overlayMode) return
     this.overlayMode = mode
+    overlay.scrollTop = 0
     cards.innerHTML = ''
     if (this.state.pendingUpgrade) {
       cards.hidden = false
@@ -259,11 +261,23 @@ class BattleScene extends Phaser.Scene {
         <div class="shop-character"><img src="${import.meta.env.BASE_URL}${character.portrait}" alt=""><strong>${character.name}</strong><span>${character.role}</span></div>
         <dl>
           <div><dt>生命</dt><dd>${Math.ceil(this.state.player.hp)} / ${this.state.player.maxHp}</dd></div>
+          <div><dt>护盾效果</dt><dd>${Math.round(this.state.player.shieldPower * 100)}%</dd></div>
           <div><dt>护甲</dt><dd>${this.state.player.armor}</dd></div>
           <div><dt>全部伤害</dt><dd>+${Math.round((this.state.player.damage - 1) * 100)}%</dd></div>
+          <div><dt>普通敌人伤害</dt><dd>${Math.round(this.state.player.normalDamage * 100)}%</dd></div>
+          <div><dt>精英 / Boss 伤害</dt><dd>${Math.round(this.state.player.eliteDamage * 100)}%</dd></div>
           <div><dt>近战伤害</dt><dd>${Math.round(this.state.player.meleeDamage * 100)}%</dd></div>
           <div><dt>远程伤害</dt><dd>${Math.round(this.state.player.rangedDamage * 100)}%</dd></div>
+          <div><dt>攻击速度</dt><dd>${Math.round(this.state.player.attackSpeed * 100)}%</dd></div>
+          <div><dt>暴击率</dt><dd>${Math.round(this.state.player.criticalChance * 100)}%</dd></div>
           <div><dt>移动速度</dt><dd>${Math.round(this.state.player.moveSpeed * 100)}%</dd></div>
+          <div><dt>近战范围</dt><dd>${this.state.player.meleeRange}</dd></div>
+          <div><dt>投射物数量</dt><dd>${this.state.player.projectileCount}</dd></div>
+          <div><dt>投射物速度</dt><dd>${Math.round(this.state.player.projectileSpeed)}</dd></div>
+          <div><dt>拾取范围</dt><dd>${Math.round(this.state.player.pickupRange)}</dd></div>
+          <div><dt>铜钱获取</dt><dd>${Math.round(this.state.player.coinGain * 100)}%</dd></div>
+          <div><dt>敌潮压力</dt><dd>${Math.round(this.state.player.enemyPressure * 100)}%</dd></div>
+          <div><dt>波次恢复</dt><dd>${Math.round((0.35 + this.state.player.waveHealing) * 100)}%</dd></div>
         </dl>`
       shopCards.innerHTML = ''
       this.state.shopChoices.forEach((id, index) => {
@@ -316,14 +330,17 @@ class BattleScene extends Phaser.Scene {
         shopWeapons.append(row)
       })
       shopInventory.innerHTML = ''
+      shopItemCount.textContent = String(this.state.ownedItems.length)
       if (this.state.ownedItems.length === 0) shopInventory.innerHTML = '<p>尚未获得宝物</p>'
-      this.state.ownedItems.forEach((id, index) => {
+      const ownedItemIds = this.state.ownedItems.filter((id, index, ownedItems) => ownedItems.indexOf(id) === index)
+      ownedItemIds.forEach((id) => {
         const item = items[id]
+        const count = this.state.ownedItems.filter((ownedId) => ownedId === id).length
         const button = document.createElement('button')
         button.type = 'button'
-        button.innerHTML = `<img src="${import.meta.env.BASE_URL}${item.image}" alt=""><span><strong>${item.name}</strong><small>出售 +${Math.floor(item.price * 0.6)} 铜钱</small></span>`
+        button.innerHTML = `<img src="${import.meta.env.BASE_URL}${item.image}" alt=""><span><strong>${item.name}${count > 1 ? ` ×${count}` : ''}</strong><small>${item.description}</small><em>出售一件 +${Math.floor(item.price * 0.6)} 铜钱</em></span>`
         button.addEventListener('click', () => {
-          if (sellItem(this.state, index)) this.overlayMode = ''
+          if (sellItem(this.state, this.state.ownedItems.indexOf(id))) this.overlayMode = ''
         })
         shopInventory.append(button)
       })
@@ -793,8 +810,8 @@ class BattleScene extends Phaser.Scene {
       if (overlay) overlay.hidden = false
       if (title) title.textContent = this.state.victory ? '竹林得守' : '此战暂歇'
       if (copy) copy.textContent = this.state.victory
-        ? `${characters[this.state.characterId].name} · ${Math.floor(this.state.time / 60)}分${Math.floor(this.state.time % 60)}秒 · 击破 ${this.state.kills} · Lv.${this.state.player.level} · 构筑 ${this.state.chosenUpgrades.slice(-3).map((id) => upgrades[id].name).join(' / ') || '初入竹林'} · 按 R 再战`
-        : `第 ${this.state.wave} 波 · Lv.${this.state.player.level} · 击破 ${this.state.kills} · 按 R 再战`
+        ? `${characters[this.state.characterId].name} · ${Math.floor(this.state.time / 60)}分${Math.floor(this.state.time % 60)}秒 · 击破 ${this.state.kills} · Lv.${this.state.player.level} · 宝物 ${this.state.ownedItems.length} 件 · 构筑 ${this.state.chosenUpgrades.slice(-3).map((id) => upgrades[id].name).join(' / ') || '初入竹林'} · 按 R 再战`
+        : `第 ${this.state.wave} 波 · Lv.${this.state.player.level} · 击破 ${this.state.kills} · 宝物 ${this.state.ownedItems.length} 件 · 按 R 再战`
     }
   }
 }
