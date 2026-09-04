@@ -57,6 +57,40 @@ shopCheck.ownedItems.push('panda-roller')
 if (buyItem(shopCheck, 0)) throw new Error('唯一宝物已拥有时不得重复购买')
 if (!buyItem(shopCheck, 1) || !buyItem(shopCheck, 2)) throw new Error('普通数值宝物应允许重复购买')
 
+const buildItemCheck = createGameState(27, 'shimo')
+buildItemCheck.shopOpen = true
+buildItemCheck.player.coins = 1000
+buildItemCheck.shopChoices = ['jade-eyepatch', 'mountain-stone', 'fortune-paw', 'spirit-bamboo-tube']
+if (!buyItem(buildItemCheck, 0) || buildItemCheck.player.criticalChance !== 0.18 || buildItemCheck.player.maxHp !== 25) throw new Error('翡翠眼罩应提高暴击率并降低最大生命')
+if (!buyItem(buildItemCheck, 1) || buildItemCheck.player.shieldPower !== 1.25 || buildItemCheck.player.moveSpeed !== 0.85) throw new Error('镇岳石应提高护盾效果并降低移动速度')
+if (!buyItem(buildItemCheck, 2) || buildItemCheck.player.coinGain !== 1.12 || buildItemCheck.player.enemyPressure !== 1.05) throw new Error('招财熊爪应同时提高铜钱收益和敌潮压力')
+if (!buyItem(buildItemCheck, 3) || buildItemCheck.player.pickupRange !== 182 || Math.abs(buildItemCheck.player.moveSpeed - 0.82) > 0.0001) throw new Error('聚灵竹筒应扩大拾取范围并降低移动速度')
+const buildItemCoins = buildItemCheck.player.coins
+if (!sellItem(buildItemCheck, buildItemCheck.ownedItems.indexOf('jade-eyepatch')) || Math.abs(buildItemCheck.player.criticalChance - 0.1) > 0.0001 || Math.abs(buildItemCheck.player.maxHp - 30) > 0.0001 || buildItemCheck.player.coins !== buildItemCoins + 22) throw new Error('出售构筑宝物应撤销对应属性并返还 60% 铜钱')
+
+const waveHealingCheck = createGameState(28)
+waveHealingCheck.shopOpen = true
+waveHealingCheck.player.coins = 100
+waveHealingCheck.player.hp = 1
+waveHealingCheck.shopChoices[0] = 'food-god-lunchbox'
+if (!buyItem(waveHealingCheck, 0) || !continueWave(waveHealingCheck) || waveHealingCheck.player.hp !== 11) throw new Error('食神饭盒应让波次开始恢复从 35% 提高到 50% 最大生命')
+
+const tigerSealCheck = createGameState(29)
+tigerSealCheck.shopOpen = true
+tigerSealCheck.player.coins = 100
+tigerSealCheck.shopChoices[0] = 'tiger-seal'
+if (!buyItem(tigerSealCheck, 0)) throw new Error('猛虎印应可购买')
+tigerSealCheck.shopOpen = false
+tigerSealCheck.spawnTimer = 99
+tigerSealCheck.bambooCooldown = 0
+tigerSealCheck.player.criticalChance = 0
+tigerSealCheck.enemies.push(
+  { id: 1, kind: 'chaser', x: 850, y: 500, hp: 200, maxHp: 200, cooldown: 99, dashTime: 0, vx: 0, vy: 0 },
+  { id: 2, kind: 'chaser', x: 850, y: 520, hp: 200, maxHp: 200, cooldown: 99, dashTime: 0, vx: 0, vy: 0, elite: true },
+)
+stepGame(tigerSealCheck, { x: 0, y: 0, dash: false }, 0.05)
+if (tigerSealCheck.enemies[0].hp <= tigerSealCheck.enemies[1].hp) throw new Error('猛虎印应提高精英伤害并降低普通敌人伤害')
+
 const allLockedShopCheck = createGameState(25)
 allLockedShopCheck.shopOpen = true
 allLockedShopCheck.player.coins = 100

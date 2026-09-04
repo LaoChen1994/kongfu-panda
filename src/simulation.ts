@@ -3,7 +3,7 @@ export type RegularEnemyKind = typeof regularEnemyIds[number]
 export type EnemyKind = RegularEnemyKind | 'boss'
 export type CharacterId = 'shanlan' | 'qingtuan' | 'shimo'
 export type UpgradeId = 'power' | 'haste' | 'vitality' | 'footwork' | 'leaf-volley' | 'wide-sweep'
-export type ItemId = 'martial-belt' | 'wind-feather' | 'iron-bracer' | 'panda-roller'
+export type ItemId = 'martial-belt' | 'wind-feather' | 'iron-bracer' | 'panda-roller' | 'bamboo-dew-pill' | 'food-god-lunchbox' | 'jade-eyepatch' | 'gale-leggings' | 'mountain-stone' | 'fortune-paw' | 'spirit-bamboo-tube' | 'tiger-seal'
 export const weaponIds = ['iron-pot-gauntlets', 'firecracker-launcher', 'spinning-bamboo-blade', 'panda-wine-gourd', 'bamboo-crossbow-turret'] as const
 export type WeaponId = typeof weaponIds[number]
 export type ShopProductId = ItemId | WeaponId
@@ -60,6 +60,14 @@ export const items: Record<ItemId, { name: string; rarity: string; description: 
   'wind-feather': { name: '风羽', rarity: '稀有', description: '投射物速度 +20%，远程伤害 +5%', preview: '弹速提高 20% · 远程伤害提高 5%', price: 38, image: 'assets/items/wind-feather.png' },
   'iron-bracer': { name: '铁砂护腕', rarity: '普通', description: '护甲 +4，移动速度 -3%', preview: '护甲增加 4 · 移速降低 3%', price: 20, image: 'assets/items/iron-bracer.png' },
   'panda-roller': { name: '熊猫滚轮', rarity: '稀有', description: '闪避结束震开敌人并造成 32 伤害', preview: '解锁闪避震击', price: 38, image: 'assets/items/panda-roller.png', unique: true },
+  'bamboo-dew-pill': { name: '竹露丸', rarity: '普通', description: '最大生命 +10，并立即恢复 10', preview: '生命上限与当前生命提高 10', price: 20, image: 'assets/items/bamboo-dew-pill.png' },
+  'food-god-lunchbox': { name: '食神饭盒', rarity: '稀有', description: '每波开始恢复 15% 最大生命', preview: '每件额外恢复 15% 最大生命', price: 40, image: 'assets/items/food-god-lunchbox.png' },
+  'jade-eyepatch': { name: '翡翠眼罩', rarity: '稀有', description: '暴击率 +8%，最大生命 -5', preview: '暴击提高 8% · 生命上限降低 5', price: 38, image: 'assets/items/jade-eyepatch.png' },
+  'gale-leggings': { name: '疾风绑腿', rarity: '普通', description: '攻击速度 +8%', preview: '所有自动攻击频率提高 8%', price: 20, image: 'assets/items/gale-leggings.png' },
+  'mountain-stone': { name: '镇岳石', rarity: '史诗', description: '护盾效果 +25%，移动速度 -5%', preview: '石墨护盾更厚 · 移速降低 5%', price: 58, image: 'assets/items/mountain-stone.png' },
+  'fortune-paw': { name: '招财熊爪', rarity: '普通', description: '铜钱获取 +12%，敌人数量 +5%', preview: '收益提高，同时增加敌潮压力', price: 24, image: 'assets/items/fortune-paw.png' },
+  'spirit-bamboo-tube': { name: '聚灵竹筒', rarity: '稀有', description: '拾取范围 +30%，移动速度 -3%', preview: '更远吸取掉落 · 移速降低 3%', price: 36, image: 'assets/items/spirit-bamboo-tube.png' },
+  'tiger-seal': { name: '猛虎印', rarity: '史诗', description: '对精英和 Boss 伤害 +18%，对普通敌人伤害 -5%', preview: '专精强敌，但清杂能力下降', price: 60, image: 'assets/items/tiger-seal.png' },
 }
 
 export const weapons: Record<WeaponId, { name: string; rarity: string; description: string; preview: string; price: number; image: string }> = {
@@ -124,6 +132,15 @@ export type GameState = {
     meleeRange: number
     rangedDamage: number
     projectileSpeed: number
+    criticalChance: number
+    pickupRange: number
+    coinGain: number
+    coinRemainder: number
+    enemyPressure: number
+    eliteDamage: number
+    normalDamage: number
+    waveHealing: number
+    shieldPower: number
     dashCooldown: number
     dashTime: number
     dashX: number
@@ -173,7 +190,7 @@ const random = (state: GameState): number => {
 }
 
 const dealEnemyDamage = (state: GameState, enemy: GameState['enemies'][number], rawDamage: number, sourceX: number, sourceY: number): number => {
-  let damage = rawDamage
+  let damage = Math.max(1, Math.round(rawDamage * (enemy.kind === 'boss' || enemy.elite ? state.player.eliteDamage : state.player.normalDamage)))
   if (enemy.kind === 'boar') {
     const sourceDistance = Math.max(0.001, Math.hypot(sourceX - enemy.x, sourceY - enemy.y))
     const sourceXDirection = (sourceX - enemy.x) / sourceDistance
@@ -181,7 +198,7 @@ const dealEnemyDamage = (state: GameState, enemy: GameState['enemies'][number], 
     const facingX = enemy.facingX ?? 1
     const facingY = enemy.facingY ?? 0
     if (sourceXDirection * facingX + sourceYDirection * facingY > 0.2) {
-      damage = Math.max(1, Math.round(rawDamage * 0.45))
+      damage = Math.max(1, Math.round(damage * 0.45))
       state.effects.push({ id: state.nextId++, kind: 'armor-block', x: enemy.x, y: enemy.y - 24, value: damage, life: 0.28, angle: Math.atan2(sourceY - enemy.y, sourceX - enemy.x) })
     }
   }
@@ -231,6 +248,7 @@ export const createGameState = (seed = 20260831, characterId: CharacterId = 'sha
     damage: 1, meleeDamage: characterId === 'shanlan' ? 1.15 : characterId === 'qingtuan' ? 0.8 : 1,
     attackSpeed: 1, armor: characterId === 'shimo' ? 8 : 0, moveSpeed: characterId === 'qingtuan' ? 1.1 : characterId === 'shimo' ? 0.9 : 1,
     projectileCount: 1, meleeRange: characterId === 'shanlan' ? 74 : 82, rangedDamage: 1, projectileSpeed: characterId === 'qingtuan' ? 516 : 430,
+    criticalChance: 0.1, pickupRange: 140, coinGain: 1, coinRemainder: 0, enemyPressure: 1, eliteDamage: 1, normalDamage: 1, waveHealing: 0, shieldPower: 1,
     dashCooldown: 0, dashTime: 0, dashX: 1, dashY: 0, facingX: 1, facingY: 0, hitCooldown: 0, dashBurstPending: false,
     shield: 0, shieldMax: 0, shieldTimer: characterId === 'shimo' ? 8 : 0,
   },
@@ -286,6 +304,33 @@ export const buyItem = (state: GameState, index: number): boolean => {
     state.player.armor += 4
     state.player.moveSpeed = Math.max(0.5, state.player.moveSpeed - 0.03)
   }
+  if (id === 'bamboo-dew-pill') {
+    state.player.maxHp += 10
+    state.player.hp = Math.min(state.player.maxHp, state.player.hp + 10)
+  }
+  if (id === 'food-god-lunchbox') state.player.waveHealing += 0.15
+  if (id === 'jade-eyepatch') {
+    state.player.criticalChance += 0.08
+    state.player.maxHp = Math.max(1, state.player.maxHp - 5)
+    state.player.hp = Math.min(state.player.hp, state.player.maxHp)
+  }
+  if (id === 'gale-leggings') state.player.attackSpeed += 0.08
+  if (id === 'mountain-stone') {
+    state.player.shieldPower += 0.25
+    state.player.moveSpeed = Math.max(0.5, state.player.moveSpeed - 0.05)
+  }
+  if (id === 'fortune-paw') {
+    state.player.coinGain += 0.12
+    state.player.enemyPressure += 0.05
+  }
+  if (id === 'spirit-bamboo-tube') {
+    state.player.pickupRange += 42
+    state.player.moveSpeed = Math.max(0.5, state.player.moveSpeed - 0.03)
+  }
+  if (id === 'tiger-seal') {
+    state.player.eliteDamage += 0.18
+    state.player.normalDamage = Math.max(0.5, state.player.normalDamage - 0.05)
+  }
   return true
 }
 
@@ -300,7 +345,11 @@ export const refreshShop = (state: GameState): boolean => {
   state.shopChoices = state.shopChoices.map((id, index) => {
     if (state.lockedShopIndices.includes(index)) return id
     const available = pool.filter((candidate) => !selected.includes(candidate))
-    const choice = available[Math.floor(random(state) * available.length)] ?? null
+    const rarityRoll = random(state) * 100
+    const rarity = rarityRoll < 60 ? '普通' : rarityRoll < 87 ? '稀有' : '史诗'
+    const rarityPool = available.filter((candidate) => (isWeaponId(candidate) ? weapons[candidate] : items[candidate]).rarity === rarity)
+    const choices = rarityPool.length ? rarityPool : available
+    const choice = choices[Math.floor(random(state) * choices.length)] ?? null
     if (choice) selected.push(choice)
     return choice
   })
@@ -328,6 +377,32 @@ export const sellItem = (state: GameState, index: number): boolean => {
   if (id === 'iron-bracer') {
     state.player.armor -= 4
     state.player.moveSpeed += 0.03
+  }
+  if (id === 'bamboo-dew-pill') {
+    state.player.maxHp = Math.max(1, state.player.maxHp - 10)
+    state.player.hp = Math.min(state.player.hp, state.player.maxHp)
+  }
+  if (id === 'food-god-lunchbox') state.player.waveHealing = Math.max(0, state.player.waveHealing - 0.15)
+  if (id === 'jade-eyepatch') {
+    state.player.criticalChance = Math.max(0.1, state.player.criticalChance - 0.08)
+    state.player.maxHp += 5
+  }
+  if (id === 'gale-leggings') state.player.attackSpeed = Math.max(0.55, state.player.attackSpeed - 0.08)
+  if (id === 'mountain-stone') {
+    state.player.shieldPower = Math.max(1, state.player.shieldPower - 0.25)
+    state.player.moveSpeed += 0.05
+  }
+  if (id === 'fortune-paw') {
+    state.player.coinGain = Math.max(1, state.player.coinGain - 0.12)
+    state.player.enemyPressure = Math.max(1, state.player.enemyPressure - 0.05)
+  }
+  if (id === 'spirit-bamboo-tube') {
+    state.player.pickupRange = Math.max(140, state.player.pickupRange - 42)
+    state.player.moveSpeed += 0.03
+  }
+  if (id === 'tiger-seal') {
+    state.player.eliteDamage = Math.max(1, state.player.eliteDamage - 0.18)
+    state.player.normalDamage += 0.05
   }
   return true
 }
@@ -380,7 +455,7 @@ export const continueWave = (state: GameState): boolean => {
       cooldown: 2.6, dashTime: 0, vx: 0, vy: 0, phase: 1, enraged: false,
     })
   }
-  state.player.hp = Math.min(state.player.maxHp, state.player.hp + Math.ceil(state.player.maxHp * 0.35))
+  state.player.hp = Math.min(state.player.maxHp, state.player.hp + Math.ceil(state.player.maxHp * (0.35 + state.player.waveHealing)))
   return true
 }
 
@@ -397,7 +472,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
   if (state.characterId === 'shimo') {
     state.player.shieldTimer -= dt
     if (state.player.shieldTimer <= 0) {
-      state.player.shieldMax = Math.ceil(state.player.maxHp * 0.08)
+      state.player.shieldMax = Math.ceil(state.player.maxHp * 0.08 * state.player.shieldPower)
       state.player.shield = state.player.shieldMax
       state.player.shieldTimer = 8
     }
@@ -410,7 +485,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
   state.gourdCooldown -= dt
   state.turretDeployCooldown -= dt
   state.spawnTimer -= dt
-  state.threatBudget += (0.7 + state.wave * 0.15) * dt
+  state.threatBudget += (0.7 + state.wave * 0.15) * state.player.enemyPressure * dt
   for (const effect of state.effects) effect.life -= dt
   for (const zone of state.enemyZones) zone.life -= dt
 
@@ -647,7 +722,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
     if (target) {
       state.characterAttackCount += 1
       const angle = Math.atan2(target.y - state.player.y, target.x - state.player.x)
-      const critical = random(state) < 0.1
+      const critical = random(state) < state.player.criticalChance
       const whirlwind = state.characterId === 'shanlan' && state.characterAttackCount % 4 === 0
       const arc = whirlwind ? Math.PI / 2 : state.characterId === 'shimo' ? Math.PI / 5 : Math.PI / 4
       const damage = Math.round((state.characterId === 'shimo' ? 34 : 38) * state.player.damage * state.player.meleeDamage * (critical ? 1.75 : 1))
@@ -687,7 +762,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
     for (let index = 0; index < state.player.projectileCount; index += 1) {
       state.characterAttackCount += 1
       const baseAngle = Math.atan2(target.y - state.player.y, target.x - state.player.x) + (index - (state.player.projectileCount - 1) / 2) * 0.16
-      const critical = random(state) < 0.1
+      const critical = random(state) < state.player.criticalChance
       const split = state.characterAttackCount % 6 === 0
       for (const angleOffset of split ? [-0.22, 0, 0.22] : [0]) {
         const angle = baseAngle + angleOffset
@@ -712,7 +787,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
     }
     if (target) {
       const targetAngle = Math.atan2(target.y - state.player.y, target.x - state.player.x)
-      const critical = random(state) < 0.1
+      const critical = random(state) < state.player.criticalChance
       const strikes = gauntletLevel >= 3 ? 2 : 1
       for (let strike = 0; strike < strikes; strike += 1) {
         const angle = targetAngle + (strike - (strikes - 1) / 2) * 0.18
@@ -751,7 +826,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
     const targetAngle = Math.atan2(target.y - state.player.y, target.x - state.player.x)
     for (let index = 0; index < projectileCount; index += 1) {
       const angle = targetAngle + (index - (projectileCount - 1) / 2) * 0.18
-      const critical = random(state) < 0.1
+      const critical = random(state) < state.player.criticalChance
       state.playerProjectiles.push({
         id: state.nextId++, kind: 'firecracker', x: state.player.x, y: state.player.y,
         vx: Math.cos(angle) * (250 + firecrackerLevel * 12), vy: Math.sin(angle) * (250 + firecrackerLevel * 12),
@@ -907,13 +982,17 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
     const dx = state.player.x - drop.x
     const dy = state.player.y - drop.y
     const distance = Math.max(0.001, Math.hypot(dx, dy))
-    if (distance < 140) {
+    if (distance < state.player.pickupRange) {
       drop.x += (dx / distance) * 420 * dt
       drop.y += (dy / distance) * 420 * dt
     }
     if (distance < 24) {
       if (drop.kind === 'xp') state.player.xp += drop.value
-      else if (drop.kind === 'coin') state.player.coins += drop.value
+      else if (drop.kind === 'coin') {
+        const coinValue = drop.value * state.player.coinGain + state.player.coinRemainder
+        state.player.coins += Math.floor(coinValue)
+        state.player.coinRemainder = coinValue - Math.floor(coinValue)
+      }
       else state.player.hp = Math.min(state.player.maxHp, state.player.hp + drop.value)
       drop.value = 0
     }
@@ -957,13 +1036,20 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
     state.player.xp -= state.player.nextXp
     state.player.level += 1
     state.player.nextXp = Math.round(state.player.nextXp * 1.24 + 6)
+    const hasMeleeBuild = state.characterId !== 'qingtuan' || (state.weaponLevels['iron-pot-gauntlets'] ?? 0) > 0
+    const hasRangedBuild = state.characterId === 'qingtuan' || (state.weaponLevels['firecracker-launcher'] ?? 0) > 0 || (state.weaponLevels['bamboo-crossbow-turret'] ?? 0) > 0
     const pool = (Object.keys(upgrades) as UpgradeId[]).filter((id) => (
-      state.characterId === 'qingtuan' ? id !== 'wide-sweep' : id !== 'leaf-volley'
+      (id !== 'wide-sweep' || hasMeleeBuild) && (id !== 'leaf-volley' || hasRangedBuild) && !(id === 'leaf-volley' && state.player.projectileCount >= 3)
     ))
-    state.upgradeChoices = []
+    const preferred = pool.filter((id) => (
+      hasMeleeBuild && (id === 'power' || id === 'haste' || id === 'wide-sweep')
+      || hasRangedBuild && (id === 'power' || id === 'haste' || id === 'leaf-volley')
+      || state.ownedItems.some((itemId) => itemId === 'iron-bracer' || itemId === 'mountain-stone' || itemId === 'spirit-bamboo-tube') && (id === 'vitality' || id === 'footwork')
+    ))
+    state.upgradeChoices = [preferred[Math.floor(random(state) * preferred.length)] ?? pool[Math.floor(random(state) * pool.length)]]
     while (state.upgradeChoices.length < 3) {
       const choice = pool[Math.floor(random(state) * pool.length)]
-      if (!state.upgradeChoices.includes(choice) && !(choice === 'leaf-volley' && state.player.projectileCount >= 3)) state.upgradeChoices.push(choice)
+      if (!state.upgradeChoices.includes(choice)) state.upgradeChoices.push(choice)
     }
     state.pendingUpgrade = true
   } else if (!state.victory && state.waveTime >= state.waveDuration && state.wave === 10) {
@@ -977,7 +1063,11 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
     state.shopChoices = state.shopChoices.map((id, index) => {
       if (state.lockedShopIndices.includes(index)) return id
       const available = pool.filter((candidate) => !selected.includes(candidate))
-      const choice = available[Math.floor(random(state) * available.length)] ?? null
+      const rarityRoll = random(state) * 100
+      const rarity = rarityRoll < 60 ? '普通' : rarityRoll < 87 ? '稀有' : '史诗'
+      const rarityPool = available.filter((candidate) => (isWeaponId(candidate) ? weapons[candidate] : items[candidate]).rarity === rarity)
+      const choices = rarityPool.length ? rarityPool : available
+      const choice = choices[Math.floor(random(state) * choices.length)] ?? null
       if (choice) selected.push(choice)
       return choice
     })
