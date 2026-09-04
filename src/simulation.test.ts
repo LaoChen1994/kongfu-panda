@@ -1,5 +1,81 @@
 import { buyItem, chooseUpgrade, continueWave, createGameState, enemyDefinitions, refreshShop, regularEnemyIds, sellItem, sellWeapon, stepGame, toggleShopLock, weaponIds } from './simulation.js'
 
+// 触及下限后，任意出售顺序都必须恢复角色基础值。
+for (const reverse of [false, true]) {
+  const stacked = createGameState(31, 'qingtuan')
+  stacked.shopOpen = true
+  stacked.player.coins = 100000
+  for (let count = 0; count < 20; count += 1) {
+    stacked.shopChoices = ['jade-eyepatch', 'mountain-stone', 'spirit-bamboo-tube', 'tiger-seal']
+    for (let slot = 0; slot < 4; slot += 1) if (!buyItem(stacked, slot)) throw new Error('叠加购买失败')
+  }
+  if (stacked.player.criticalChance !== 1 || stacked.player.maxHp !== 1 || stacked.player.moveSpeed !== 0.5 || stacked.player.normalDamage !== 0.5) throw new Error('极限叠加必须遵守上下限')
+  while (stacked.ownedItems.length) sellItem(stacked, reverse ? stacked.ownedItems.length - 1 : 0)
+  if (Number(stacked.player.maxHp) !== 10 || Math.abs(stacked.player.moveSpeed - 1.1) > 1e-8 || Math.abs(stacked.player.normalDamage - 1) > 1e-8) throw new Error('属性触底后出售不能凭空增加属性')
+}
+for (let seed = 1; seed <= 100; seed += 1) {
+  for (const character of ['shanlan', 'qingtuan', 'shimo'] as const) {
+    const candidate = createGameState(seed, character)
+    candidate.weaponLevels = { 'iron-pot-gauntlets': 1, 'firecracker-launcher': 1 }
+    candidate.player.xp = candidate.player.nextXp
+    stepGame(candidate, { x: 0, y: 0, dash: false }, 0.01)
+    if (candidate.upgradeChoices.includes(character === 'qingtuan' ? 'wide-sweep' : 'leaf-volley')) throw new Error('跨流派武器不应解锁无效专属天赋')
+  }
+}
+for (const talentFirst of [false, true]) {
+  const order = createGameState(32, 'qingtuan')
+  order.shopOpen = true
+  order.player.coins = 1000
+  for (const action of talentFirst ? ['talent', 'item'] : ['item', 'talent']) {
+    if (action === 'item') {
+      order.shopChoices[0] = 'wind-feather'
+      buyItem(order, 0)
+    } else {
+      order.pendingUpgrade = true
+      order.upgradeChoices = ['leaf-volley']
+      chooseUpgrade(order, 'leaf-volley')
+    }
+  }
+  if (Math.abs(order.player.rangedDamage - 1.05 * 0.9) > 1e-8) throw new Error('远程伤害不应依赖天赋与宝物获得顺序')
+  sellItem(order, 0)
+  if (Math.abs(order.player.rangedDamage - 0.9) > 1e-8) throw new Error('出售风羽不能残留负伤害')
+}
+const previewSource = createGameState(33, 'qingtuan')
+previewSource.shopOpen = true
+previewSource.player.coins = 100
+previewSource.shopChoices[0] = 'jade-eyepatch'
+const previewCopy = structuredClone(previewSource)
+buyItem(previewCopy, 0)
+if (previewSource.player.maxHp !== 10 || previewSource.player.coins !== 100 || previewSource.ownedItems.length) throw new Error('预览不能修改真实状态')
+buyItem(previewSource, 0)
+if (JSON.stringify(previewSource.player) !== JSON.stringify(previewCopy.player)) throw new Error('预览与实际购买属性必须一致')
+const cappedHaste = createGameState(34)
+for (let count = 0; count < 12; count += 1) {
+  cappedHaste.pendingUpgrade = true
+  cappedHaste.upgradeChoices = ['wide-sweep']
+  chooseUpgrade(cappedHaste, 'wide-sweep')
+}
+cappedHaste.shopOpen = true
+cappedHaste.player.coins = 1000
+for (let count = 0; count < 4; count += 1) {
+  cappedHaste.shopChoices[0] = 'gale-leggings'
+  buyItem(cappedHaste, 0)
+}
+while (cappedHaste.ownedItems.length) sellItem(cappedHaste, 0)
+if (cappedHaste.player.attackSpeed !== 0.55) throw new Error('攻速触底后买卖绑腿必须恢复55%')
+const mixedHealth = createGameState(35, 'qingtuan')
+mixedHealth.shopOpen = true
+mixedHealth.player.coins = 1000
+mixedHealth.shopChoices = ['jade-eyepatch', 'jade-eyepatch', 'bamboo-dew-pill']
+buyItem(mixedHealth, 0)
+buyItem(mixedHealth, 1)
+buyItem(mixedHealth, 2)
+mixedHealth.pendingUpgrade = true
+mixedHealth.upgradeChoices = ['vitality']
+chooseUpgrade(mixedHealth, 'vitality')
+sellItem(mixedHealth, mixedHealth.ownedItems.indexOf('bamboo-dew-pill'))
+while (mixedHealth.ownedItems.length) sellItem(mixedHealth, 0)
+if (mixedHealth.player.maxHp !== 15 || mixedHealth.player.hp > 15) throw new Error('混合生命加减与升级后出售应保留升级成长')
 const movement = createGameState(1)
 stepGame(movement, { x: 1, y: 0, dash: false }, 0.05)
 if (movement.player.x <= 800) throw new Error('玩家应当向右移动')
@@ -422,10 +498,10 @@ stepGame(victoryCheck, { x: 0, y: 0, dash: false }, 0.05)
 if (!victoryCheck.victory || victoryCheck.gameOver || victoryCheck.enemies.some((enemy) => enemy.kind === 'boss')) throw new Error('击败最终 Boss 后应进入胜利结算并移除 Boss')
 
 const endurance = createGameState(7)
-endurance.player.hp = 1_000_000
-endurance.player.maxHp = 1_000_000
 const seen = new Set<string>()
 for (let tick = 0; tick < 12_000; tick += 1) {
+  // 波次覆盖测试免伤，不能覆写现在由构筑派生的生命上限。
+  endurance.player.hitCooldown = 1
   stepGame(endurance, { x: tick % 400 < 200 ? 1 : -1, y: tick % 600 < 300 ? 1 : -1, dash: tick % 60 === 0 }, 0.05)
   for (const enemy of endurance.enemies) seen.add(enemy.kind)
   if (endurance.pendingUpgrade) chooseUpgrade(endurance, endurance.upgradeChoices[0])

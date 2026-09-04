@@ -52,7 +52,7 @@ export const upgrades: Record<UpgradeId, { name: string; rarity: string; descrip
   vitality: { name: '竹息养生', rarity: '普通', description: '最大生命 +5，并恢复 5', tag: '生存' },
   footwork: { name: '踏叶无痕', rarity: '稀有', description: '移动速度 +10%', tag: '机动' },
   'leaf-volley': { name: '竹叶连射', rarity: '史诗', description: '额外发射 1 枚飞叶，远程伤害 -10%', tag: '远程 · 天赋' },
-  'wide-sweep': { name: '横扫千军', rarity: '稀有', description: '竹杖范围 +18，攻击速度 -5%', tag: '近战 · 天赋' },
+  'wide-sweep': { name: '横扫千军', rarity: '稀有', description: '杖/盾攻击范围 +18，攻击速度 -5%', tag: '近战 · 天赋' },
 }
 
 export const items: Record<ItemId, { name: string; rarity: string; description: string; preview: string; price: number; image: string; unique?: boolean }> = {
@@ -255,24 +255,50 @@ export const createGameState = (seed = 20260831, characterId: CharacterId = 'sha
   enemies: [], playerProjectiles: [], enemyProjectiles: [], bossHazards: [], attacks: [], groundZones: [], enemyZones: [], turrets: [], drops: [], effects: [],
 })
 
+const recalculateBuildStats = (state: GameState): void => {
+  let maxHp = state.characterId === 'qingtuan' ? 10 : state.characterId === 'shimo' ? 30 : 20
+  let moveSpeed = state.characterId === 'qingtuan' ? 1.1 : state.characterId === 'shimo' ? 0.9 : 1
+  let attackSpeed = 1
+  let normalDamage = 1
+  let criticalChance = 0.1
+  let rangedDamage = 1
+  for (const id of state.ownedItems) {
+    if (id === 'bamboo-dew-pill') maxHp += 10
+    if (id === 'jade-eyepatch') { maxHp -= 5; criticalChance += 0.08 }
+    if (id === 'iron-bracer' || id === 'spirit-bamboo-tube') moveSpeed -= 0.03
+    if (id === 'mountain-stone') moveSpeed -= 0.05
+    if (id === 'gale-leggings') attackSpeed += 0.08
+    if (id === 'tiger-seal') normalDamage -= 0.05
+    if (id === 'wind-feather') rangedDamage += 0.05
+  }
+  for (const id of state.chosenUpgrades) {
+    if (id === 'vitality') maxHp += 5
+    if (id === 'footwork') moveSpeed += 0.1
+    if (id === 'haste') attackSpeed += 0.1
+    if (id === 'wide-sweep') attackSpeed -= 0.05
+    if (id === 'leaf-volley') rangedDamage *= 0.9
+  }
+  state.player.maxHp = Math.max(1, maxHp)
+  state.player.moveSpeed = Math.max(0.5, Number(moveSpeed.toFixed(8)))
+  state.player.attackSpeed = Math.max(0.55, Number(attackSpeed.toFixed(8)))
+  state.player.normalDamage = Math.max(0.5, Number(normalDamage.toFixed(8)))
+  state.player.criticalChance = Math.min(1, Number(criticalChance.toFixed(8)))
+  state.player.rangedDamage = rangedDamage
+  state.player.hp = Math.min(state.player.hp, state.player.maxHp)
+}
+
 export const chooseUpgrade = (state: GameState, id: UpgradeId): boolean => {
   if (!state.pendingUpgrade || !state.upgradeChoices.includes(id)) return false
   if (id === 'power') state.player.damage += 0.12
-  if (id === 'haste') state.player.attackSpeed += 0.1
-  if (id === 'vitality') {
-    state.player.maxHp += 5
-    state.player.hp = Math.min(state.player.maxHp, state.player.hp + 5)
-  }
-  if (id === 'footwork') state.player.moveSpeed += 0.1
   if (id === 'leaf-volley') {
     state.player.projectileCount = Math.min(3, state.player.projectileCount + 1)
-    state.player.rangedDamage *= 0.9
   }
   if (id === 'wide-sweep') {
     state.player.meleeRange += 18
-    state.player.attackSpeed = Math.max(0.55, state.player.attackSpeed - 0.05)
   }
   state.chosenUpgrades.push(id)
+  recalculateBuildStats(state)
+  if (id === 'vitality') state.player.hp = Math.min(state.player.maxHp, state.player.hp + 5)
   state.pendingUpgrade = false
   state.upgradeChoices = []
   return true
@@ -298,26 +324,13 @@ export const buyItem = (state: GameState, index: number): boolean => {
   if (id === 'martial-belt') state.player.meleeDamage += 0.1
   if (id === 'wind-feather') {
     state.player.projectileSpeed *= 1.2
-    state.player.rangedDamage += 0.05
   }
   if (id === 'iron-bracer') {
     state.player.armor += 4
-    state.player.moveSpeed = Math.max(0.5, state.player.moveSpeed - 0.03)
-  }
-  if (id === 'bamboo-dew-pill') {
-    state.player.maxHp += 10
-    state.player.hp = Math.min(state.player.maxHp, state.player.hp + 10)
   }
   if (id === 'food-god-lunchbox') state.player.waveHealing += 0.15
-  if (id === 'jade-eyepatch') {
-    state.player.criticalChance += 0.08
-    state.player.maxHp = Math.max(1, state.player.maxHp - 5)
-    state.player.hp = Math.min(state.player.hp, state.player.maxHp)
-  }
-  if (id === 'gale-leggings') state.player.attackSpeed += 0.08
   if (id === 'mountain-stone') {
     state.player.shieldPower += 0.25
-    state.player.moveSpeed = Math.max(0.5, state.player.moveSpeed - 0.05)
   }
   if (id === 'fortune-paw') {
     state.player.coinGain += 0.12
@@ -325,12 +338,12 @@ export const buyItem = (state: GameState, index: number): boolean => {
   }
   if (id === 'spirit-bamboo-tube') {
     state.player.pickupRange += 42
-    state.player.moveSpeed = Math.max(0.5, state.player.moveSpeed - 0.03)
   }
   if (id === 'tiger-seal') {
     state.player.eliteDamage += 0.18
-    state.player.normalDamage = Math.max(0.5, state.player.normalDamage - 0.05)
   }
+  recalculateBuildStats(state)
+  if (id === 'bamboo-dew-pill') state.player.hp = Math.min(state.player.maxHp, state.player.hp + 10)
   return true
 }
 
@@ -372,25 +385,13 @@ export const sellItem = (state: GameState, index: number): boolean => {
   if (id === 'martial-belt') state.player.meleeDamage -= 0.1
   if (id === 'wind-feather') {
     state.player.projectileSpeed /= 1.2
-    state.player.rangedDamage -= 0.05
   }
   if (id === 'iron-bracer') {
     state.player.armor -= 4
-    state.player.moveSpeed += 0.03
-  }
-  if (id === 'bamboo-dew-pill') {
-    state.player.maxHp = Math.max(1, state.player.maxHp - 10)
-    state.player.hp = Math.min(state.player.hp, state.player.maxHp)
   }
   if (id === 'food-god-lunchbox') state.player.waveHealing = Math.max(0, state.player.waveHealing - 0.15)
-  if (id === 'jade-eyepatch') {
-    state.player.criticalChance = Math.max(0.1, state.player.criticalChance - 0.08)
-    state.player.maxHp += 5
-  }
-  if (id === 'gale-leggings') state.player.attackSpeed = Math.max(0.55, state.player.attackSpeed - 0.08)
   if (id === 'mountain-stone') {
     state.player.shieldPower = Math.max(1, state.player.shieldPower - 0.25)
-    state.player.moveSpeed += 0.05
   }
   if (id === 'fortune-paw') {
     state.player.coinGain = Math.max(1, state.player.coinGain - 0.12)
@@ -398,12 +399,11 @@ export const sellItem = (state: GameState, index: number): boolean => {
   }
   if (id === 'spirit-bamboo-tube') {
     state.player.pickupRange = Math.max(140, state.player.pickupRange - 42)
-    state.player.moveSpeed += 0.03
   }
   if (id === 'tiger-seal') {
     state.player.eliteDamage = Math.max(1, state.player.eliteDamage - 0.18)
-    state.player.normalDamage += 0.05
   }
+  recalculateBuildStats(state)
   return true
 }
 
@@ -1039,7 +1039,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
     const hasMeleeBuild = state.characterId !== 'qingtuan' || (state.weaponLevels['iron-pot-gauntlets'] ?? 0) > 0
     const hasRangedBuild = state.characterId === 'qingtuan' || (state.weaponLevels['firecracker-launcher'] ?? 0) > 0 || (state.weaponLevels['bamboo-crossbow-turret'] ?? 0) > 0
     const pool = (Object.keys(upgrades) as UpgradeId[]).filter((id) => (
-      (id !== 'wide-sweep' || hasMeleeBuild) && (id !== 'leaf-volley' || hasRangedBuild) && !(id === 'leaf-volley' && state.player.projectileCount >= 3)
+      (id !== 'wide-sweep' || state.characterId !== 'qingtuan') && (id !== 'leaf-volley' || state.characterId === 'qingtuan') && !(id === 'leaf-volley' && state.player.projectileCount >= 3)
     ))
     const preferred = pool.filter((id) => (
       hasMeleeBuild && (id === 'power' || id === 'haste' || id === 'wide-sweep')
