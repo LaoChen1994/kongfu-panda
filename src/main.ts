@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import './style.css'
-import { buyItem, characters, chooseUpgrade, continueWave, createGameState, enemyDefinitions, injurySources, isWeaponId, items, refreshShop, sellItem, sellWeapon, stepGame, toggleShopLock, upgrades, weaponIds, weapons, type CharacterId } from './simulation.js'
+import { buyItem, characters, chooseUpgrade, continueWave, createGameState, enemyDefinitions, injurySources, isSignatureWeaponId, isWeaponId, items, refreshShop, sellItem, sellWeapon, signatureWeapons, stepGame, toggleShopLock, upgrades, weaponIds, weapons, type CharacterId } from './simulation.js'
 import { parseBattleRecords } from './records.js'
 
 const assetRoot = `${import.meta.env.BASE_URL}assets/`
@@ -90,6 +90,7 @@ class BattleScene extends Phaser.Scene {
   private enemyZoneSprites = new Map<number, Phaser.GameObjects.Image>()
   private turretSprites = new Map<number, Phaser.GameObjects.Image>()
   private bladeSprites = new Map<number, Phaser.GameObjects.Image>()
+  private dragonSweepSprites = new Map<number, Phaser.GameObjects.Image>()
   private effectTexts = new Map<number, Phaser.GameObjects.Text>()
   private seenEffects = new Set<number>()
   private keys!: Record<'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd', Phaser.Input.Keyboard.Key>
@@ -105,6 +106,7 @@ class BattleScene extends Phaser.Scene {
   private loading = true
   private loadFailed = false
   private resultShown = false
+  private evolutionShown = false
 
   preload(): void {
     this.load.on('progress', (progress: number) => {
@@ -120,12 +122,17 @@ class BattleScene extends Phaser.Scene {
     })
     this.load.image('bamboo-ground', `${assetRoot}environments/bamboo-ground.png`)
     this.load.image('leaf-dart', `${assetRoot}weapons/leaf-dart.png`)
+    this.load.image('myriad-leaf-return', `${assetRoot}weapons/myriad-leaf-return.png`)
+    this.load.image('coiling-dragon-bamboo', `${assetRoot}weapons/coiling-dragon-bamboo.png`)
+    this.load.image('immovable-bear-mountain', `${assetRoot}weapons/immovable-bear-mountain.png`)
     this.load.image('firecracker-launcher', `${assetRoot}weapons/firecracker-launcher.png`)
     this.load.image('spinning-bamboo-blade', `${assetRoot}weapons/spinning-bamboo-blade.png`)
     this.load.image('panda-wine-gourd', `${assetRoot}weapons/panda-wine-gourd.png`)
     this.load.image('bamboo-crossbow-turret', `${assetRoot}weapons/bamboo-crossbow-turret.png`)
     this.load.image('firecracker-blast', `${assetRoot}effects/firecracker-blast.png`)
     this.load.image('wine-flame-patch', `${assetRoot}effects/wine-flame-patch.png`)
+    this.load.image('mountain-quake', `${assetRoot}effects/mountain-quake.png`)
+    this.load.image('dragon-staff-sweep', `${assetRoot}effects/dragon-staff-sweep.png`)
     this.load.image('fox-slowing-mist', `${assetRoot}effects/fox-slowing-mist.png`)
     this.load.image('corrupted-bamboo-giant', `${assetRoot}enemies/corrupted-bamboo-giant.png`)
     this.load.image('corrupted-root-warning', `${assetRoot}effects/corrupted-root-warning.png`)
@@ -142,7 +149,30 @@ class BattleScene extends Phaser.Scene {
 
   create(): void {
     if (this.loadFailed) return
-    if (import.meta.env.DEV && new URLSearchParams(location.search).has('playtest-upgrade')) {
+    if (import.meta.env.DEV && new URLSearchParams(location.search).has('playtest-evolution')) {
+      const signature = signatureWeapons[characters[this.state.characterId].weaponId]
+      if (new URLSearchParams(location.search).get('playtest-evolution') === 'combat') {
+        this.state.signatureWeaponLevel = 5
+        this.state.signatureWeaponEvolved = true
+        this.state.spawnTimer = 99
+        this.state.player.nextXp = 99999
+        this.state.player.hp = 200
+        this.state.player.maxHp = 200
+        this.state.enemies = this.state.characterId === 'shimo'
+          ? [{ id: this.state.nextId++, kind: 'chaser', x: 800, y: 500, hp: 2000, maxHp: 2000, cooldown: 99, dashTime: 0, vx: 0, vy: 0 }]
+          : [0, Math.PI / 2, Math.PI, Math.PI * 1.5].map((angle) => ({ id: this.state.nextId++, kind: 'chaser' as const, x: 800 + Math.cos(angle) * (this.state.characterId === 'shanlan' ? 118 : 360), y: 500 + Math.sin(angle) * (this.state.characterId === 'shanlan' ? 118 : 360), hp: 2000, maxHp: 2000, cooldown: 99, dashTime: 0, vx: 0, vy: 0 }))
+        if (this.state.characterId === 'shimo') {
+          this.state.player.shield = 1
+          this.state.player.shieldTimer = 99
+        }
+      } else {
+        this.state.shopOpen = true
+        this.state.player.coins = 500
+        this.state.signatureWeaponLevel = 4
+        this.state.ownedItems.push(signature.evolution.requiredItem)
+        this.state.shopChoices = [characters[this.state.characterId].weaponId, 'iron-pot-gauntlets', 'bamboo-dew-pill', 'panda-roller']
+      }
+    } else if (import.meta.env.DEV && new URLSearchParams(location.search).has('playtest-upgrade')) {
       this.state.player.hp = Math.min(6, this.state.player.maxHp)
       this.state.pendingUpgrade = true
       this.state.upgradeChoices = ['vitality', 'power', 'haste']
@@ -205,6 +235,10 @@ class BattleScene extends Phaser.Scene {
       this.state.player.coins = 10000
       for (const id of ['martial-belt', 'wind-feather', 'iron-bracer', 'panda-roller', 'bamboo-dew-pill', 'food-god-lunchbox', 'jade-eyepatch', 'gale-leggings', 'mountain-stone', 'fortune-paw', 'spirit-bamboo-tube', 'tiger-seal', 'bamboo-dew-pill', 'bamboo-dew-pill', 'martial-belt', 'firecracker-launcher', 'spinning-bamboo-blade', 'panda-wine-gourd'] as const) {
         this.state.shopChoices[0] = id
+        buyItem(this.state, 0)
+      }
+      for (let level = 1; level < 5; level += 1) {
+        this.state.shopChoices[0] = characters[this.state.characterId].weaponId
         buyItem(this.state, 0)
       }
       for (const id of ['vitality', 'power', 'haste', 'footwork', 'vitality', 'power'] as const) {
@@ -340,7 +374,7 @@ class BattleScene extends Phaser.Scene {
     if (!overlay || !cards || !title || !kicker || !copy || !continueButton || !shopLayout || !shopCards || !shopWeapons || !shopInventory || !shopItemCount || !shopStats || !refreshButton) return
     if (this.state.gameOver || this.state.victory) { overlay.hidden = true; return }
 
-    const mode = this.state.pendingUpgrade ? `upgrade-${this.state.player.level}` : this.state.shopOpen ? `shop-${this.state.wave}-${this.state.player.coins}-${this.state.shopChoices.join('-')}-${this.state.lockedShopIndices.join('-')}-${this.state.ownedItems.join('-')}-${Object.entries(this.state.weaponLevels).join('-')}` : ''
+    const mode = this.state.pendingUpgrade ? `upgrade-${this.state.player.level}` : this.state.shopOpen ? `shop-${this.state.wave}-${this.state.player.coins}-${this.state.shopChoices.join('-')}-${this.state.lockedShopIndices.join('-')}-${this.state.ownedItems.join('-')}-${this.state.signatureWeaponLevel}-${this.state.signatureWeaponEvolved}-${Object.entries(this.state.weaponLevels).join('-')}` : ''
     overlay.hidden = !mode
     if (!mode || mode === this.overlayMode) return
     this.overlayMode = mode
@@ -390,17 +424,19 @@ class BattleScene extends Phaser.Scene {
         const article = document.createElement('article')
         article.className = 'shop-card'
         if (!id) return
-        const product = isWeaponId(id) ? weapons[id] : items[id]
-        const weaponLevel = isWeaponId(id) ? this.state.weaponLevels[id] ?? 0 : 0
-        const uniqueOwned = Boolean(!isWeaponId(id) && items[id].unique && this.state.ownedItems.includes(id))
-        const weaponFull = isWeaponId(id) && weaponLevel === 0 && Object.keys(this.state.weaponLevels).length >= 3
-        const maxLevel = isWeaponId(id) && weaponLevel >= 5
+        const signatureWeapon = isSignatureWeaponId(id)
+        const commonWeapon = isWeaponId(id)
+        const product = commonWeapon ? weapons[id] : signatureWeapon ? signatureWeapons[id] : items[id]
+        const weaponLevel = signatureWeapon ? this.state.signatureWeaponLevel : commonWeapon ? this.state.weaponLevels[id] ?? 0 : 0
+        const uniqueOwned = Boolean(!commonWeapon && !signatureWeapon && items[id].unique && this.state.ownedItems.includes(id))
+        const weaponFull = commonWeapon && weaponLevel === 0 && Object.keys(this.state.weaponLevels).length >= 3
+        const maxLevel = (commonWeapon || signatureWeapon) && weaponLevel >= 5
         const buyButton = document.createElement('button')
         const lockButton = document.createElement('button')
         const locked = this.state.lockedShopIndices.includes(index)
         article.dataset.rarity = product.rarity
-        article.innerHTML = `<kbd>${index + 1}</kbd><img src="${import.meta.env.BASE_URL}${product.image}" alt=""><small>${product.rarity} · ${isWeaponId(id) ? `武器 · ${weaponLevel >= 5 ? 'Lv.5 · 已满级' : weaponLevel > 0 ? `Lv.${weaponLevel} → Lv.${weaponLevel + 1}` : '新武器'}` : '宝物'}</small><strong>${product.name}</strong><span>${product.description}</span><em>${product.preview}</em>`
-        if (!isWeaponId(id)) {
+        article.innerHTML = `<kbd>${index + 1}</kbd><img src="${import.meta.env.BASE_URL}${product.image}" alt=""><small>${product.rarity} · ${signatureWeapon ? `专属武器 · Lv.${weaponLevel} → Lv.${weaponLevel + 1}` : commonWeapon ? `武器 · ${weaponLevel >= 5 ? 'Lv.5 · 已满级' : weaponLevel > 0 ? `Lv.${weaponLevel} → Lv.${weaponLevel + 1}` : '新武器'}` : '宝物'}</small><strong>${product.name}</strong><span>${product.description}</span><em>${product.preview}</em>`
+        if (!commonWeapon && !signatureWeapon) {
           const preview = structuredClone(this.state)
           preview.player.coins = Math.max(preview.player.coins, product.price)
           const available = buyItem(preview, index)
@@ -437,8 +473,13 @@ class BattleScene extends Phaser.Scene {
         shopCards.append(article)
       })
       shopWeapons.innerHTML = ''
+      const signature = signatureWeapons[characters[this.state.characterId].weaponId]
+      const signatureRow = document.createElement('div')
+      signatureRow.className = `shop-weapon signature-weapon${this.state.signatureWeaponEvolved ? ' evolved' : ''}`
+      signatureRow.innerHTML = `<img src="${import.meta.env.BASE_URL}${this.state.signatureWeaponEvolved ? signature.evolution.image : signature.image}" alt=""><span><strong>${this.state.signatureWeaponEvolved ? signature.evolution.name : signature.name} · ${this.state.signatureWeaponEvolved ? '已觉醒' : `Lv.${this.state.signatureWeaponLevel}`}</strong><small>${this.state.signatureWeaponEvolved ? signature.evolution.description : `不可出售 · Lv.5 + ${items[signature.evolution.requiredItem].name} 可进化`}</small></span>`
+      shopWeapons.append(signatureRow)
       const ownedWeaponIds = weaponIds.filter((id) => (this.state.weaponLevels[id] ?? 0) > 0)
-      if (ownedWeaponIds.length === 0) shopWeapons.innerHTML = '<p>尚未获得通用武器</p>'
+      if (ownedWeaponIds.length === 0) shopWeapons.insertAdjacentHTML('beforeend', '<p>尚未获得通用武器</p>')
       ownedWeaponIds.forEach((id) => {
         const weapon = weapons[id]
         const level = this.state.weaponLevels[id] ?? 0
@@ -560,11 +601,11 @@ class BattleScene extends Phaser.Scene {
       liveZoneIds.add(zone.id)
       let sprite = this.wineFlameSprites.get(zone.id)
       if (!sprite) {
-        sprite = this.add.image(zone.x, zone.y, 'wine-flame-patch').setRotation((zone.id % 9 - 4) * 0.08)
+        sprite = this.add.image(zone.x, zone.y, zone.kind === 'mountain' ? 'mountain-quake' : 'wine-flame-patch').setRotation((zone.id % 9 - 4) * 0.08)
         this.wineFlameSprites.set(zone.id, sprite)
       }
       const fade = Math.min(1, zone.life * 2, (zone.duration - zone.life) * 5)
-      sprite.setPosition(zone.x, zone.y).setDisplaySize(zone.radius * 2.25, zone.radius * 1.7).setDepth(zone.y - 2).setAlpha(fade * 0.86)
+      sprite.setTexture(zone.kind === 'mountain' ? 'mountain-quake' : 'wine-flame-patch').setPosition(zone.x, zone.y).setDisplaySize(zone.radius * 2.25, zone.kind === 'mountain' ? zone.radius * 2.25 : zone.radius * 1.7).setDepth(zone.y - 2).setAlpha(fade * (zone.kind === 'mountain' ? 0.72 : 0.86))
     }
     for (const [id, sprite] of this.wineFlameSprites) if (!liveZoneIds.has(id)) { sprite.destroy(); this.wineFlameSprites.delete(id) }
 
@@ -600,7 +641,9 @@ class BattleScene extends Phaser.Scene {
       graphics.fillStyle(color, 0.9).fillCircle(drop.x, drop.y, drop.kind === 'xp' ? 5 : 6)
       graphics.lineStyle(2, 0xf9f0c8, 0.7).strokeCircle(drop.x, drop.y, drop.kind === 'xp' ? 8 : 9)
     }
+    const liveAttackIds = new Set<number>()
     for (const attack of this.state.attacks) {
+      liveAttackIds.add(attack.id)
       const alpha = Math.min(1, attack.life / 0.2)
       const start = attack.angle - attack.arc
       const end = attack.angle + attack.arc
@@ -611,27 +654,37 @@ class BattleScene extends Phaser.Scene {
         graphics.lineStyle(5, attack.critical ? 0xffdf65 : 0xe3a83b, alpha).beginPath().arc(attack.x, attack.y, attack.radius, start, end).strokePath()
         graphics.fillStyle(0xf3e6c8, alpha * 0.9).fillCircle(impactX, impactY, attack.critical ? 9 : 6)
         graphics.lineStyle(4, 0xe3a83b, alpha).lineBetween(impactX - Math.cos(attack.angle) * 14, impactY - Math.sin(attack.angle) * 14, impactX + Math.cos(attack.angle) * 12, impactY + Math.sin(attack.angle) * 12)
-      } else if (attack.kind === 'shield') {
+      } else if (attack.kind === 'shield' || attack.kind === 'mountain-shield') {
         const impactX = attack.x + Math.cos(attack.angle) * attack.radius
         const impactY = attack.y + Math.sin(attack.angle) * attack.radius
-        graphics.lineStyle(12, 0x286d72, alpha * 0.78).beginPath().arc(attack.x, attack.y, attack.radius * 0.82, start + 0.16, end - 0.16).strokePath()
-        graphics.lineStyle(6, attack.critical ? 0xf3e6c8 : 0x72d4cf, alpha).beginPath().arc(attack.x, attack.y, attack.radius, start, end).strokePath()
+        graphics.lineStyle(attack.kind === 'mountain-shield' ? 15 : 12, attack.kind === 'mountain-shield' ? 0x4f8f55 : 0x286d72, alpha * 0.78).beginPath().arc(attack.x, attack.y, attack.radius * 0.82, start + 0.16, end - 0.16).strokePath()
+        graphics.lineStyle(attack.kind === 'mountain-shield' ? 8 : 6, attack.critical ? 0xf3e6c8 : attack.kind === 'mountain-shield' ? 0xe3a83b : 0x72d4cf, alpha).beginPath().arc(attack.x, attack.y, attack.radius, start, end).strokePath()
         graphics.fillStyle(0xf3e6c8, alpha * 0.82).fillTriangle(impactX + Math.cos(attack.angle) * 12, impactY + Math.sin(attack.angle) * 12, impactX + Math.cos(attack.angle + 2.35) * 8, impactY + Math.sin(attack.angle + 2.35) * 8, impactX + Math.cos(attack.angle - 2.35) * 8, impactY + Math.sin(attack.angle - 2.35) * 8)
         for (let index = -1; index <= 1; index += 1) {
           const angle = attack.angle + index * 0.42
           graphics.lineStyle(4, index === 0 ? 0xf3e6c8 : 0x53b8b2, alpha * 0.9).lineBetween(impactX - Math.cos(angle) * 8, impactY - Math.sin(angle) * 8, impactX + Math.cos(angle) * 18, impactY + Math.sin(angle) * 18)
         }
       } else {
-        graphics.fillStyle(attack.kind === 'whirlwind' ? 0xffdf65 : 0x9bcb66, alpha * (attack.kind === 'whirlwind' ? 0.25 : 0.18)).beginPath().moveTo(attack.x, attack.y).arc(attack.x, attack.y, attack.radius, start, end).closePath().fillPath()
-        graphics.lineStyle(attack.critical || attack.kind === 'whirlwind' ? 9 : 7, attack.critical || attack.kind === 'whirlwind' ? 0xffdf65 : 0xe3a83b, alpha).beginPath().arc(attack.x, attack.y, attack.radius, start, end).strokePath()
-        graphics.lineStyle(3, 0xcdf08a, alpha * 0.8).beginPath().arc(attack.x, attack.y, attack.radius * 0.72, start + 0.08, end - 0.08).strokePath()
-        if (attack.kind === 'whirlwind') graphics.lineStyle(5, 0xe3a83b, alpha * 0.8).beginPath().arc(attack.x, attack.y, attack.radius * 0.86, start + 0.2, end - 0.2).strokePath()
-        for (let index = 0; index < (attack.kind === 'whirlwind' ? 5 : attack.radius > 110 ? 3 : 2); index += 1) {
-          const angle = start + (end - start) * ((index + 1) / (attack.kind === 'whirlwind' ? 6 : attack.radius > 110 ? 4 : 3))
-          graphics.lineStyle(3, index % 2 === 0 ? 0xf3e6c8 : 0x9bcb66, alpha * 0.72).lineBetween(attack.x + Math.cos(angle) * attack.radius * 0.78, attack.y + Math.sin(angle) * attack.radius * 0.78, attack.x + Math.cos(angle + 0.08) * attack.radius, attack.y + Math.sin(angle + 0.08) * attack.radius)
+        if (attack.kind === 'dragon-staff') {
+          let sprite = this.dragonSweepSprites.get(attack.id)
+          if (!sprite) {
+            sprite = this.add.image(attack.x, attack.y, 'dragon-staff-sweep')
+            this.dragonSweepSprites.set(attack.id, sprite)
+          }
+          sprite.setPosition(attack.x, attack.y).setDisplaySize(attack.radius * 2.35, attack.radius * 2.35).setRotation(attack.angle + attack.id * 0.19).setDepth(attack.y + 1).setAlpha(alpha * 0.9)
+        } else {
+          graphics.fillStyle(attack.kind === 'whirlwind' ? 0xffdf65 : 0x9bcb66, alpha * (attack.kind === 'whirlwind' ? 0.25 : 0.18)).beginPath().moveTo(attack.x, attack.y).arc(attack.x, attack.y, attack.radius, start, end).closePath().fillPath()
+          graphics.lineStyle(attack.critical || attack.kind === 'whirlwind' ? 9 : 7, attack.critical || attack.kind === 'whirlwind' ? 0xffdf65 : 0xe3a83b, alpha).beginPath().arc(attack.x, attack.y, attack.radius, start, end).strokePath()
+          graphics.lineStyle(3, 0xcdf08a, alpha * 0.8).beginPath().arc(attack.x, attack.y, attack.radius * 0.72, start + 0.08, end - 0.08).strokePath()
+          if (attack.kind === 'whirlwind') graphics.lineStyle(5, 0xe3a83b, alpha * 0.8).beginPath().arc(attack.x, attack.y, attack.radius * 0.86, start + 0.2, end - 0.2).strokePath()
+          for (let index = 0; index < (attack.kind === 'whirlwind' ? 5 : attack.radius > 110 ? 3 : 2); index += 1) {
+            const angle = start + (end - start) * ((index + 1) / (attack.kind === 'whirlwind' ? 6 : attack.radius > 110 ? 4 : 3))
+            graphics.lineStyle(3, index % 2 === 0 ? 0xf3e6c8 : 0x9bcb66, alpha * 0.72).lineBetween(attack.x + Math.cos(angle) * attack.radius * 0.78, attack.y + Math.sin(angle) * attack.radius * 0.78, attack.x + Math.cos(angle + 0.08) * attack.radius, attack.y + Math.sin(angle + 0.08) * attack.radius)
+          }
         }
       }
     }
+    for (const [id, sprite] of this.dragonSweepSprites) if (!liveAttackIds.has(id)) { sprite.destroy(); this.dragonSweepSprites.delete(id) }
     for (const effect of this.state.effects) {
       const alpha = Math.min(1, effect.life * 4)
       if (effect.kind === 'kill') {
@@ -747,11 +800,11 @@ class BattleScene extends Phaser.Scene {
       }
       let sprite = this.leafSprites.get(projectile.id)
       if (!sprite) {
-        sprite = this.add.image(projectile.x, projectile.y, projectile.kind === 'firecracker' ? 'firecracker-launcher' : 'leaf-dart')
+        sprite = this.add.image(projectile.x, projectile.y, projectile.kind === 'firecracker' ? 'firecracker-launcher' : this.state.signatureWeaponEvolved ? 'myriad-leaf-return' : 'leaf-dart')
         this.leafSprites.set(projectile.id, sprite)
       }
       const projectileSize = projectile.kind === 'firecracker' ? 32 : projectile.critical ? 34 : 28
-      sprite.setTexture(projectile.kind === 'firecracker' ? 'firecracker-launcher' : 'leaf-dart').setDisplaySize(projectileSize, projectileSize).setPosition(projectile.x, projectile.y).setRotation(Math.atan2(projectile.vy, projectile.vx) + Math.PI / 4 + Math.sin(this.state.time * 18 + projectile.id) * 0.18).setDepth(projectile.y + 5)
+      sprite.setTexture(projectile.kind === 'firecracker' ? 'firecracker-launcher' : this.state.signatureWeaponEvolved ? 'myriad-leaf-return' : 'leaf-dart').setDisplaySize(projectile.returning ? projectileSize * 0.82 : projectileSize, projectile.returning ? projectileSize * 0.82 : projectileSize).setPosition(projectile.x, projectile.y).setRotation(Math.atan2(projectile.vy, projectile.vx) + Math.PI / 4 + Math.sin(this.state.time * 18 + projectile.id) * 0.18).setDepth(projectile.y + 5)
       if (projectile.critical) sprite.setTint(0xffdf65)
       else sprite.clearTint()
     }
@@ -881,11 +934,12 @@ class BattleScene extends Phaser.Scene {
       if (element) element.textContent = value
     }
     const weaponStrip = document.querySelector<HTMLElement>('#weapon-strip')
-    const weaponHudMode = `${this.state.characterId}-${Object.entries(this.state.weaponLevels).join('-')}`
+    const weaponHudMode = `${this.state.characterId}-${this.state.signatureWeaponLevel}-${this.state.signatureWeaponEvolved}-${Object.entries(this.state.weaponLevels).join('-')}`
     if (weaponStrip && weaponHudMode !== this.weaponHudMode) {
       this.weaponHudMode = weaponHudMode
       const character = characters[this.state.characterId]
-      weaponStrip.innerHTML = `<span class="weapon-slot"><img src="${import.meta.env.BASE_URL}${character.weaponImage}" alt="${character.weaponName}"><span><b>${character.weaponName} · 专属</b><small>${character.weaponDescription}</small></span></span>${weaponIds.filter((id) => (this.state.weaponLevels[id] ?? 0) > 0).map((id) => {
+      const signature = signatureWeapons[character.weaponId]
+      weaponStrip.innerHTML = `<span class="weapon-slot${this.state.signatureWeaponEvolved ? ' evolved' : ''}"><img src="${import.meta.env.BASE_URL}${this.state.signatureWeaponEvolved ? signature.evolution.image : signature.image}" alt="${this.state.signatureWeaponEvolved ? signature.evolution.name : signature.name}"><span><b>${this.state.signatureWeaponEvolved ? signature.evolution.name : signature.name} · ${this.state.signatureWeaponEvolved ? '觉醒' : `Lv.${this.state.signatureWeaponLevel}`}</b><small>${this.state.signatureWeaponEvolved ? signature.evolution.description : character.weaponDescription}</small></span></span>${weaponIds.filter((id) => (this.state.weaponLevels[id] ?? 0) > 0).map((id) => {
         const weapon = weapons[id]
         const level = this.state.weaponLevels[id] ?? 0
         let detail = `${level >= 3 ? '双段' : '单段'}快拳 · 范围 ${62 + level * 4}`
@@ -909,6 +963,18 @@ class BattleScene extends Phaser.Scene {
     if (bossAnnouncement) {
       bossAnnouncement.hidden = this.state.bossIntroTime === 0
       bossAnnouncement.textContent = '最终波 · 腐竹巨灵苏醒'
+    }
+    if (this.state.signatureWeaponEvolved && !this.evolutionShown) {
+      this.evolutionShown = true
+      const signature = signatureWeapons[characters[this.state.characterId].weaponId]
+      const announcement = document.querySelector<HTMLElement>('#evolution-announcement')!
+      const image = document.querySelector<HTMLImageElement>('#evolution-image')!
+      image.src = `${import.meta.env.BASE_URL}${signature.evolution.image}`
+      image.alt = signature.evolution.name
+      document.querySelector<HTMLElement>('#evolution-name')!.textContent = signature.evolution.name
+      document.querySelector<HTMLElement>('#evolution-copy')!.textContent = signature.evolution.description
+      announcement.hidden = false
+      announcement.onanimationend = () => { announcement.hidden = true }
     }
     const dash = document.querySelector<HTMLElement>('#dash')
     if (dash) {
@@ -940,11 +1006,12 @@ class BattleScene extends Phaser.Scene {
       this.resultShown = true
       this.dashQueued = false
       const character = characters[this.state.characterId]
+      const signature = signatureWeapons[character.weaponId]
       const stats = this.state.runStats
       const damageEntries = [
-        { name: characters.shanlan.weaponName, image: characters.shanlan.weaponImage, value: stats.damage['bamboo-staff'] ?? 0 },
-        { name: characters.qingtuan.weaponName, image: characters.qingtuan.weaponImage, value: stats.damage['leaf-dart'] ?? 0 },
-        { name: `${characters.shimo.weaponName}（含破盾反击）`, image: characters.shimo.weaponImage, value: stats.damage['iron-bamboo-shield'] ?? 0 },
+        { name: this.state.characterId === 'shanlan' && this.state.signatureWeaponEvolved ? signature.evolution.name : characters.shanlan.weaponName, image: this.state.characterId === 'shanlan' && this.state.signatureWeaponEvolved ? signature.evolution.image : characters.shanlan.weaponImage, value: stats.damage['bamboo-staff'] ?? 0 },
+        { name: this.state.characterId === 'qingtuan' && this.state.signatureWeaponEvolved ? signature.evolution.name : characters.qingtuan.weaponName, image: this.state.characterId === 'qingtuan' && this.state.signatureWeaponEvolved ? signature.evolution.image : characters.qingtuan.weaponImage, value: stats.damage['leaf-dart'] ?? 0 },
+        { name: `${this.state.characterId === 'shimo' && this.state.signatureWeaponEvolved ? signature.evolution.name : characters.shimo.weaponName}（含破盾反击）`, image: this.state.characterId === 'shimo' && this.state.signatureWeaponEvolved ? signature.evolution.image : characters.shimo.weaponImage, value: stats.damage['iron-bamboo-shield'] ?? 0 },
         ...weaponIds.map((id) => ({ name: weapons[id].name, image: weapons[id].image, value: stats.damage[id] ?? 0 })),
         { name: items['panda-roller'].name, image: items['panda-roller'].image, value: stats.damage['panda-roller'] ?? 0 },
       ].filter((entry) => entry.value > 0).sort((a, b) => b.value - a.value)
@@ -969,7 +1036,7 @@ class BattleScene extends Phaser.Scene {
       document.querySelector<HTMLElement>('#result-damage')!.innerHTML = damageEntries.length ? damageEntries.map((entry) => `<div class="result-damage-row"><img src="${import.meta.env.BASE_URL}${entry.image}" alt=""><div><div class="result-row-label"><span>${entry.name}</span><b>${Math.round(entry.value).toLocaleString('zh-CN')} · ${Math.round(entry.value / totalDamage * 100)}%</b></div><div class="result-meter"><i style="width:${entry.value / totalDamage * 100}%"></i></div></div></div>`).join('') : '<p class="result-empty">尚未命中敌人，下一局试着靠近攻击范围。</p>'
       document.querySelector<HTMLElement>('#result-injury-note')!.textContent = `只计生命扣除 · 护盾另吸收 ${Math.round(stats.shieldAbsorbed)} 点`
       document.querySelector<HTMLElement>('#result-injuries')!.innerHTML = Object.entries(stats.injuries).map(([id, value]) => ({ name: Object.entries(injurySources).find(([key]) => key === id)?.[1] ?? '其他', value })).filter((entry) => entry.value > 0).sort((a, b) => b.value - a.value).map((entry) => `<div class="result-injury-row"><span>${entry.name}</span><b>${Math.round(entry.value)} 点</b></div>`).join('') || '<p class="result-empty">未损失生命，护盾吸收不计入此处。</p>'
-      document.querySelector<HTMLElement>('#result-loadout')!.innerHTML = `<span><img src="${import.meta.env.BASE_URL}${character.weaponImage}" alt="">${character.weaponName} · 专属</span>${weaponIds.filter((id) => this.state.weaponLevels[id]).map((id) => `<span><img src="${import.meta.env.BASE_URL}${weapons[id].image}" alt="">${weapons[id].name} · Lv.${this.state.weaponLevels[id]}</span>`).join('')}`
+      document.querySelector<HTMLElement>('#result-loadout')!.innerHTML = `<span class="${this.state.signatureWeaponEvolved ? 'evolved' : ''}"><img src="${import.meta.env.BASE_URL}${this.state.signatureWeaponEvolved ? signature.evolution.image : signature.image}" alt="">${this.state.signatureWeaponEvolved ? signature.evolution.name : signature.name} · ${this.state.signatureWeaponEvolved ? '觉醒' : `Lv.${this.state.signatureWeaponLevel}`}</span>${weaponIds.filter((id) => this.state.weaponLevels[id]).map((id) => `<span><img src="${import.meta.env.BASE_URL}${weapons[id].image}" alt="">${weapons[id].name} · Lv.${this.state.weaponLevels[id]}</span>`).join('')}`
       document.querySelector<HTMLElement>('#result-item-count')!.textContent = `${this.state.ownedItems.length} 件宝物`
       document.querySelector<HTMLElement>('#result-items')!.innerHTML = [...new Set(this.state.ownedItems)].map((id) => `<div><img src="${import.meta.env.BASE_URL}${items[id].image}" alt=""><span><b>${items[id].name} ×${this.state.ownedItems.filter((ownedId) => ownedId === id).length}</b><small>每件：${items[id].description}</small></span></div>`).join('') || '<p class="result-empty">本局没有携带宝物。</p>'
       document.querySelector<HTMLElement>('#result-upgrade-count')!.textContent = `${this.state.chosenUpgrades.length} 次选择`
