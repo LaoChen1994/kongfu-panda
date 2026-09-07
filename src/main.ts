@@ -1,10 +1,32 @@
 import Phaser from 'phaser'
 import './style.css'
-import { buyItem, characters, chooseUpgrade, continueWave, createGameState, enemyDefinitions, isWeaponId, items, refreshShop, sellItem, sellWeapon, stepGame, toggleShopLock, upgrades, weaponIds, weapons, type CharacterId } from './simulation.js'
+import { buyItem, characters, chooseUpgrade, continueWave, createGameState, enemyDefinitions, injurySources, isWeaponId, items, refreshShop, sellItem, sellWeapon, stepGame, toggleShopLock, upgrades, weaponIds, weapons, type CharacterId } from './simulation.js'
+import { parseBattleRecords } from './records.js'
 
 const assetRoot = `${import.meta.env.BASE_URL}assets/`
 let selectedCharacter: CharacterId = 'shanlan'
 let gameStarting = false
+let battleRecords = parseBattleRecords(null)
+let recordsAvailable = true
+try {
+  battleRecords = parseBattleRecords(localStorage.getItem('panda-battle-records'))
+} catch {
+  recordsAvailable = false
+}
+for (const id of ['shanlan', 'qingtuan', 'shimo'] as const) {
+  const record = battleRecords[id]
+  document.querySelector<HTMLElement>(`[data-record="${id}"]`)!.textContent = record.runs
+    ? `出战 ${record.runs} 局 · 通关 ${record.wins} 次\n最高第 ${record.bestWave} 波 · 最多击破 ${record.bestKills}${record.bestClearTime ? `\n最快通关 ${Math.floor(record.bestClearTime / 60)}分${record.bestClearTime % 60}秒` : ''}`
+    : '尚未出战 · 写下第一份战绩'
+}
+if (!recordsAvailable) document.querySelector<HTMLElement>('#records-note')!.textContent = '浏览器未允许保存战绩，本次仍可正常游玩。'
+const resultOverlay = document.querySelector<HTMLElement>('#result-overlay')!
+const resultRetry = document.querySelector<HTMLButtonElement>('#result-retry')!
+document.querySelector<HTMLButtonElement>('#result-select')!.onclick = () => {
+  const url = new URL(location.href)
+  for (const key of [...url.searchParams.keys()]) if (key.startsWith('playtest-')) url.searchParams.delete(key)
+  location.assign(url.href)
+}
 const loadingOverlay = document.querySelector<HTMLElement>('#loading-overlay')!
 const loadingMessage = document.querySelector<HTMLElement>('#loading-message')!
 const loadingProgress = document.querySelector<HTMLProgressElement>('#loading-progress')!
@@ -56,7 +78,7 @@ const animationSets = [
 ]
 
 class BattleScene extends Phaser.Scene {
-  private state = createGameState(20260831, selectedCharacter)
+  private state = createGameState(crypto.getRandomValues(new Uint32Array(1))[0], selectedCharacter)
   private actorGraphics!: Phaser.GameObjects.Graphics
   private playerSprite!: Phaser.GameObjects.Sprite
   private enemySprites = new Map<number, Phaser.GameObjects.Sprite>()
@@ -82,6 +104,7 @@ class BattleScene extends Phaser.Scene {
   private weaponHudMode = ''
   private loading = true
   private loadFailed = false
+  private resultShown = false
 
   preload(): void {
     this.load.on('progress', (progress: number) => {
@@ -169,6 +192,32 @@ class BattleScene extends Phaser.Scene {
       this.state.player.hp = 500
       this.state.player.maxHp = 500
     }
+    if (import.meta.env.DEV && new URLSearchParams(location.search).get('playtest-summary') === 'empty') {
+      this.state = createGameState(20260907, selectedCharacter)
+      this.state.player.hp = 1
+      this.state.bambooCooldown = 99
+      this.state.leafCooldown = 99
+      this.state.spawnTimer = 99
+      this.state.enemies = [{ id: this.state.nextId++, kind: 'chaser', x: 800, y: 500, hp: 30, maxHp: 30, cooldown: 99, dashTime: 0, vx: 0, vy: 0 }]
+    } else if (import.meta.env.DEV && new URLSearchParams(location.search).has('playtest-summary')) {
+      this.state = createGameState(20260907, selectedCharacter)
+      this.state.shopOpen = true
+      this.state.player.coins = 10000
+      for (const id of ['martial-belt', 'wind-feather', 'iron-bracer', 'panda-roller', 'bamboo-dew-pill', 'food-god-lunchbox', 'jade-eyepatch', 'gale-leggings', 'mountain-stone', 'fortune-paw', 'spirit-bamboo-tube', 'tiger-seal', 'bamboo-dew-pill', 'bamboo-dew-pill', 'martial-belt', 'firecracker-launcher', 'spinning-bamboo-blade', 'panda-wine-gourd'] as const) {
+        this.state.shopChoices[0] = id
+        buyItem(this.state, 0)
+      }
+      for (const id of ['vitality', 'power', 'haste', 'footwork', 'vitality', 'power'] as const) {
+        this.state.pendingUpgrade = true
+        this.state.upgradeChoices = [id]
+        chooseUpgrade(this.state, id)
+        this.state.player.level += 1
+      }
+      this.state.wave = 9
+      continueWave(this.state)
+      const boss = this.state.enemies.find((enemy) => enemy.kind === 'boss')
+      if (boss) { boss.x = 850; boss.y = 500; boss.hp = 600; boss.maxHp = 600 }
+    }
     this.cameras.main.setBackgroundColor('#173527')
     this.add.tileSprite(800, 500, 1600, 1000, 'bamboo-ground').setDepth(-10)
     const worldGraphics = this.add.graphics()
@@ -203,8 +252,41 @@ class BattleScene extends Phaser.Scene {
       w: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W), a: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
       s: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S), d: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
     }
+    resultRetry.onclick = () => {
+      if (!this.resultShown) return
+      this.state = createGameState(crypto.getRandomValues(new Uint32Array(1))[0], this.state.characterId)
+      this.lastAttackId = 0
+      this.lastPlayerProjectileId = 0
+      this.hitStop = 0
+      this.dashQueued = false
+      this.paused = false
+      this.overlayMode = ''
+      this.weaponHudMode = ''
+      this.resultShown = false
+      this.seenEffects.clear()
+      for (const sprites of [this.enemySprites, this.bossHazardSprites, this.leafSprites, this.firecrackerBlastSprites, this.wineFlameSprites, this.enemyZoneSprites, this.turretSprites, this.bladeSprites, this.effectTexts]) {
+        for (const sprite of sprites.values()) sprite.destroy()
+        sprites.clear()
+      }
+      keyboard.resetKeys()
+      this.playerSprite.play(`${characters[this.state.characterId].animation}-idle`)
+      resultOverlay.hidden = true
+      resultRetry.blur()
+      document.querySelector<HTMLElement>('#pause-overlay')!.hidden = true
+    }
     window.addEventListener('keydown', (event) => {
       if (event.repeat) return
+      if (this.state.gameOver || this.state.victory) {
+        if (event.code === 'KeyR') { event.preventDefault(); resultRetry.click() }
+        if (event.code === 'Tab') {
+          const targets = Array.from(resultOverlay.querySelectorAll<HTMLElement>('button, [tabindex="0"]'))
+          const first = targets[0]
+          const last = targets[targets.length - 1]
+          if (event.shiftKey && (document.activeElement === first || document.activeElement === resultOverlay.querySelector('.result-panel'))) { event.preventDefault(); last.focus() }
+          else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
+        }
+        return
+      }
       if (event.code === 'Space' || event.code === 'Escape' || event.code === 'KeyR') event.preventDefault()
       if (!this.audioContext && new URLSearchParams(window.location.search).get('muted') !== '1') this.audioContext = new AudioContext()
       if (event.code === 'Space' && !this.state.pendingUpgrade && !this.state.shopOpen) this.dashQueued = true
@@ -224,15 +306,6 @@ class BattleScene extends Phaser.Scene {
         if (overlay) overlay.hidden = !this.paused
         if (title) title.textContent = '竹息凝神'
         if (copy) copy.textContent = '按 ESC 继续战斗'
-      }
-      if (event.code === 'KeyR' && (this.state.gameOver || this.state.victory)) {
-        this.state = createGameState(20260831, this.state.characterId)
-        this.lastAttackId = 0
-        this.lastPlayerProjectileId = 0
-        this.paused = false
-        this.overlayMode = ''
-        const overlay = document.querySelector<HTMLDivElement>('#pause-overlay')
-        if (overlay) overlay.hidden = true
       }
     })
   }
@@ -265,6 +338,7 @@ class BattleScene extends Phaser.Scene {
     const shopStats = document.querySelector<HTMLElement>('#shop-stats')
     const refreshButton = document.querySelector<HTMLButtonElement>('#refresh-shop')
     if (!overlay || !cards || !title || !kicker || !copy || !continueButton || !shopLayout || !shopCards || !shopWeapons || !shopInventory || !shopItemCount || !shopStats || !refreshButton) return
+    if (this.state.gameOver || this.state.victory) { overlay.hidden = true; return }
 
     const mode = this.state.pendingUpgrade ? `upgrade-${this.state.player.level}` : this.state.shopOpen ? `shop-${this.state.wave}-${this.state.player.coins}-${this.state.shopChoices.join('-')}-${this.state.lockedShopIndices.join('-')}-${this.state.ownedItems.join('-')}-${Object.entries(this.state.weaponLevels).join('-')}` : ''
     overlay.hidden = !mode
@@ -862,14 +936,64 @@ class BattleScene extends Phaser.Scene {
     if (buildPanel) buildPanel.classList.toggle('near-player', this.state.player.x > 1400 && this.state.player.y > 850)
 
     if (this.state.gameOver || this.state.victory) {
-      const overlay = document.querySelector<HTMLDivElement>('#pause-overlay')
-      const title = document.querySelector<HTMLElement>('#overlay-title')
-      const copy = document.querySelector<HTMLElement>('#overlay-copy')
-      if (overlay) overlay.hidden = false
-      if (title) title.textContent = this.state.victory ? '竹林得守' : '此战暂歇'
-      if (copy) copy.textContent = this.state.victory
-        ? `${characters[this.state.characterId].name} · ${Math.floor(this.state.time / 60)}分${Math.floor(this.state.time % 60)}秒 · 击破 ${this.state.kills} · Lv.${this.state.player.level} · 宝物 ${this.state.ownedItems.length} 件 · 构筑 ${this.state.chosenUpgrades.slice(-3).map((id) => upgrades[id].name).join(' / ') || '初入竹林'} · 按 R 再战`
-        : `第 ${this.state.wave} 波 · Lv.${this.state.player.level} · 击破 ${this.state.kills} · 宝物 ${this.state.ownedItems.length} 件 · 按 R 再战`
+      if (this.resultShown) return
+      this.resultShown = true
+      this.dashQueued = false
+      const character = characters[this.state.characterId]
+      const stats = this.state.runStats
+      const damageEntries = [
+        { name: characters.shanlan.weaponName, image: characters.shanlan.weaponImage, value: stats.damage['bamboo-staff'] ?? 0 },
+        { name: characters.qingtuan.weaponName, image: characters.qingtuan.weaponImage, value: stats.damage['leaf-dart'] ?? 0 },
+        { name: `${characters.shimo.weaponName}（含破盾反击）`, image: characters.shimo.weaponImage, value: stats.damage['iron-bamboo-shield'] ?? 0 },
+        ...weaponIds.map((id) => ({ name: weapons[id].name, image: weapons[id].image, value: stats.damage[id] ?? 0 })),
+        { name: items['panda-roller'].name, image: items['panda-roller'].image, value: stats.damage['panda-roller'] ?? 0 },
+      ].filter((entry) => entry.value > 0).sort((a, b) => b.value - a.value)
+      const totalDamage = damageEntries.reduce((sum, entry) => sum + entry.value, 0)
+      const totalInjury = Object.values(stats.injuries).reduce((sum, value) => sum + value, 0)
+      const elapsed = Math.ceil(this.state.time)
+      const portrait = document.querySelector<HTMLImageElement>('#result-portrait')!
+      portrait.src = `${import.meta.env.BASE_URL}${character.portrait}`
+      portrait.alt = character.name
+      document.querySelector<HTMLElement>('#result-title')!.textContent = this.state.victory ? '竹林得守' : '此战暂歇'
+      document.querySelector<HTMLElement>('#result-context')!.textContent = `${character.name} · ${character.role} · Lv.${this.state.player.level} · 第 ${this.state.wave} 波`
+      const seal = document.querySelector<HTMLElement>('#result-seal')!
+      seal.textContent = this.state.victory ? '通关' : `第 ${this.state.wave} 波`
+      seal.dataset.victory = String(this.state.victory)
+      document.querySelector<HTMLElement>('#result-stats')!.innerHTML = [
+        ['战斗时长', `${Math.floor(elapsed / 60)}分${elapsed % 60}秒`], ['击破敌人', this.state.kills.toLocaleString('zh-CN')],
+        ['累计输出', Math.round(totalDamage).toLocaleString('zh-CN')], ['生命损失', Math.round(totalInjury).toLocaleString('zh-CN')],
+      ].map(([label, value]) => `<div><dt>${label}</dt><dd>${value}</dd></div>`).join('')
+      document.querySelector<HTMLElement>('#result-cause')!.textContent = this.state.victory
+        ? '腐竹巨灵已败，竹林重归安宁。换一位侠客，试试另一种招式。'
+        : `最后一击：${stats.lastInjury ? injurySources[stats.lastInjury] : '暂无记录'}。${stats.lastInjury === 'root' || stats.lastInjury === 'shockwave' ? '留意地面预警，在招式落下前离开或闪避。' : stats.lastInjury === 'enemy-shot' ? '横向移动避开弹幕，给自己留出闪避空间。' : '被围住时及时闪避，下一局可兼顾生命与输出成长。'}`
+      document.querySelector<HTMLElement>('#result-damage')!.innerHTML = damageEntries.length ? damageEntries.map((entry) => `<div class="result-damage-row"><img src="${import.meta.env.BASE_URL}${entry.image}" alt=""><div><div class="result-row-label"><span>${entry.name}</span><b>${Math.round(entry.value).toLocaleString('zh-CN')} · ${Math.round(entry.value / totalDamage * 100)}%</b></div><div class="result-meter"><i style="width:${entry.value / totalDamage * 100}%"></i></div></div></div>`).join('') : '<p class="result-empty">尚未命中敌人，下一局试着靠近攻击范围。</p>'
+      document.querySelector<HTMLElement>('#result-injury-note')!.textContent = `只计生命扣除 · 护盾另吸收 ${Math.round(stats.shieldAbsorbed)} 点`
+      document.querySelector<HTMLElement>('#result-injuries')!.innerHTML = Object.entries(stats.injuries).map(([id, value]) => ({ name: Object.entries(injurySources).find(([key]) => key === id)?.[1] ?? '其他', value })).filter((entry) => entry.value > 0).sort((a, b) => b.value - a.value).map((entry) => `<div class="result-injury-row"><span>${entry.name}</span><b>${Math.round(entry.value)} 点</b></div>`).join('') || '<p class="result-empty">未损失生命，护盾吸收不计入此处。</p>'
+      document.querySelector<HTMLElement>('#result-loadout')!.innerHTML = `<span><img src="${import.meta.env.BASE_URL}${character.weaponImage}" alt="">${character.weaponName} · 专属</span>${weaponIds.filter((id) => this.state.weaponLevels[id]).map((id) => `<span><img src="${import.meta.env.BASE_URL}${weapons[id].image}" alt="">${weapons[id].name} · Lv.${this.state.weaponLevels[id]}</span>`).join('')}`
+      document.querySelector<HTMLElement>('#result-item-count')!.textContent = `${this.state.ownedItems.length} 件宝物`
+      document.querySelector<HTMLElement>('#result-items')!.innerHTML = [...new Set(this.state.ownedItems)].map((id) => `<div><img src="${import.meta.env.BASE_URL}${items[id].image}" alt=""><span><b>${items[id].name} ×${this.state.ownedItems.filter((ownedId) => ownedId === id).length}</b><small>每件：${items[id].description}</small></span></div>`).join('') || '<p class="result-empty">本局没有携带宝物。</p>'
+      document.querySelector<HTMLElement>('#result-upgrade-count')!.textContent = `${this.state.chosenUpgrades.length} 次选择`
+      document.querySelector<HTMLElement>('#result-upgrades')!.innerHTML = [...new Set(this.state.chosenUpgrades)].map((id) => `<div><b>${upgrades[id].name} ×${this.state.chosenUpgrades.filter((chosen) => chosen === id).length}</b><small>每次：${upgrades[id].description}</small></div>`).join('') || '<p class="result-empty">尚未习得强化。</p>'
+      const debugRun = import.meta.env.DEV && [...new URLSearchParams(location.search).keys()].some((key) => key.startsWith('playtest-'))
+      if (!debugRun) {
+        try { battleRecords = parseBattleRecords(localStorage.getItem('panda-battle-records')) } catch { recordsAvailable = false }
+        const record = battleRecords[this.state.characterId]
+        record.runs += 1
+        record.wins += this.state.victory ? 1 : 0
+        record.bestWave = Math.max(record.bestWave, this.state.wave)
+        record.bestKills = Math.max(record.bestKills, this.state.kills)
+        if (this.state.victory) record.bestClearTime = record.bestClearTime ? Math.min(record.bestClearTime, elapsed) : elapsed
+        try {
+          localStorage.setItem('panda-battle-records', JSON.stringify({ version: 1, characters: battleRecords }))
+          recordsAvailable = true
+        } catch { recordsAvailable = false }
+      }
+      const record = battleRecords[this.state.characterId]
+      document.querySelector<HTMLElement>('#result-record')!.textContent = `${character.name}战绩 · 出战 ${record.runs} 局 · 通关 ${record.wins} 次 · 最高第 ${record.bestWave} 波 · 最多击破 ${record.bestKills}${record.bestClearTime ? ` · 最快通关 ${Math.floor(record.bestClearTime / 60)}分${record.bestClearTime % 60}秒` : ''}`
+      document.querySelector<HTMLElement>('#result-save-status')!.textContent = `${debugRun ? '测试对局，不计入战绩。' : recordsAvailable ? '战绩已保存在当前浏览器。' : '战绩未能保存，刷新后可能丢失；仍可继续游玩。'} 对局种子 ${stats.initialSeed}`
+      document.querySelector<HTMLElement>('#pause-overlay')!.hidden = true
+      resultOverlay.hidden = false
+      resultOverlay.querySelector<HTMLElement>('.result-panel')!.focus({ preventScroll: true })
     }
   }
 }
