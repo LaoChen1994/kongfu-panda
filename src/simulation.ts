@@ -7,6 +7,12 @@ export type ItemId = 'martial-belt' | 'wind-feather' | 'iron-bracer' | 'panda-ro
 export const weaponIds = ['iron-pot-gauntlets', 'firecracker-launcher', 'spinning-bamboo-blade', 'panda-wine-gourd', 'bamboo-crossbow-turret'] as const
 export type WeaponId = typeof weaponIds[number]
 export type ShopProductId = ItemId | WeaponId
+export type DamageSource = WeaponId | 'bamboo-staff' | 'leaf-dart' | 'iron-bamboo-shield' | 'panda-roller'
+export const injurySources = {
+  chaser: '竹鼠接触', dasher: '山猴冲撞', shooter: '毒蜂接触', boar: '野猪撞击',
+  assassin: '鼬鼠突刺', sorcerer: '狐妖接触', boss: '巨灵接触',
+  'elite-chaser': '赤纹竹鼠冲撞', 'enemy-shot': '毒蜂弹幕', root: '巨灵根刺', shockwave: '巨灵冲击波',
+} as const
 
 export const enemyDefinitions: Record<RegularEnemyKind, { name: string; unlockWave: number; threat: number; baseHp: number; size: number; animation: string }> = {
   chaser: { name: '竹鼠', unlockWave: 1, threat: 1, baseHp: 30, size: 54, animation: 'redfang-chaser' },
@@ -83,6 +89,13 @@ export const isWeaponId = (id: ShopProductId): id is WeaponId => id in weapons
 export type GameState = {
   characterId: CharacterId
   seed: number
+  runStats: {
+    initialSeed: number
+    damage: Partial<Record<DamageSource, number>>
+    injuries: Partial<Record<keyof typeof injurySources, number>>
+    shieldAbsorbed: number
+    lastInjury?: keyof typeof injurySources
+  }
   time: number
   wave: number
   waveTime: number
@@ -189,7 +202,7 @@ const random = (state: GameState): number => {
   return state.seed / 4294967296
 }
 
-const dealEnemyDamage = (state: GameState, enemy: GameState['enemies'][number], rawDamage: number, sourceX: number, sourceY: number): number => {
+const dealEnemyDamage = (state: GameState, enemy: GameState['enemies'][number], rawDamage: number, sourceX: number, sourceY: number, source: DamageSource): number => {
   let damage = Math.max(1, Math.round(rawDamage * (enemy.kind === 'boss' || enemy.elite ? state.player.eliteDamage : state.player.normalDamage)))
   if (enemy.kind === 'boar') {
     const sourceDistance = Math.max(0.001, Math.hypot(sourceX - enemy.x, sourceY - enemy.y))
@@ -202,13 +215,24 @@ const dealEnemyDamage = (state: GameState, enemy: GameState['enemies'][number], 
       state.effects.push({ id: state.nextId++, kind: 'armor-block', x: enemy.x, y: enemy.y - 24, value: damage, life: 0.28, angle: Math.atan2(sourceY - enemy.y, sourceX - enemy.x) })
     }
   }
+  state.runStats.damage[source] = (state.runStats.damage[source] ?? 0) + Math.min(Math.max(0, enemy.hp), damage)
   enemy.hp -= damage
   return damage
+}
+
+const recordInjury = (state: GameState, damage: number, absorbed: number, source: keyof typeof injurySources): void => {
+  const lostHp = Math.min(Math.max(0, state.player.hp), damage - absorbed)
+  state.runStats.shieldAbsorbed += absorbed
+  if (lostHp > 0) {
+    state.runStats.injuries[source] = (state.runStats.injuries[source] ?? 0) + lostHp
+    state.runStats.lastInjury = source
+  }
 }
 
 export const createGameState = (seed = 20260831, characterId: CharacterId = 'shanlan'): GameState => ({
   characterId,
   seed,
+  runStats: { initialSeed: seed, damage: {}, injuries: {}, shieldAbsorbed: 0 },
   time: 0,
   wave: 1,
   waveTime: 0,
@@ -497,7 +521,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
       const dy = enemy.y - state.player.y
       const distance = Math.max(0.001, Math.hypot(dx, dy))
       if (distance < 118) {
-        dealEnemyDamage(state, enemy, 32, state.player.x, state.player.y)
+        dealEnemyDamage(state, enemy, 32, state.player.x, state.player.y, 'panda-roller')
         if (enemy.kind !== 'boss') {
           enemy.x += (dx / distance) * 42
           enemy.y += (dy / distance) * 42
@@ -655,6 +679,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
       const damage = Math.max(1, Math.floor(rawDamage * (1 - state.player.armor / (state.player.armor + 60))))
       const shieldBefore = state.player.shield
       const absorbed = Math.min(shieldBefore, damage)
+      recordInjury(state, damage, absorbed, enemy.elite && enemy.kind === 'chaser' ? 'elite-chaser' : enemy.kind)
       state.player.shield -= absorbed
       state.player.hp -= damage - absorbed
       state.player.hitCooldown = 1.15
@@ -666,7 +691,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
           const breakY = nearbyEnemy.y - state.player.y
           const breakDistance = Math.max(0.001, Math.hypot(breakX, breakY))
           if (breakDistance <= 110) {
-            dealEnemyDamage(state, nearbyEnemy, 24, state.player.x, state.player.y)
+            dealEnemyDamage(state, nearbyEnemy, 24, state.player.x, state.player.y, 'iron-bamboo-shield')
             if (nearbyEnemy.kind !== 'boss') {
               nearbyEnemy.x += (breakX / breakDistance) * 48
               nearbyEnemy.y += (breakY / breakDistance) * 48
@@ -688,6 +713,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
         const damage = Math.max(1, Math.floor(rawDamage * (1 - state.player.armor / (state.player.armor + 60))))
         const shieldBefore = state.player.shield
         const absorbed = Math.min(shieldBefore, damage)
+        recordInjury(state, damage, absorbed, hazard.kind)
         state.player.shield -= absorbed
         state.player.hp -= damage - absorbed
         state.player.hitCooldown = 1.05
@@ -699,7 +725,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
             const breakY = enemy.y - state.player.y
             const breakDistance = Math.max(0.001, Math.hypot(breakX, breakY))
             if (breakDistance <= 110) {
-              dealEnemyDamage(state, enemy, 24, state.player.x, state.player.y)
+              dealEnemyDamage(state, enemy, 24, state.player.x, state.player.y, 'iron-bamboo-shield')
               if (enemy.kind !== 'boss') {
                 enemy.x += (breakX / breakDistance) * 48
                 enemy.y += (breakY / breakDistance) * 48
@@ -734,7 +760,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
         const angleDelta = Math.atan2(Math.sin(Math.atan2(dy, dx) - angle), Math.cos(Math.atan2(dy, dx) - angle))
         if (distance <= attackRadius && Math.abs(angleDelta) <= arc && hitCount < 8) {
           hitCount += 1
-          const appliedDamage = dealEnemyDamage(state, enemy, damage, state.player.x, state.player.y)
+          const appliedDamage = dealEnemyDamage(state, enemy, damage, state.player.x, state.player.y, state.characterId === 'shimo' ? 'iron-bamboo-shield' : 'bamboo-staff')
           if (enemy.kind !== 'boss') {
             const knockback = state.characterId === 'shimo' ? critical ? 46 : 34 : critical ? 22 : 14
             enemy.x = Math.min(1550, Math.max(50, enemy.x + (dx / distance) * knockback))
@@ -800,7 +826,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
           const angleDelta = Math.atan2(Math.sin(Math.atan2(dy, dx) - angle), Math.cos(Math.atan2(dy, dx) - angle))
           if (distance <= radius && Math.abs(angleDelta) <= Math.PI / 7 && hitCount < 3) {
             hitCount += 1
-            const appliedDamage = dealEnemyDamage(state, enemy, damage, state.player.x, state.player.y)
+            const appliedDamage = dealEnemyDamage(state, enemy, damage, state.player.x, state.player.y, 'iron-pot-gauntlets')
             if (enemy.kind !== 'boss') {
               enemy.x = Math.min(1550, Math.max(50, enemy.x + dx / distance * 8))
               enemy.y = Math.min(950, Math.max(75, enemy.y + dy / distance * 8))
@@ -852,7 +878,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
         if (Math.abs(angleDelta) <= 0.72) bladeIsPassing = true
       }
       if (Math.abs(distance - radius) <= 24 && bladeIsPassing) {
-        const appliedDamage = dealEnemyDamage(state, enemy, damage, state.player.x, state.player.y)
+        const appliedDamage = dealEnemyDamage(state, enemy, damage, state.player.x, state.player.y, 'spinning-bamboo-blade')
         state.effects.push({ id: state.nextId++, kind: 'hit', x: enemy.x, y: enemy.y - 28, value: appliedDamage, life: 0.36, angle: enemyAngle })
       }
     }
@@ -888,7 +914,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
     if (zone.tickCooldown <= 0) {
       for (const enemy of state.enemies) {
         if (Math.hypot(enemy.x - zone.x, enemy.y - zone.y) <= zone.radius) {
-          const appliedDamage = dealEnemyDamage(state, enemy, zone.damage, zone.x, zone.y)
+          const appliedDamage = dealEnemyDamage(state, enemy, zone.damage, zone.x, zone.y, 'panda-wine-gourd')
           state.effects.push({ id: state.nextId++, kind: 'firecracker-hit', x: enemy.x, y: enemy.y - 28, value: appliedDamage, life: 0.42, angle: Math.atan2(enemy.y - zone.y, enemy.x - zone.x) })
         }
       }
@@ -934,12 +960,12 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
           state.effects.push({ id: state.nextId++, kind: 'firecracker-blast', x: projectile.x, y: projectile.y, value: projectile.blastRadius, life: 0.38, angle: 0 })
           for (const blastTarget of state.enemies) {
             if (Math.hypot(blastTarget.x - projectile.x, blastTarget.y - projectile.y) <= projectile.blastRadius) {
-              const appliedDamage = dealEnemyDamage(state, blastTarget, projectile.damage, projectile.x, projectile.y)
+              const appliedDamage = dealEnemyDamage(state, blastTarget, projectile.damage, projectile.x, projectile.y, 'firecracker-launcher')
               state.effects.push({ id: state.nextId++, kind: projectile.critical ? 'firecracker-crit' : 'firecracker-hit', x: blastTarget.x, y: blastTarget.y - 28, value: appliedDamage, life: 0.42, angle: Math.atan2(blastTarget.y - projectile.y, blastTarget.x - projectile.x) })
             }
           }
         } else {
-          const appliedDamage = dealEnemyDamage(state, enemy, projectile.damage, projectile.x - projectile.vx * dt, projectile.y - projectile.vy * dt)
+          const appliedDamage = dealEnemyDamage(state, enemy, projectile.damage, projectile.x - projectile.vx * dt, projectile.y - projectile.vy * dt, projectile.kind === 'leaf' ? 'leaf-dart' : 'bamboo-crossbow-turret')
           state.effects.push({ id: state.nextId++, kind: projectile.critical ? 'projectile-crit' : 'projectile-hit', x: enemy.x, y: enemy.y - 28, value: appliedDamage, life: 0.42, angle: Math.atan2(projectile.vy, projectile.vx) })
         }
         projectile.damage = 0
@@ -955,6 +981,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
       const damage = Math.max(1, Math.floor((2 + Math.floor((state.wave - 1) / 3)) * (1 - state.player.armor / (state.player.armor + 60))))
       const shieldBefore = state.player.shield
       const absorbed = Math.min(shieldBefore, damage)
+      recordInjury(state, damage, absorbed, 'enemy-shot')
       state.player.shield -= absorbed
       state.player.hp -= damage - absorbed
       state.player.hitCooldown = 1.05
@@ -967,7 +994,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
           const breakY = enemy.y - state.player.y
           const breakDistance = Math.max(0.001, Math.hypot(breakX, breakY))
           if (breakDistance <= 110) {
-            dealEnemyDamage(state, enemy, 24, state.player.x, state.player.y)
+            dealEnemyDamage(state, enemy, 24, state.player.x, state.player.y, 'iron-bamboo-shield')
             if (enemy.kind !== 'boss') {
               enemy.x += (breakX / breakDistance) * 48
               enemy.y += (breakY / breakDistance) * 48
@@ -1003,6 +1030,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
     if (enemy.hp <= 0) {
       if (enemy.kind === 'boss') {
         state.victory = true
+        state.kills += 1
         state.corruptionInset = 0
         state.enemyProjectiles = []
         state.bossHazards = []

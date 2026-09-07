@@ -1,4 +1,52 @@
 import { buyItem, chooseUpgrade, continueWave, createGameState, enemyDefinitions, refreshShop, regularEnemyIds, sellItem, sellWeapon, stepGame, toggleShopLock, weaponIds } from './simulation.js'
+import { parseBattleRecords } from './records.js'
+
+// 战报只计实际损失生命；同帧多次命中和出售武器不能篡改历史输出。
+const reportDamage = createGameState(77, 'qingtuan')
+reportDamage.spawnTimer = 99
+reportDamage.leafCooldown = 99
+reportDamage.enemies = [{ id: 100, kind: 'chaser', x: 950, y: 500, hp: 7, maxHp: 7, cooldown: 99, dashTime: 0, vx: 0, vy: 0 }]
+reportDamage.playerProjectiles = [
+  { id: 101, kind: 'firecracker', x: 950, y: 500, vx: 0, vy: 0, damage: 100, critical: false, blastRadius: 50 },
+  { id: 102, kind: 'leaf', x: 950, y: 500, vx: 0, vy: 0, damage: 100, critical: false, blastRadius: 0 },
+]
+stepGame(reportDamage, { x: 0, y: 0, dash: false }, 0.01)
+if (reportDamage.runStats.damage['firecracker-launcher'] !== 7 || reportDamage.runStats.damage['leaf-dart'] !== 0) throw new Error('输出统计不能包含溢出或重复扣血')
+reportDamage.shopOpen = true
+reportDamage.weaponLevels['firecracker-launcher'] = 1
+sellWeapon(reportDamage, 'firecracker-launcher')
+if (reportDamage.runStats.damage['firecracker-launcher'] !== 7) throw new Error('出售武器不应丢失历史输出')
+
+const reportInjury = createGameState(78, 'shimo')
+reportInjury.spawnTimer = 99
+reportInjury.bambooCooldown = 99
+reportInjury.player.shield = 2
+reportInjury.player.shieldTimer = 99
+reportInjury.player.armor = 0
+reportInjury.bossHazards = [{ id: 100, kind: 'root', x: 800, y: 500, radius: 46, life: 0, duration: 0.9, triggered: false }]
+stepGame(reportInjury, { x: 0, y: 0, dash: false }, 0.01)
+if (reportInjury.runStats.shieldAbsorbed !== 2 || reportInjury.runStats.injuries.root !== 10 || reportInjury.runStats.lastInjury !== 'root') throw new Error('根刺承伤应拆分护盾与生命')
+reportInjury.player.hp = 1
+reportInjury.player.hitCooldown = 0
+reportInjury.enemyProjectiles = [{ id: 101, x: 800, y: 500, vx: 0, vy: 0 }]
+stepGame(reportInjury, { x: 0, y: 0, dash: false }, 0.01)
+if (!reportInjury.gameOver || reportInjury.runStats.injuries['enemy-shot'] !== 1 || String(reportInjury.runStats.lastInjury) !== 'enemy-shot') throw new Error('致命弹幕只记录剩余生命并归因')
+const frozenReport = JSON.stringify(reportInjury.runStats)
+stepGame(reportInjury, { x: 1, y: 0, dash: true }, 1)
+if (JSON.stringify(reportInjury.runStats) !== frozenReport) throw new Error('结算后统计必须冻结')
+const freshReport = createGameState(79, 'shimo')
+if (freshReport.runStats.initialSeed !== 79 || Object.keys(freshReport.runStats.damage).length || Object.keys(freshReport.runStats.injuries).length || freshReport.runStats.shieldAbsorbed) throw new Error('新局必须从空战报开始')
+
+for (const raw of [null, '{broken', 'null', '[]', '{"version":2,"characters":{}}']) {
+  if (parseBattleRecords(raw).shanlan.runs !== 0) throw new Error('无效版本或存档应安全回退')
+}
+const savedRecords = parseBattleRecords(JSON.stringify({ version: 1, characters: {
+  shanlan: { runs: 5, wins: 2, bestWave: 10, bestKills: 350, bestClearTime: 560 },
+  qingtuan: { runs: 3, wins: 9, bestWave: 80, bestKills: 'bad', bestClearTime: -1 },
+  shimo: null,
+} }))
+if (savedRecords.shanlan.runs !== 5 || savedRecords.shanlan.bestClearTime !== 560 || savedRecords.qingtuan.wins !== 3 || savedRecords.qingtuan.bestWave !== 10 || savedRecords.qingtuan.bestKills !== 0 || savedRecords.shimo.runs !== 0) throw new Error('损坏字段不得破坏其他角色成绩，数值需遵守范围')
+if (JSON.stringify(parseBattleRecords(JSON.stringify({ version: 1, characters: savedRecords }))) !== JSON.stringify(savedRecords)) throw new Error('战绩存取往返必须保持数据')
 
 // 触及下限后，任意出售顺序都必须恢复角色基础值。
 for (const reverse of [false, true]) {
@@ -256,6 +304,8 @@ turretCheck.turretDeployCooldown = 0
 turretCheck.enemies.push({ id: 1, kind: 'chaser', x: 1100, y: 500, hp: 200, maxHp: 200, cooldown: 99, dashTime: 0, vx: 0, vy: 0 })
 stepGame(turretCheck, { x: 0, y: 0, dash: false }, 0.05)
 if (turretCheck.turrets.length !== 2 || turretCheck.playerProjectiles.filter((projectile) => projectile.kind === 'bolt').length !== 1) throw new Error('Lv.3 竹弩机关应部署两台，并由已就绪的机关自动射击')
+for (let tick = 0; tick < 16; tick += 1) stepGame(turretCheck, { x: 0, y: 0, dash: false }, 0.05)
+if (!(turretCheck.runStats.damage['bamboo-crossbow-turret']! > 0)) throw new Error('机关弩箭应计入机关输出')
 turretCheck.shopOpen = true
 const turretSaleCoins = turretCheck.player.coins
 if (!sellWeapon(turretCheck, 'bamboo-crossbow-turret') || turretCheck.turrets.some(Boolean) || turretCheck.playerProjectiles.some((projectile) => projectile.kind === 'bolt') || turretCheck.player.coins !== turretSaleCoins + 86) throw new Error('出售竹弩机关应返还 60% 总投入并清理机关与弩箭')
@@ -424,6 +474,8 @@ splitCheck.characterAttackCount = 5
 splitCheck.enemies.push({ id: 1, kind: 'chaser', x: 1100, y: 500, hp: 100, maxHp: 100, cooldown: 1, dashTime: 0, vx: 0, vy: 0 })
 stepGame(splitCheck, { x: 0, y: 0, dash: false }, 0.05)
 if (splitCheck.playerProjectiles.length !== 3 || splitCheck.playerProjectiles.some((projectile) => projectile.damage !== 11)) throw new Error('青团第 6 次射击应分裂为 3 枚 45% 伤害飞叶')
+for (let tick = 0; tick < 16; tick += 1) stepGame(splitCheck, { x: 0, y: 0, dash: false }, 0.05)
+if (!(splitCheck.runStats.damage['leaf-dart']! > 0)) throw new Error('分裂飞叶应归入专属武器输出')
 
 const shieldCheck = createGameState(13, 'shimo')
 shieldCheck.spawnTimer = 99
@@ -435,6 +487,7 @@ shieldCheck.player.shield = 1
 shieldCheck.enemies.push({ id: 1, kind: 'chaser', x: 800, y: 500, hp: 50, maxHp: 50, cooldown: 1, dashTime: 0, vx: 0, vy: 0 })
 stepGame(shieldCheck, { x: 0, y: 0, dash: false }, 0.05)
 if (shieldCheck.player.shield !== 0 || !shieldCheck.effects.some((effect) => effect.kind === 'shield-break') || shieldCheck.enemies[0].hp !== 26) throw new Error('石墨护盾破裂时应吸收伤害并反击周围敌人')
+if (shieldCheck.runStats.shieldAbsorbed !== 1 || Object.keys(shieldCheck.runStats.injuries).length || shieldCheck.runStats.damage['iron-bamboo-shield'] !== 24) throw new Error('完全吸收不能算生命损失，反击应归入铁竹盾')
 
 const shieldAttackCheck = createGameState(14, 'shimo')
 shieldAttackCheck.spawnTimer = 99
@@ -496,6 +549,14 @@ finalBoss.cooldown = 99
 finalBoss.hp = 1
 stepGame(victoryCheck, { x: 0, y: 0, dash: false }, 0.05)
 if (!victoryCheck.victory || victoryCheck.gameOver || victoryCheck.enemies.some((enemy) => enemy.kind === 'boss')) throw new Error('击败最终 Boss 后应进入胜利结算并移除 Boss')
+if (victoryCheck.kills !== 1) throw new Error('最终 Boss 应计入结算击破数')
+const victoryStats = JSON.stringify(victoryCheck.runStats)
+stepGame(victoryCheck, { x: 1, y: 1, dash: true }, 1)
+if (JSON.stringify(victoryCheck.runStats) !== victoryStats) throw new Error('胜利后伤害统计不能继续增长')
+for (const [state, id] of [[sweepCheck, 'bamboo-staff'], [whirlwindCheck, 'bamboo-staff'], [shieldAttackCheck, 'iron-bamboo-shield'], [gauntletCheck, 'iron-pot-gauntlets'], [firecrackerCheck, 'firecracker-launcher'], [bladeCheck, 'spinning-bamboo-blade'], [gourdCheck, 'panda-wine-gourd']] as const) {
+  const actualLoss = state.enemies.reduce((sum, enemy) => sum + enemy.maxHp - Math.max(0, enemy.hp), 0)
+  if (state.runStats.damage[id] !== actualLoss) throw new Error(`${id} 的战报输出必须等于敌人实际生命损失`)
+}
 
 const endurance = createGameState(7)
 const seen = new Set<string>()

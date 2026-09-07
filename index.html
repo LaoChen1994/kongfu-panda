@@ -38,6 +38,7 @@
                 <span class="character-weapon">青竹杖 · 中距 90° 横扫</span>
                 <span class="character-passive">每第 4 次近战变为 180° 旋风，并恢复生命。</span>
                 <small>弱点：攻击距离较短</small>
+                <span class="character-record" data-record="shanlan">尚未出战</span>
               </button>
               <button class="character-card" type="button" data-character="qingtuan">
                 <span class="character-role">远程 · 机动</span>
@@ -46,6 +47,7 @@
                 <span class="character-weapon">飞叶镖 · 长距高速飞叶</span>
                 <span class="character-passive">每第 6 次射击分裂为 3 枚飞叶。</span>
                 <small>弱点：生命较低</small>
+                <span class="character-record" data-record="qingtuan">尚未出战</span>
               </button>
               <button class="character-card" type="button" data-character="shimo">
                 <span class="character-role">肉盾 · 反击</span>
@@ -54,8 +56,10 @@
                 <span class="character-weapon">铁竹盾 · 短距 72° 盾击</span>
                 <span class="character-passive">每 8 秒获得护盾，破盾时震开周围敌人。</span>
                 <small>弱点：移动速度较慢</small>
+                <span class="character-record" data-record="shimo">尚未出战</span>
               </button>
             </div>
+            <p id="records-note" class="records-note">战绩保存在当前浏览器，完成一局后记录。</p>
           </div>
         </div>
         <div id="loading-overlay" class="loading-overlay" hidden>
@@ -75,6 +79,28 @@
             <strong id="overlay-title">竹息凝神</strong>
             <span id="overlay-copy">按 ESC 继续战斗</span>
           </div>
+        </div>
+        <div id="result-overlay" class="result-overlay" hidden>
+          <section class="result-panel" role="dialog" aria-modal="true" aria-labelledby="result-title" tabindex="-1">
+            <header class="result-header">
+              <img id="result-portrait" alt="" />
+              <div><p class="choice-kicker">灵竹谷 · 此战记事</p><h2 id="result-title"></h2><p id="result-context"></p></div>
+              <span id="result-seal" class="result-seal"></span>
+            </header>
+            <div class="result-scroll" tabindex="0" aria-label="战报详情，可滚动查看">
+              <dl id="result-stats" class="result-stats"></dl>
+              <p id="result-cause" class="result-cause"></p>
+              <div class="result-columns">
+                <section><h3>招式贡献</h3><p class="result-help">按实际扣血统计，含已出售武器的贡献</p><div id="result-damage"></div></section>
+                <section><h3>承伤来源</h3><p id="result-injury-note" class="result-help"></p><div id="result-injuries"></div></section>
+              </div>
+              <section class="result-build"><h3>终局行囊 <span id="result-item-count"></span></h3><div id="result-loadout" class="result-loadout"></div><div id="result-items" class="result-items"></div></section>
+              <section class="result-build"><h3>习得强化 <span id="result-upgrade-count"></span></h3><div id="result-upgrades" class="result-upgrades"></div></section>
+              <p id="result-record" class="result-record"></p>
+              <p id="result-save-status" class="result-help" role="status"></p>
+            </div>
+            <footer class="result-actions"><button id="result-retry" type="button">再战一局 <kbd>R</kbd></button><button id="result-select" type="button">返回选人</button></footer>
+          </section>
         </div>
         <div id="choice-overlay" class="choice-overlay" hidden>
           <div class="choice-panel">
