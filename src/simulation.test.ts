@@ -1,4 +1,4 @@
-import { buyItem, chooseUpgrade, continueWave, createGameState, enemyDefinitions, refreshShop, regularEnemyIds, sellItem, sellWeapon, stepGame, toggleShopLock, weaponIds } from './simulation.js'
+import { buyItem, characters, chooseUpgrade, continueWave, createGameState, enemyDefinitions, isSignatureWeaponId, refreshShop, regularEnemyIds, sellItem, sellWeapon, signatureWeapons, stepGame, toggleShopLock, weaponIds } from './simulation.js'
 import { parseBattleRecords } from './records.js'
 
 // 战报只计实际损失生命；同帧多次命中和出售武器不能篡改历史输出。
@@ -252,6 +252,71 @@ const coinsBeforeWeaponSale = weaponShopCheck.player.coins
 if (!sellWeapon(weaponShopCheck, 'iron-pot-gauntlets') || weaponShopCheck.player.coins !== coinsBeforeWeaponSale + 66 || weaponShopCheck.weaponLevels['iron-pot-gauntlets']) throw new Error('出售 Lv.5 通用武器应返还总投入的 60% 并空出武器栏')
 if (!buyItem(weaponShopCheck, 1)) throw new Error('出售通用武器后应能购买新的武器')
 
+for (const characterId of ['shanlan', 'qingtuan', 'shimo'] as const) {
+  const signatureCheck = createGameState(36, characterId)
+  const signatureId = characters[characterId].weaponId
+  const evolution = signatureWeapons[signatureId].evolution
+  signatureCheck.shopOpen = true
+  signatureCheck.player.coins = 1000
+  if (signatureCheck.signatureWeaponLevel !== 1 || signatureCheck.signatureWeaponEvolved) throw new Error('专属武器应从 Lv.1 未进化状态开始')
+  for (let level = 2; level <= 5; level += 1) {
+    signatureCheck.shopChoices[0] = signatureId
+    if (!buyItem(signatureCheck, 0) || signatureCheck.signatureWeaponLevel !== level) throw new Error('重复购买当前角色专属武器应逐级提升')
+  }
+  if (signatureCheck.signatureWeaponEvolved) throw new Error('缺少指定宝物时专属武器不得进化')
+  signatureCheck.shopChoices[0] = evolution.requiredItem
+  if (!buyItem(signatureCheck, 0) || !signatureCheck.signatureWeaponEvolved) throw new Error('Lv.5 专属武器与指定宝物应触发进化')
+  const itemIndex = signatureCheck.ownedItems.indexOf(evolution.requiredItem)
+  if (!sellItem(signatureCheck, itemIndex) || !signatureCheck.signatureWeaponEvolved) throw new Error('已经觉醒的专属武器不能因出售宝物而退化')
+  signatureCheck.shopChoices[0] = signatureId
+  if (buyItem(signatureCheck, 0)) throw new Error('满级或已进化专属武器不能继续购买')
+}
+
+const signatureSlotCheck = createGameState(37, 'shanlan')
+signatureSlotCheck.shopOpen = true
+signatureSlotCheck.player.coins = 1000
+signatureSlotCheck.weaponLevels = { 'iron-pot-gauntlets': 1, 'firecracker-launcher': 1, 'spinning-bamboo-blade': 1 }
+signatureSlotCheck.shopChoices[0] = characters.shanlan.weaponId
+if (!buyItem(signatureSlotCheck, 0) || signatureSlotCheck.signatureWeaponLevel !== 2 || Object.keys(signatureSlotCheck.weaponLevels).length !== 3) throw new Error('专属武器升级不能占用通用武器槽')
+for (let refresh = 0; refresh < 40; refresh += 1) {
+  refreshShop(signatureSlotCheck)
+  if (signatureSlotCheck.shopChoices.some((id) => id && isSignatureWeaponId(id) && id !== characters.shanlan.weaponId)) throw new Error('商城不能出现其他角色的专属武器')
+}
+
+const dragonStaffCheck = createGameState(38, 'shanlan')
+dragonStaffCheck.signatureWeaponLevel = 5
+dragonStaffCheck.signatureWeaponEvolved = true
+dragonStaffCheck.spawnTimer = 99
+dragonStaffCheck.bambooCooldown = 0
+dragonStaffCheck.enemies = [
+  { id: 1, kind: 'chaser', x: 890, y: 500, hp: 200, maxHp: 200, cooldown: 99, dashTime: 0, vx: 0, vy: 0 },
+  { id: 2, kind: 'chaser', x: 710, y: 500, hp: 200, maxHp: 200, cooldown: 99, dashTime: 0, vx: 0, vy: 0 },
+]
+stepGame(dragonStaffCheck, { x: 0, y: 0, dash: false }, 0.05)
+if (dragonStaffCheck.attacks[0]?.kind !== 'dragon-staff' || dragonStaffCheck.enemies.some((enemy) => enemy.hp === enemy.maxHp)) throw new Error('盘龙金竹应以环形连击命中角色前后敌人')
+
+const returningLeafCheck = createGameState(39, 'qingtuan')
+returningLeafCheck.signatureWeaponLevel = 5
+returningLeafCheck.signatureWeaponEvolved = true
+returningLeafCheck.spawnTimer = 99
+returningLeafCheck.leafCooldown = 0
+returningLeafCheck.enemies = [{ id: 1, kind: 'chaser', x: 1200, y: 500, hp: 500, maxHp: 500, cooldown: 99, dashTime: 0, vx: 0, vy: 0 }]
+stepGame(returningLeafCheck, { x: 0, y: 0, dash: false }, 0.05)
+if (!returningLeafCheck.playerProjectiles.every((projectile) => projectile.kind !== 'leaf' || projectile.pierces === 3)) throw new Error('万叶归宗飞叶应获得三次穿透')
+for (let tick = 0; tick < 24; tick += 1) stepGame(returningLeafCheck, { x: 0, y: 0, dash: false }, 0.05)
+if (!returningLeafCheck.playerProjectiles.some((projectile) => projectile.kind === 'leaf' && projectile.returning)) throw new Error('万叶归宗飞叶到达末端后应分裂回射')
+
+const mountainShieldCheck = createGameState(40, 'shimo')
+mountainShieldCheck.signatureWeaponLevel = 5
+mountainShieldCheck.signatureWeaponEvolved = true
+mountainShieldCheck.spawnTimer = 99
+mountainShieldCheck.bambooCooldown = 99
+mountainShieldCheck.player.shield = 1
+mountainShieldCheck.player.shieldTimer = 99
+mountainShieldCheck.enemies = [{ id: 1, kind: 'chaser', x: 800, y: 500, hp: 200, maxHp: 200, cooldown: 99, dashTime: 0, vx: 0, vy: 0 }]
+stepGame(mountainShieldCheck, { x: 0, y: 0, dash: false }, 0.05)
+if (!mountainShieldCheck.groundZones.some((zone) => zone.kind === 'mountain') || mountainShieldCheck.runStats.damage['iron-bamboo-shield']! <= 24) throw new Error('不动熊山破盾后应生成持续震地波并计入铁竹盾输出')
+
 const gauntletCheck = createGameState(20)
 gauntletCheck.spawnTimer = 99
 gauntletCheck.bambooCooldown = 99
@@ -317,7 +382,7 @@ pausedWeaponCheck.shopOpen = true
 stepGame(pausedWeaponCheck, { x: 0, y: 0, dash: false }, 0.05)
 if (pausedWeaponCheck.gauntletCooldown !== 0.2) throw new Error('商城打开时武器冷却必须暂停')
 pausedWeaponCheck.gourdCooldown = 0.4
-pausedWeaponCheck.groundZones.push({ id: 99, x: 800, y: 500, radius: 54, life: 2, duration: 2, tickCooldown: 0.2, damage: 5 })
+pausedWeaponCheck.groundZones.push({ id: 99, kind: 'wine', x: 800, y: 500, radius: 54, life: 2, duration: 2, tickCooldown: 0.2, damage: 5 })
 pausedWeaponCheck.turrets.push({ id: 100, x: 840, y: 500, life: 8, cooldown: 0.3, level: 1, angle: 0 })
 stepGame(pausedWeaponCheck, { x: 0, y: 0, dash: false }, 0.05)
 if (pausedWeaponCheck.gourdCooldown !== 0.4 || pausedWeaponCheck.groundZones[0].life !== 2 || pausedWeaponCheck.turrets[0].life !== 8) throw new Error('商城打开时酒焰、机关和新武器冷却必须暂停')

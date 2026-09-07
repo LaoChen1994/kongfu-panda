@@ -2,11 +2,12 @@ export const regularEnemyIds = ['chaser', 'dasher', 'shooter', 'boar', 'assassin
 export type RegularEnemyKind = typeof regularEnemyIds[number]
 export type EnemyKind = RegularEnemyKind | 'boss'
 export type CharacterId = 'shanlan' | 'qingtuan' | 'shimo'
+export type SignatureWeaponId = 'bamboo-staff' | 'leaf-dart' | 'iron-bamboo-shield'
 export type UpgradeId = 'power' | 'haste' | 'vitality' | 'footwork' | 'leaf-volley' | 'wide-sweep'
 export type ItemId = 'martial-belt' | 'wind-feather' | 'iron-bracer' | 'panda-roller' | 'bamboo-dew-pill' | 'food-god-lunchbox' | 'jade-eyepatch' | 'gale-leggings' | 'mountain-stone' | 'fortune-paw' | 'spirit-bamboo-tube' | 'tiger-seal'
 export const weaponIds = ['iron-pot-gauntlets', 'firecracker-launcher', 'spinning-bamboo-blade', 'panda-wine-gourd', 'bamboo-crossbow-turret'] as const
 export type WeaponId = typeof weaponIds[number]
-export type ShopProductId = ItemId | WeaponId
+export type ShopProductId = ItemId | WeaponId | SignatureWeaponId
 export type DamageSource = WeaponId | 'bamboo-staff' | 'leaf-dart' | 'iron-bamboo-shield' | 'panda-roller'
 export const injurySources = {
   chaser: '竹鼠接触', dasher: '山猴冲撞', shooter: '毒蜂接触', boar: '野猪撞击',
@@ -33,22 +34,47 @@ export const characters: Record<CharacterId, {
   weaponName: string
   weaponDescription: string
   weaponImage: string
+  weaponId: SignatureWeaponId
   animation: string
 }> = {
   shanlan: {
     name: '山岚', role: '近战 · 爆发', description: '贴近敌群，用大范围横扫打出持续压制。',
     passive: '每第 4 次近战变为 180° 旋风，并恢复 1% 最大生命。', weakness: '攻击距离较短',
-    portrait: 'assets/characters/panda-wanderer.png', weaponName: '青竹杖', weaponDescription: '中距 90° 横扫', weaponImage: 'assets/weapons/bamboo-staff.png', animation: 'panda',
+    portrait: 'assets/characters/panda-wanderer.png', weaponName: '青竹杖', weaponDescription: '中距 90° 横扫', weaponImage: 'assets/weapons/bamboo-staff.png', weaponId: 'bamboo-staff', animation: 'panda',
   },
   qingtuan: {
     name: '青团', role: '远程 · 机动', description: '保持距离，用高速飞叶穿梭清场。',
     passive: '每第 6 次射击分裂为 3 枚各造成 45% 伤害的飞叶。', weakness: '生命较低',
-    portrait: 'assets/characters/qingtuan.png', weaponName: '飞叶镖', weaponDescription: '长距高速飞叶', weaponImage: 'assets/weapons/leaf-dart.png', animation: 'qingtuan',
+    portrait: 'assets/characters/qingtuan.png', weaponName: '飞叶镖', weaponDescription: '长距高速飞叶', weaponImage: 'assets/weapons/leaf-dart.png', weaponId: 'leaf-dart', animation: 'qingtuan',
   },
   shimo: {
     name: '石墨', role: '肉盾 · 反击', description: '顶住敌潮，用铁盾撞开近身威胁。',
     passive: '每 8 秒获得 8% 最大生命护盾，破盾时震开周围敌人。', weakness: '移动速度较慢',
-    portrait: 'assets/characters/shimo.png', weaponName: '铁竹盾', weaponDescription: '短距 72° 盾击', weaponImage: 'assets/weapons/iron-bamboo-shield.png', animation: 'shimo',
+    portrait: 'assets/characters/shimo.png', weaponName: '铁竹盾', weaponDescription: '短距 72° 盾击', weaponImage: 'assets/weapons/iron-bamboo-shield.png', weaponId: 'iron-bamboo-shield', animation: 'shimo',
+  },
+}
+
+export const signatureWeapons: Record<SignatureWeaponId, {
+  characterId: CharacterId
+  name: string
+  rarity: string
+  description: string
+  preview: string
+  price: number
+  image: string
+  evolution: { name: string; description: string; image: string; requiredItem: ItemId }
+}> = {
+  'bamboo-staff': {
+    characterId: 'shanlan', name: '青竹杖', rarity: '普通', description: '山岚专属；升级提高伤害与横扫范围', preview: '专属武器升级，不占通用武器槽', price: 26, image: 'assets/weapons/bamboo-staff.png',
+    evolution: { name: '盘龙金竹', description: '横扫化为两段环形连击，末击强力击退', image: 'assets/weapons/coiling-dragon-bamboo.png', requiredItem: 'martial-belt' },
+  },
+  'leaf-dart': {
+    characterId: 'qingtuan', name: '飞叶镖', rarity: '普通', description: '青团专属；升级提高飞叶伤害', preview: '专属武器升级，不占通用武器槽', price: 26, image: 'assets/weapons/leaf-dart.png',
+    evolution: { name: '万叶归宗', description: '飞叶穿透敌群，并在末端分裂回射', image: 'assets/weapons/myriad-leaf-return.png', requiredItem: 'wind-feather' },
+  },
+  'iron-bamboo-shield': {
+    characterId: 'shimo', name: '铁竹盾', rarity: '普通', description: '石墨专属；升级提高盾击伤害与范围', preview: '专属武器升级，不占通用武器槽', price: 26, image: 'assets/weapons/iron-bamboo-shield.png',
+    evolution: { name: '不动熊山', description: '护盾破裂后留下持续震地波', image: 'assets/weapons/immovable-bear-mountain.png', requiredItem: 'mountain-stone' },
   },
 }
 
@@ -85,6 +111,7 @@ export const weapons: Record<WeaponId, { name: string; rarity: string; descripti
 }
 
 export const isWeaponId = (id: ShopProductId): id is WeaponId => id in weapons
+export const isSignatureWeaponId = (id: ShopProductId): id is SignatureWeaponId => id in signatureWeapons
 
 export type GameState = {
   characterId: CharacterId
@@ -122,6 +149,8 @@ export type GameState = {
   lockedShopIndices: number[]
   shopRefreshCost: number
   ownedItems: ItemId[]
+  signatureWeaponLevel: number
+  signatureWeaponEvolved: boolean
   weaponLevels: Partial<Record<WeaponId, number>>
   chosenUpgrades: UpgradeId[]
   bossAttackCount: number
@@ -185,10 +214,10 @@ export type GameState = {
     enraged?: boolean
   }>
   bossHazards: Array<{ id: number; kind: 'root' | 'shockwave'; x: number; y: number; radius: number; life: number; duration: number; triggered: boolean }>
-  playerProjectiles: Array<{ id: number; kind: 'leaf' | 'firecracker' | 'bolt'; x: number; y: number; vx: number; vy: number; damage: number; critical: boolean; blastRadius: number }>
+  playerProjectiles: Array<{ id: number; kind: 'leaf' | 'firecracker' | 'bolt'; x: number; y: number; vx: number; vy: number; damage: number; critical: boolean; blastRadius: number; travel?: number; maxTravel?: number; pierces?: number; returning?: boolean; splitOnEnd?: boolean; hitIds?: number[] }>
   enemyProjectiles: Array<{ id: number; x: number; y: number; vx: number; vy: number }>
-  attacks: Array<{ id: number; x: number; y: number; life: number; radius: number; angle: number; arc: number; critical: boolean; kind: 'staff' | 'whirlwind' | 'shield' | 'fists' }>
-  groundZones: Array<{ id: number; x: number; y: number; radius: number; life: number; duration: number; tickCooldown: number; damage: number }>
+  attacks: Array<{ id: number; x: number; y: number; life: number; radius: number; angle: number; arc: number; critical: boolean; kind: 'staff' | 'whirlwind' | 'dragon-staff' | 'shield' | 'mountain-shield' | 'fists' }>
+  groundZones: Array<{ id: number; kind: 'wine' | 'mountain'; x: number; y: number; radius: number; life: number; duration: number; tickCooldown: number; damage: number }>
   enemyZones: Array<{ id: number; x: number; y: number; radius: number; life: number; duration: number }>
   turrets: Array<{ id: number; x: number; y: number; life: number; cooldown: number; level: number; angle: number }>
   drops: Array<{ id: number; kind: 'xp' | 'coin' | 'heal'; x: number; y: number; value: number }>
@@ -229,6 +258,28 @@ const recordInjury = (state: GameState, damage: number, absorbed: number, source
   }
 }
 
+const triggerShieldBreak = (state: GameState): void => {
+  state.effects.push({ id: state.nextId++, kind: 'shield-break', x: state.player.x, y: state.player.y, value: 24, life: 0.42, angle: 0 })
+  for (const enemy of state.enemies) {
+    const breakX = enemy.x - state.player.x
+    const breakY = enemy.y - state.player.y
+    const breakDistance = Math.max(0.001, Math.hypot(breakX, breakY))
+    if (breakDistance <= 110) {
+      dealEnemyDamage(state, enemy, 24, state.player.x, state.player.y, 'iron-bamboo-shield')
+      if (enemy.kind !== 'boss') {
+        enemy.x += (breakX / breakDistance) * 48
+        enemy.y += (breakY / breakDistance) * 48
+      }
+    }
+  }
+  if (state.characterId === 'shimo' && state.signatureWeaponEvolved) {
+    state.groundZones.push({
+      id: state.nextId++, kind: 'mountain', x: state.player.x, y: state.player.y, radius: 150,
+      life: 2.4, duration: 2.4, tickCooldown: 0, damage: Math.round(14 * state.player.damage * state.player.meleeDamage),
+    })
+  }
+}
+
 export const createGameState = (seed = 20260831, characterId: CharacterId = 'shanlan'): GameState => ({
   characterId,
   seed,
@@ -259,6 +310,8 @@ export const createGameState = (seed = 20260831, characterId: CharacterId = 'sha
   lockedShopIndices: [],
   shopRefreshCost: 4,
   ownedItems: [],
+  signatureWeaponLevel: 1,
+  signatureWeaponEvolved: false,
   weaponLevels: {},
   chosenUpgrades: [],
   bossAttackCount: 0,
@@ -331,10 +384,13 @@ export const chooseUpgrade = (state: GameState, id: UpgradeId): boolean => {
 export const buyItem = (state: GameState, index: number): boolean => {
   const id = state.shopChoices[index]
   if (!id) return false
-  const product = isWeaponId(id) ? weapons[id] : items[id]
-  const unique = !isWeaponId(id) && Boolean(items[id].unique)
+  const product = isWeaponId(id) ? weapons[id] : isSignatureWeaponId(id) ? signatureWeapons[id] : items[id]
+  const unique = !isWeaponId(id) && !isSignatureWeaponId(id) && Boolean(items[id].unique)
   if (!state.shopOpen || state.player.coins < product.price) return false
-  if (isWeaponId(id)) {
+  if (isSignatureWeaponId(id)) {
+    if (id !== characters[state.characterId].weaponId || state.signatureWeaponLevel >= 5 || state.signatureWeaponEvolved) return false
+    state.signatureWeaponLevel += 1
+  } else if (isWeaponId(id)) {
     const level = state.weaponLevels[id] ?? 0
     if (level >= 5 || level === 0 && Object.keys(state.weaponLevels).length >= 3) return false
     state.weaponLevels[id] = level + 1
@@ -368,6 +424,10 @@ export const buyItem = (state: GameState, index: number): boolean => {
   }
   recalculateBuildStats(state)
   if (id === 'bamboo-dew-pill') state.player.hp = Math.min(state.player.maxHp, state.player.hp + 10)
+  const signature = signatureWeapons[characters[state.characterId].weaponId]
+  if (!state.signatureWeaponEvolved && state.signatureWeaponLevel === 5 && state.ownedItems.includes(signature.evolution.requiredItem)) {
+    state.signatureWeaponEvolved = true
+  }
   return true
 }
 
@@ -375,8 +435,10 @@ export const refreshShop = (state: GameState): boolean => {
   if (!state.shopOpen || state.player.coins < state.shopRefreshCost || state.shopChoices.every((id, index) => id !== null && state.lockedShopIndices.includes(index))) return false
   state.player.coins -= state.shopRefreshCost
   state.shopRefreshCost += 2
-  const pool: ShopProductId[] = [...Object.keys(items) as ItemId[], ...weaponIds].filter((id) => (
-    isWeaponId(id) ? (state.weaponLevels[id] ?? 0) < 5 : !items[id].unique || !state.ownedItems.includes(id)
+  const signatureId = characters[state.characterId].weaponId
+  const pool: ShopProductId[] = [...Object.keys(items) as ItemId[], ...weaponIds, signatureId].filter((id) => (
+    isSignatureWeaponId(id) ? state.signatureWeaponLevel < 5 && !state.signatureWeaponEvolved
+      : isWeaponId(id) ? (state.weaponLevels[id] ?? 0) < 5 : !items[id].unique || !state.ownedItems.includes(id)
   ))
   const selected = state.lockedShopIndices.map((index) => state.shopChoices[index]).filter((id): id is ShopProductId => id !== null)
   state.shopChoices = state.shopChoices.map((id, index) => {
@@ -384,7 +446,7 @@ export const refreshShop = (state: GameState): boolean => {
     const available = pool.filter((candidate) => !selected.includes(candidate))
     const rarityRoll = random(state) * 100
     const rarity = rarityRoll < 60 ? '普通' : rarityRoll < 87 ? '稀有' : '史诗'
-    const rarityPool = available.filter((candidate) => (isWeaponId(candidate) ? weapons[candidate] : items[candidate]).rarity === rarity)
+    const rarityPool = available.filter((candidate) => (isWeaponId(candidate) ? weapons[candidate] : isSignatureWeaponId(candidate) ? signatureWeapons[candidate] : items[candidate]).rarity === rarity)
     const choices = rarityPool.length ? rarityPool : available
     const choice = choices[Math.floor(random(state) * choices.length)] ?? null
     if (choice) selected.push(choice)
@@ -436,7 +498,7 @@ export const sellWeapon = (state: GameState, id: WeaponId): boolean => {
   if (!state.shopOpen || level === 0) return false
   state.player.coins += Math.floor(weapons[id].price * level * 0.6)
   delete state.weaponLevels[id]
-  if (id === 'panda-wine-gourd') state.groundZones = []
+  if (id === 'panda-wine-gourd') state.groundZones = state.groundZones.filter((zone) => zone.kind !== 'wine')
   if (id === 'bamboo-crossbow-turret') {
     state.turrets = []
     state.playerProjectiles = state.playerProjectiles.filter((projectile) => projectile.kind !== 'bolt')
@@ -684,21 +746,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
       state.player.hp -= damage - absorbed
       state.player.hitCooldown = 1.15
       state.effects.push({ id: state.nextId++, kind: 'player-hit', x: state.player.x, y: state.player.y, value: damage, life: 0.35, angle: Math.atan2(dy, dx) })
-      if (shieldBefore > 0 && state.player.shield === 0) {
-        state.effects.push({ id: state.nextId++, kind: 'shield-break', x: state.player.x, y: state.player.y, value: 24, life: 0.42, angle: 0 })
-        for (const nearbyEnemy of state.enemies) {
-          const breakX = nearbyEnemy.x - state.player.x
-          const breakY = nearbyEnemy.y - state.player.y
-          const breakDistance = Math.max(0.001, Math.hypot(breakX, breakY))
-          if (breakDistance <= 110) {
-            dealEnemyDamage(state, nearbyEnemy, 24, state.player.x, state.player.y, 'iron-bamboo-shield')
-            if (nearbyEnemy.kind !== 'boss') {
-              nearbyEnemy.x += (breakX / breakDistance) * 48
-              nearbyEnemy.y += (breakY / breakDistance) * 48
-            }
-          }
-        }
-      }
+      if (shieldBefore > 0 && state.player.shield === 0) triggerShieldBreak(state)
     }
   }
 
@@ -718,28 +766,14 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
         state.player.hp -= damage - absorbed
         state.player.hitCooldown = 1.05
         state.effects.push({ id: state.nextId++, kind: 'player-hit', x: state.player.x, y: state.player.y, value: damage, life: 0.35, angle: Math.atan2(state.player.y - hazard.y, state.player.x - hazard.x) })
-        if (shieldBefore > 0 && state.player.shield === 0) {
-          state.effects.push({ id: state.nextId++, kind: 'shield-break', x: state.player.x, y: state.player.y, value: 24, life: 0.42, angle: 0 })
-          for (const enemy of state.enemies) {
-            const breakX = enemy.x - state.player.x
-            const breakY = enemy.y - state.player.y
-            const breakDistance = Math.max(0.001, Math.hypot(breakX, breakY))
-            if (breakDistance <= 110) {
-              dealEnemyDamage(state, enemy, 24, state.player.x, state.player.y, 'iron-bamboo-shield')
-              if (enemy.kind !== 'boss') {
-                enemy.x += (breakX / breakDistance) * 48
-                enemy.y += (breakY / breakDistance) * 48
-              }
-            }
-          }
-        }
+        if (shieldBefore > 0 && state.player.shield === 0) triggerShieldBreak(state)
       }
     }
   }
 
   if (state.characterId !== 'qingtuan' && state.bambooCooldown <= 0) {
     let target: GameState['enemies'][number] | undefined
-    const attackRadius = state.player.meleeRange + (state.characterId === 'shimo' ? 8 : 24)
+    const attackRadius = state.player.meleeRange + (state.characterId === 'shimo' ? 8 : 24) + (state.signatureWeaponLevel - 1) * 4 + (state.characterId === 'shanlan' && state.signatureWeaponEvolved ? 18 : 0)
     let targetDistance = attackRadius
     for (const enemy of state.enemies) {
       const distance = Math.hypot(enemy.x - state.player.x, enemy.y - state.player.y)
@@ -750,30 +784,34 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
       const angle = Math.atan2(target.y - state.player.y, target.x - state.player.x)
       const critical = random(state) < state.player.criticalChance
       const whirlwind = state.characterId === 'shanlan' && state.characterAttackCount % 4 === 0
-      const arc = whirlwind ? Math.PI / 2 : state.characterId === 'shimo' ? Math.PI / 5 : Math.PI / 4
-      const damage = Math.round((state.characterId === 'shimo' ? 34 : 38) * state.player.damage * state.player.meleeDamage * (critical ? 1.75 : 1))
-      let hitCount = 0
-      for (const enemy of state.enemies) {
-        const dx = enemy.x - state.player.x
-        const dy = enemy.y - state.player.y
-        const distance = Math.max(0.001, Math.hypot(dx, dy))
-        const angleDelta = Math.atan2(Math.sin(Math.atan2(dy, dx) - angle), Math.cos(Math.atan2(dy, dx) - angle))
-        if (distance <= attackRadius && Math.abs(angleDelta) <= arc && hitCount < 8) {
-          hitCount += 1
-          const appliedDamage = dealEnemyDamage(state, enemy, damage, state.player.x, state.player.y, state.characterId === 'shimo' ? 'iron-bamboo-shield' : 'bamboo-staff')
-          if (enemy.kind !== 'boss') {
-            const knockback = state.characterId === 'shimo' ? critical ? 46 : 34 : critical ? 22 : 14
-            enemy.x = Math.min(1550, Math.max(50, enemy.x + (dx / distance) * knockback))
-            enemy.y = Math.min(950, Math.max(75, enemy.y + (dy / distance) * knockback))
+      const dragonStaff = state.characterId === 'shanlan' && state.signatureWeaponEvolved
+      const arc = dragonStaff ? Math.PI : whirlwind ? Math.PI / 2 : state.characterId === 'shimo' ? Math.PI / 5 : Math.PI / 4
+      const damage = Math.round((state.characterId === 'shimo' ? 34 : 38) * (1 + (state.signatureWeaponLevel - 1) * 0.12) * state.player.damage * state.player.meleeDamage * (critical ? 1.75 : 1))
+      const strikes = dragonStaff ? 2 : 1
+      for (let strike = 0; strike < strikes; strike += 1) {
+        let hitCount = 0
+        for (const enemy of state.enemies) {
+          const dx = enemy.x - state.player.x
+          const dy = enemy.y - state.player.y
+          const distance = Math.max(0.001, Math.hypot(dx, dy))
+          const angleDelta = Math.atan2(Math.sin(Math.atan2(dy, dx) - angle), Math.cos(Math.atan2(dy, dx) - angle))
+          if (enemy.hp > 0 && distance <= attackRadius && Math.abs(angleDelta) <= arc && hitCount < (dragonStaff ? 12 : 8)) {
+            hitCount += 1
+            const appliedDamage = dealEnemyDamage(state, enemy, Math.round(damage * (strike === 0 ? 1 : 0.6)), state.player.x, state.player.y, state.characterId === 'shimo' ? 'iron-bamboo-shield' : 'bamboo-staff')
+            if (enemy.kind !== 'boss') {
+              const knockback = dragonStaff && strike === 1 ? 56 : state.characterId === 'shimo' ? critical ? 46 : 34 : critical ? 22 : 14
+              enemy.x = Math.min(1550, Math.max(50, enemy.x + (dx / distance) * knockback))
+              enemy.y = Math.min(950, Math.max(75, enemy.y + (dy / distance) * knockback))
+            }
+            state.effects.push({ id: state.nextId++, kind: critical ? 'crit' : 'hit', x: enemy.x, y: enemy.y - 28, value: appliedDamage, life: 0.42, angle })
           }
-          state.effects.push({ id: state.nextId++, kind: critical ? 'crit' : 'hit', x: enemy.x, y: enemy.y - 28, value: appliedDamage, life: 0.42, angle })
         }
+        state.attacks.push({
+          id: state.nextId++, x: state.player.x, y: state.player.y, life: 0.28 + strike * 0.08, radius: attackRadius - strike * 12, angle: angle + strike * 0.35, arc, critical,
+          kind: dragonStaff ? 'dragon-staff' : whirlwind ? 'whirlwind' : state.characterId === 'shimo' && state.signatureWeaponEvolved ? 'mountain-shield' : state.characterId === 'shimo' ? 'shield' : 'staff',
+        })
       }
       if (whirlwind) state.player.hp = Math.min(state.player.maxHp, state.player.hp + Math.max(1, Math.ceil(state.player.maxHp * 0.01)))
-      state.attacks.push({
-        id: state.nextId++, x: state.player.x, y: state.player.y, life: 0.28, radius: attackRadius, angle, arc, critical,
-        kind: whirlwind ? 'whirlwind' : state.characterId === 'shimo' ? 'shield' : 'staff',
-      })
     }
     state.bambooCooldown = 0.62 / state.player.attackSpeed
   }
@@ -795,7 +833,9 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
         state.playerProjectiles.push({
           id: state.nextId++, kind: 'leaf', x: state.player.x, y: state.player.y,
           vx: Math.cos(angle) * state.player.projectileSpeed, vy: Math.sin(angle) * state.player.projectileSpeed,
-          damage: Math.round(24 * state.player.damage * state.player.rangedDamage * (critical ? 1.75 : 1) * (split ? 0.45 : 1)), critical, blastRadius: 0,
+          damage: Math.round((24 + (state.signatureWeaponLevel - 1) * 4) * state.player.damage * state.player.rangedDamage * (critical ? 1.75 : 1) * (split ? 0.45 : 1)), critical, blastRadius: 0,
+          travel: 0, maxTravel: state.signatureWeaponEvolved ? 520 : undefined, pierces: state.signatureWeaponEvolved ? 3 : 1,
+          splitOnEnd: state.signatureWeaponEvolved, hitIds: [],
         })
       }
     }
@@ -900,7 +940,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
       const x = Math.min(1530, Math.max(70, target.x + Math.cos(targetAngle + Math.PI / 2) * offset))
       const y = Math.min(930, Math.max(95, target.y + Math.sin(targetAngle + Math.PI / 2) * offset))
       state.groundZones.push({
-        id: state.nextId++, x, y, radius: 48 + gourdLevel * 6,
+        id: state.nextId++, kind: 'wine', x, y, radius: 48 + gourdLevel * 6,
         life: 2.4 + gourdLevel * 0.15, duration: 2.4 + gourdLevel * 0.15,
         tickCooldown: 0, damage: Math.round((5 + gourdLevel * 2) * state.player.damage * state.player.rangedDamage),
       })
@@ -914,7 +954,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
     if (zone.tickCooldown <= 0) {
       for (const enemy of state.enemies) {
         if (Math.hypot(enemy.x - zone.x, enemy.y - zone.y) <= zone.radius) {
-          const appliedDamage = dealEnemyDamage(state, enemy, zone.damage, zone.x, zone.y, 'panda-wine-gourd')
+          const appliedDamage = dealEnemyDamage(state, enemy, zone.damage, zone.x, zone.y, zone.kind === 'mountain' ? 'iron-bamboo-shield' : 'panda-wine-gourd')
           state.effects.push({ id: state.nextId++, kind: 'firecracker-hit', x: enemy.x, y: enemy.y - 28, value: appliedDamage, life: 0.42, angle: Math.atan2(enemy.y - zone.y, enemy.x - zone.x) })
         }
       }
@@ -951,11 +991,30 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
     }
   }
 
+  const returningLeaves: GameState['playerProjectiles'] = []
   for (const projectile of state.playerProjectiles) {
+    const speed = Math.hypot(projectile.vx, projectile.vy)
     projectile.x += projectile.vx * dt
     projectile.y += projectile.vy * dt
+    projectile.travel = (projectile.travel ?? 0) + speed * dt
+    if (projectile.kind === 'leaf' && projectile.maxTravel && projectile.travel >= projectile.maxTravel) {
+      if (projectile.splitOnEnd) {
+        const returnAngle = Math.atan2(state.player.y - projectile.y, state.player.x - projectile.x)
+        for (const offset of [-0.2, 0, 0.2]) {
+          const angle = returnAngle + offset
+          returningLeaves.push({
+            id: state.nextId++, kind: 'leaf', x: projectile.x, y: projectile.y,
+            vx: Math.cos(angle) * state.player.projectileSpeed * 0.9, vy: Math.sin(angle) * state.player.projectileSpeed * 0.9,
+            damage: Math.max(1, Math.round(projectile.damage * 0.55)), critical: projectile.critical, blastRadius: 0,
+            travel: 0, maxTravel: 520, pierces: 2, returning: true, splitOnEnd: false, hitIds: [],
+          })
+        }
+      }
+      projectile.damage = 0
+      continue
+    }
     for (const enemy of state.enemies) {
-      if (projectile.damage > 0 && Math.hypot(enemy.x - projectile.x, enemy.y - projectile.y) < 24) {
+      if (projectile.damage > 0 && !projectile.hitIds?.includes(enemy.id) && Math.hypot(enemy.x - projectile.x, enemy.y - projectile.y) < 24) {
         if (projectile.kind === 'firecracker') {
           state.effects.push({ id: state.nextId++, kind: 'firecracker-blast', x: projectile.x, y: projectile.y, value: projectile.blastRadius, life: 0.38, angle: 0 })
           for (const blastTarget of state.enemies) {
@@ -968,11 +1027,14 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
           const appliedDamage = dealEnemyDamage(state, enemy, projectile.damage, projectile.x - projectile.vx * dt, projectile.y - projectile.vy * dt, projectile.kind === 'leaf' ? 'leaf-dart' : 'bamboo-crossbow-turret')
           state.effects.push({ id: state.nextId++, kind: projectile.critical ? 'projectile-crit' : 'projectile-hit', x: enemy.x, y: enemy.y - 28, value: appliedDamage, life: 0.42, angle: Math.atan2(projectile.vy, projectile.vx) })
         }
-        projectile.damage = 0
+        projectile.hitIds?.push(enemy.id)
+        projectile.pierces = (projectile.pierces ?? 1) - 1
+        if (projectile.kind !== 'leaf' || projectile.pierces <= 0) projectile.damage = 0
         break
       }
     }
   }
+  state.playerProjectiles.push(...returningLeaves)
 
   for (const projectile of state.enemyProjectiles) {
     projectile.x += projectile.vx * dt
@@ -987,21 +1049,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
       state.player.hitCooldown = 1.05
       state.effects.push({ id: state.nextId++, kind: 'player-hit', x: state.player.x, y: state.player.y, value: damage, life: 0.35, angle: Math.atan2(projectile.vy, projectile.vx) })
       projectile.x = -100
-      if (shieldBefore > 0 && state.player.shield === 0) {
-        state.effects.push({ id: state.nextId++, kind: 'shield-break', x: state.player.x, y: state.player.y, value: 24, life: 0.42, angle: 0 })
-        for (const enemy of state.enemies) {
-          const breakX = enemy.x - state.player.x
-          const breakY = enemy.y - state.player.y
-          const breakDistance = Math.max(0.001, Math.hypot(breakX, breakY))
-          if (breakDistance <= 110) {
-            dealEnemyDamage(state, enemy, 24, state.player.x, state.player.y, 'iron-bamboo-shield')
-            if (enemy.kind !== 'boss') {
-              enemy.x += (breakX / breakDistance) * 48
-              enemy.y += (breakY / breakDistance) * 48
-            }
-          }
-        }
-      }
+      if (shieldBefore > 0 && state.player.shield === 0) triggerShieldBreak(state)
     }
   }
 
@@ -1084,8 +1132,10 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
     const boss = state.enemies.find((enemy) => enemy.kind === 'boss')
     if (boss) boss.enraged = true
   } else if (!state.victory && state.waveTime >= state.waveDuration) {
-    const pool: ShopProductId[] = [...Object.keys(items) as ItemId[], ...weaponIds].filter((id) => (
-      isWeaponId(id) ? (state.weaponLevels[id] ?? 0) < 5 : !items[id].unique || !state.ownedItems.includes(id)
+    const signatureId = characters[state.characterId].weaponId
+    const pool: ShopProductId[] = [...Object.keys(items) as ItemId[], ...weaponIds, signatureId].filter((id) => (
+      isSignatureWeaponId(id) ? state.signatureWeaponLevel < 5 && !state.signatureWeaponEvolved
+        : isWeaponId(id) ? (state.weaponLevels[id] ?? 0) < 5 : !items[id].unique || !state.ownedItems.includes(id)
     ))
     const selected = state.lockedShopIndices.map((index) => state.shopChoices[index]).filter((id): id is ShopProductId => id !== null)
     state.shopChoices = state.shopChoices.map((id, index) => {
@@ -1093,7 +1143,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
       const available = pool.filter((candidate) => !selected.includes(candidate))
       const rarityRoll = random(state) * 100
       const rarity = rarityRoll < 60 ? '普通' : rarityRoll < 87 ? '稀有' : '史诗'
-      const rarityPool = available.filter((candidate) => (isWeaponId(candidate) ? weapons[candidate] : items[candidate]).rarity === rarity)
+      const rarityPool = available.filter((candidate) => (isWeaponId(candidate) ? weapons[candidate] : isSignatureWeaponId(candidate) ? signatureWeapons[candidate] : items[candidate]).rarity === rarity)
       const choices = rarityPool.length ? rarityPool : available
       const choice = choices[Math.floor(random(state) * choices.length)] ?? null
       if (choice) selected.push(choice)
