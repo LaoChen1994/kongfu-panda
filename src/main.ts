@@ -13,6 +13,29 @@ try {
 } catch {
   recordsAvailable = false
 }
+let gameSettings = { version: 1, screenShake: true, reducedMotion: false }
+let settingsAvailable = true
+try {
+  const savedSettings = localStorage.getItem('panda-game-settings')
+  if (savedSettings) {
+    try {
+      const stored = JSON.parse(savedSettings)
+      if (stored?.version === 1 && typeof stored.screenShake === 'boolean' && typeof stored.reducedMotion === 'boolean') gameSettings = stored
+    } catch { /* 损坏记录使用默认值 */ }
+  }
+} catch {
+  settingsAvailable = false
+}
+document.documentElement.dataset.reducedMotion = String(gameSettings.reducedMotion)
+const onboardingPlaytestMode = import.meta.env.DEV ? new URLSearchParams(location.search).get('playtest-onboarding') : null
+const onboardingPlaytest = onboardingPlaytestMode !== null
+let onboardingStep = 0
+try {
+  const storedStep = Number(localStorage.getItem('panda-onboarding-step'))
+  onboardingStep = onboardingPlaytest ? onboardingPlaytestMode === 'upgrade' ? 2 : onboardingPlaytestMode === 'shop' ? 3 : 0 : Object.values(battleRecords).some((record) => record.runs > 0) ? 4 : Number.isInteger(storedStep) && storedStep >= 0 && storedStep <= 4 ? storedStep : 0
+} catch {
+  onboardingStep = onboardingPlaytestMode === 'upgrade' ? 2 : onboardingPlaytestMode === 'shop' ? 3 : onboardingPlaytest ? 0 : 4
+}
 for (const id of ['shanlan', 'qingtuan', 'shimo'] as const) {
   const record = battleRecords[id]
   document.querySelector<HTMLElement>(`[data-record="${id}"]`)!.textContent = record.runs
@@ -33,6 +56,26 @@ const loadingProgress = document.querySelector<HTMLProgressElement>('#loading-pr
 const loadingPercent = document.querySelector<HTMLElement>('#loading-percent')!
 const loadingRetry = document.querySelector<HTMLButtonElement>('#loading-retry')!
 loadingRetry.addEventListener('click', () => window.location.reload())
+const pauseOverlay = document.querySelector<HTMLElement>('#pause-overlay')!
+const pauseContinue = document.querySelector<HTMLButtonElement>('#pause-continue')!
+const pauseRestart = document.querySelector<HTMLButtonElement>('#pause-restart')!
+const settingShake = document.querySelector<HTMLInputElement>('#setting-shake')!
+const settingReducedMotion = document.querySelector<HTMLInputElement>('#setting-reduced-motion')!
+const settingsStatus = document.querySelector<HTMLElement>('#settings-status')!
+settingShake.checked = gameSettings.screenShake
+settingReducedMotion.checked = gameSettings.reducedMotion
+settingsStatus.textContent = settingsAvailable ? '设置会保存在当前浏览器' : '浏览器未允许保存，本次设置仍会生效'
+document.querySelector<HTMLElement>('.pause-settings')!.addEventListener('change', () => {
+  gameSettings = { version: 1, screenShake: settingShake.checked, reducedMotion: settingReducedMotion.checked }
+  document.documentElement.dataset.reducedMotion = String(gameSettings.reducedMotion)
+  try {
+    localStorage.setItem('panda-game-settings', JSON.stringify(gameSettings))
+    settingsStatus.textContent = '设置已保存'
+  } catch {
+    settingsAvailable = false
+    settingsStatus.textContent = '浏览器未允许保存，本次设置仍会生效'
+  }
+})
 const buildStatFields = [
   { key: 'maxHp', label: '生命上限', scale: 1, unit: '' },
   { key: 'shieldPower', label: '护盾效果·石墨', scale: 100, unit: '%' },
@@ -107,6 +150,28 @@ class BattleScene extends Phaser.Scene {
   private loadFailed = false
   private resultShown = false
   private evolutionShown = false
+  private sawOnboardingUpgrade = false
+  private sawOnboardingShop = false
+
+  private setOnboardingStep = (step: number): void => {
+    onboardingStep = step
+    if (!onboardingPlaytest) {
+      try { localStorage.setItem('panda-onboarding-step', String(step)) } catch { /* 本局继续显示，无法跨刷新保存 */ }
+    }
+    this.renderOnboarding()
+  }
+
+  private renderOnboarding = (): void => {
+    const hint = document.querySelector<HTMLElement>('#onboarding-hint')!
+    hint.hidden = onboardingStep >= 4 || this.loading || this.paused || this.state.pendingUpgrade || this.state.shopOpen || this.state.gameOver || this.state.victory
+    if (hint.hidden) return
+    document.querySelector<HTMLElement>('#onboarding-copy')!.innerHTML = [
+      '<kbd>WASD</kbd> 或方向键移动，侠客会自动攻击最近的敌人',
+      '<kbd>SPACE</kbd> 闪避穿出包围，闪避期间不会受伤',
+      '收集敌人掉落的灵竹，灵竹满后可选择一门强化',
+      '坚持到本波结束，在商城购买武器和宝物后继续',
+    ][onboardingStep]
+  }
 
   preload(): void {
     this.load.on('progress', (progress: number) => {
@@ -149,7 +214,21 @@ class BattleScene extends Phaser.Scene {
 
   create(): void {
     if (this.loadFailed) return
-    if (import.meta.env.DEV && new URLSearchParams(location.search).has('playtest-evolution')) {
+    if (onboardingPlaytest) {
+      this.state.waveDuration = 999
+      this.state.spawnTimer = 999
+      this.state.bambooCooldown = 999
+      this.state.player.nextXp = 99999
+      this.state.enemies = []
+      if (onboardingPlaytestMode === 'upgrade') {
+        this.state.pendingUpgrade = true
+        this.state.upgradeChoices = ['vitality', 'power', 'haste']
+      } else if (onboardingPlaytestMode === 'shop') {
+        this.state.shopOpen = true
+        this.state.player.coins = 80
+        this.state.shopChoices = ['martial-belt', 'wind-feather', 'iron-bracer', 'panda-roller']
+      }
+    } else if (import.meta.env.DEV && new URLSearchParams(location.search).has('playtest-evolution')) {
       const signature = signatureWeapons[characters[this.state.characterId].weaponId]
       if (new URLSearchParams(location.search).get('playtest-evolution') === 'combat') {
         this.state.signatureWeaponLevel = 5
@@ -306,7 +385,6 @@ class BattleScene extends Phaser.Scene {
       s: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S), d: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
     }
     resultRetry.onclick = () => {
-      if (!this.resultShown) return
       this.state = createGameState(crypto.getRandomValues(new Uint32Array(1))[0], this.state.characterId)
       this.lastAttackId = 0
       this.lastPlayerProjectileId = 0
@@ -316,6 +394,8 @@ class BattleScene extends Phaser.Scene {
       this.overlayMode = ''
       this.weaponHudMode = ''
       this.resultShown = false
+      this.sawOnboardingUpgrade = false
+      this.sawOnboardingShop = false
       this.seenEffects.clear()
       for (const sprites of [this.enemySprites, this.bossHazardSprites, this.leafSprites, this.firecrackerBlastSprites, this.wineFlameSprites, this.enemyZoneSprites, this.turretSprites, this.bladeSprites, this.effectTexts]) {
         for (const sprite of sprites.values()) sprite.destroy()
@@ -325,8 +405,21 @@ class BattleScene extends Phaser.Scene {
       this.playerSprite.play(`${characters[this.state.characterId].animation}-idle`)
       resultOverlay.hidden = true
       resultRetry.blur()
-      document.querySelector<HTMLElement>('#pause-overlay')!.hidden = true
+      pauseOverlay.hidden = true
+      this.renderOnboarding()
     }
+    pauseContinue.onclick = () => {
+      this.paused = false
+      pauseOverlay.hidden = true
+      pauseContinue.blur()
+      this.renderOnboarding()
+    }
+    pauseRestart.onclick = () => {
+      resultRetry.click()
+      pauseRestart.blur()
+    }
+    document.querySelector<HTMLButtonElement>('#onboarding-skip')!.onclick = () => this.setOnboardingStep(4)
+    this.renderOnboarding()
     window.addEventListener('keydown', (event) => {
       if (event.repeat) return
       if (this.state.gameOver || this.state.victory) {
@@ -340,9 +433,13 @@ class BattleScene extends Phaser.Scene {
         }
         return
       }
-      if (event.code === 'Space' || event.code === 'Escape' || event.code === 'KeyR') event.preventDefault()
+      if ((event.code === 'Space' && !(event.target instanceof HTMLButtonElement) && !(event.target instanceof HTMLInputElement)) || event.code === 'Escape' || event.code === 'KeyR') event.preventDefault()
       if (!this.audioContext && new URLSearchParams(window.location.search).get('muted') !== '1') this.audioContext = new AudioContext()
-      if (event.code === 'Space' && !this.state.pendingUpgrade && !this.state.shopOpen) this.dashQueued = true
+      if (onboardingStep === 0 && ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight'].includes(event.code) && !this.paused && !this.state.pendingUpgrade && !this.state.shopOpen) this.setOnboardingStep(1)
+      if (event.code === 'Space' && !(event.target instanceof HTMLButtonElement) && !(event.target instanceof HTMLInputElement) && !this.paused && !this.state.pendingUpgrade && !this.state.shopOpen) {
+        this.dashQueued = true
+        if (onboardingStep === 1) this.setOnboardingStep(2)
+      }
       if (this.state.pendingUpgrade && ['Digit1', 'Digit2', 'Digit3'].includes(event.code)) {
         const choice = this.state.upgradeChoices[Number(event.code.slice(-1)) - 1]
         if (choice) chooseUpgrade(this.state, choice)
@@ -353,12 +450,14 @@ class BattleScene extends Phaser.Scene {
       if (event.code === 'Enter' && this.state.shopOpen) continueWave(this.state)
       if (event.code === 'Escape' && !this.state.gameOver && !this.state.victory && !this.state.pendingUpgrade && !this.state.shopOpen) {
         this.paused = !this.paused
-        const overlay = document.querySelector<HTMLDivElement>('#pause-overlay')
-        const title = document.querySelector<HTMLElement>('#overlay-title')
-        const copy = document.querySelector<HTMLElement>('#overlay-copy')
-        if (overlay) overlay.hidden = !this.paused
-        if (title) title.textContent = '竹息凝神'
-        if (copy) copy.textContent = '按 ESC 继续战斗'
+        pauseOverlay.hidden = !this.paused
+        document.querySelector<HTMLElement>('#overlay-title')!.textContent = '竹息凝神'
+        document.querySelector<HTMLElement>('#overlay-copy')!.textContent = '战斗与计时已暂停'
+        if (this.paused) pauseContinue.focus()
+        else {
+          pauseContinue.blur()
+          this.renderOnboarding()
+        }
       }
     })
   }
@@ -405,7 +504,7 @@ class BattleScene extends Phaser.Scene {
       shopLayout.hidden = true
       kicker.textContent = `境界突破 · Lv.${this.state.player.level}`
       title.textContent = '选择一门强化'
-      copy.textContent = '战斗已暂停 · 让这一局形成自己的招式'
+      copy.textContent = onboardingStep === 2 ? '首次突破 · 选择一项强化，战斗会在选择后继续' : '战斗已暂停 · 让这一局形成自己的招式'
       cards.style.gridTemplateColumns = 'repeat(3, 1fr)'
       continueButton.hidden = true
       refreshUpgradeButton.hidden = false
@@ -434,7 +533,7 @@ class BattleScene extends Phaser.Scene {
       refreshUpgradeButton.hidden = true
       kicker.textContent = `竹林补给 · 第 ${this.state.wave} 波结束`
       title.textContent = '整备下一波构筑'
-      copy.textContent = `现有 ${this.state.player.coins} 铜钱 · 商品可重复购买，唯一宝物除外`
+      copy.textContent = onboardingStep === 3 ? `首次整备 · 用 ${this.state.player.coins} 铜钱补强构筑，再进入下一波` : `现有 ${this.state.player.coins} 铜钱 · 商品可重复购买，唯一宝物除外`
       continueButton.hidden = false
       continueButton.onclick = () => continueWave(this.state)
       const allProductsLocked = this.state.shopChoices.every((id, index) => id !== null && this.state.lockedShopIndices.includes(index))
@@ -552,18 +651,25 @@ class BattleScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     if (this.loading) return
+    const inputX = Number(this.keys.right.isDown || this.keys.d.isDown) - Number(this.keys.left.isDown || this.keys.a.isDown)
+    const inputY = Number(this.keys.down.isDown || this.keys.s.isDown) - Number(this.keys.up.isDown || this.keys.w.isDown)
     if (!this.paused) {
       if (this.hitStop > 0) this.hitStop = Math.max(0, this.hitStop - delta / 1000)
       else {
         stepGame(this.state, {
-          x: Number(this.keys.right.isDown || this.keys.d.isDown) - Number(this.keys.left.isDown || this.keys.a.isDown),
-          y: Number(this.keys.down.isDown || this.keys.s.isDown) - Number(this.keys.up.isDown || this.keys.w.isDown),
+          x: inputX,
+          y: inputY,
           dash: this.dashQueued,
         }, delta / 1000)
       }
     }
     this.dashQueued = false
+    if (onboardingStep === 2 && this.state.pendingUpgrade) this.sawOnboardingUpgrade = true
+    if (onboardingStep === 2 && this.sawOnboardingUpgrade && !this.state.pendingUpgrade) this.setOnboardingStep(3)
+    if (onboardingStep === 3 && this.state.shopOpen) this.sawOnboardingShop = true
+    if (onboardingStep === 3 && this.sawOnboardingShop && !this.state.shopOpen) this.setOnboardingStep(4)
     this.renderChoiceOverlay()
+    this.renderOnboarding()
     this.cameras.main.centerOn(this.state.player.x, this.state.player.y)
     const graphics = this.actorGraphics.clear()
 
@@ -787,13 +893,13 @@ class BattleScene extends Phaser.Scene {
         this.seenEffects.add(effect.id)
         if (effect.kind === 'crit' || effect.kind === 'projectile-crit' || effect.kind === 'firecracker-crit') {
           this.hitStop = 0.04
-          this.cameras.main.shake(75, 0.0025)
+          if (gameSettings.screenShake) this.cameras.main.shake(75, 0.0025)
           this.playTone(155, 0.08, 0.035)
         } else if (effect.kind === 'player-hit') {
-          this.cameras.main.shake(100, 0.004)
+          if (gameSettings.screenShake) this.cameras.main.shake(100, 0.004)
           this.playTone(70, 0.1, 0.055)
         } else if (effect.kind === 'shield-break') {
-          this.cameras.main.shake(130, 0.006)
+          if (gameSettings.screenShake) this.cameras.main.shake(130, 0.006)
           this.playTone(92, 0.14, 0.06)
         } else if ((effect.kind === 'hit' || effect.kind === 'projectile-hit' || effect.kind === 'firecracker-hit') && performance.now() - this.lastHitSound > 70) {
           this.hitStop = effect.kind === 'hit' ? 0.018 : 0.012
@@ -861,7 +967,7 @@ class BattleScene extends Phaser.Scene {
       graphics.lineStyle(7, 0x3f285d, 0.22).lineBetween(projectile.x - directionX * 34, projectile.y - directionY * 34, projectile.x, projectile.y)
       graphics.lineStyle(3, 0xd9554d, 0.78).lineBetween(projectile.x - directionX * 28, projectile.y - directionY * 28, projectile.x, projectile.y)
       graphics.lineStyle(1, 0xffb0a8, 0.9).lineBetween(projectile.x - directionX * 15, projectile.y - directionY * 15, projectile.x, projectile.y)
-      const pulse = Math.sin(this.state.time * 12 + projectile.id) * 1.5
+      const pulse = gameSettings.reducedMotion ? 0 : Math.sin(this.state.time * 12 + projectile.id) * 1.5
       graphics.fillStyle(0x7651a8, 0.96).beginPath().moveTo(projectile.x + directionX * (9 + pulse), projectile.y + directionY * (9 + pulse)).lineTo(projectile.x + sideX * 5, projectile.y + sideY * 5).lineTo(projectile.x - directionX * 8, projectile.y - directionY * 8).lineTo(projectile.x - sideX * 5, projectile.y - sideY * 5).closePath().fillPath()
       graphics.lineStyle(2, 0xd9554d, 0.9).beginPath().moveTo(projectile.x + directionX * (9 + pulse), projectile.y + directionY * (9 + pulse)).lineTo(projectile.x + sideX * 5, projectile.y + sideY * 5).lineTo(projectile.x - directionX * 8, projectile.y - directionY * 8).lineTo(projectile.x - sideX * 5, projectile.y - sideY * 5).closePath().strokePath()
       graphics.fillStyle(0xf3e6c8, 0.95).fillCircle(projectile.x + Math.cos(angle) * 2, projectile.y + Math.sin(angle) * 2, 2)
@@ -908,9 +1014,12 @@ class BattleScene extends Phaser.Scene {
       }
       const flashing = this.state.effects.some((effect) => (effect.kind === 'hit' || effect.kind === 'crit' || effect.kind === 'projectile-hit' || effect.kind === 'projectile-crit' || effect.kind === 'firecracker-hit' || effect.kind === 'firecracker-crit') && Math.abs(effect.x - enemy.x) < 24 && Math.abs(effect.y + 28 - enemy.y) < 24)
       const attacking = enemy.kind === 'chaser' ? enemy.elite ? (enemy.telegraph ?? 0) > 0 || enemy.dashTime > 0 : Math.hypot(this.state.player.x - enemy.x, this.state.player.y - enemy.y) < 42 : enemy.kind === 'dasher' || enemy.kind === 'assassin' ? enemy.dashTime > 0 || (enemy.telegraph ?? 0) > 0 : enemy.kind === 'boar' ? Math.hypot(this.state.player.x - enemy.x, this.state.player.y - enemy.y) < 48 : enemy.cooldown > (enemy.kind === 'sorcerer' ? 3.65 : 1.45)
-      if (enemy.kind !== 'boss') sprite.play(`${family}-${attacking ? 'attack' : 'move'}`, true).setFlipX((enemy.facingX ?? this.state.player.x - enemy.x) < 0)
+      if (enemy.kind !== 'boss') {
+        sprite.play(`${family}-${attacking ? 'attack' : 'move'}`, true).setFlipX((enemy.facingX ?? this.state.player.x - enemy.x) < 0)
+        sprite.anims.timeScale = gameSettings.reducedMotion && !attacking ? 0.5 : 1
+      }
       const generatedEnemy = enemy.kind === 'boar' || enemy.kind === 'assassin' || enemy.kind === 'sorcerer'
-      const actionScale = enemy.kind === 'boss' ? 1 + Math.sin(this.state.time * (enemy.enraged ? 6 : 3)) * 0.018 : generatedEnemy ? enemy.kind === 'assassin' && enemy.dashTime > 0 ? 1.06 : 1 : (enemy.kind === 'dasher' && enemy.dashTime > 0 ? 1.12 : 1) * (
+      const actionScale = enemy.kind === 'boss' ? 1 + (gameSettings.reducedMotion ? 0 : Math.sin(this.state.time * (enemy.enraged ? 6 : 3)) * 0.018) : generatedEnemy ? enemy.kind === 'assassin' && enemy.dashTime > 0 ? 1.06 : 1 : (enemy.kind === 'dasher' && enemy.dashTime > 0 ? 1.12 : 1) * (
         attacking ? enemy.kind === 'chaser' ? 0.9 : enemy.kind === 'dasher' ? 0.625 : 0.51 : 1
       )
       const baseScale = enemy.kind === 'boss' ? size / 512 : size / 96
@@ -929,8 +1038,8 @@ class BattleScene extends Phaser.Scene {
     const { x, y, dashTime } = this.state.player
     if (dashTime > 0) graphics.fillStyle(0xd4ffb8, 0.22).fillCircle(x, y, 38)
     const shieldRatio = this.state.player.shieldMax > 0 ? this.state.player.shield / this.state.player.shieldMax : 0
-    const shieldPulse = 1 + Math.sin(this.state.time * 2.3) * 0.018
-    this.shieldAura.setPosition(x, y - 10).setDepth(y + 1).setVisible(shieldRatio > 0).setAlpha(0.1 + shieldRatio * 0.09 + Math.sin(this.state.time * 4) * 0.018).setDisplaySize(102 * shieldPulse, 72 * shieldPulse)
+    const shieldPulse = 1 + (gameSettings.reducedMotion ? 0 : Math.sin(this.state.time * 2.3) * 0.018)
+    this.shieldAura.setPosition(x, y - 10).setDepth(y + 1).setVisible(shieldRatio > 0).setAlpha(0.1 + shieldRatio * 0.09 + (gameSettings.reducedMotion ? 0 : Math.sin(this.state.time * 4) * 0.018)).setDisplaySize(102 * shieldPulse, 72 * shieldPulse)
     const playerAnimation = characters[this.state.characterId].animation
     const latestAttack = this.state.attacks.at(-1)
     if (latestAttack && latestAttack.id > this.lastAttackId) {
@@ -949,6 +1058,7 @@ class BattleScene extends Phaser.Scene {
       this.playerSprite.play(`${playerAnimation}-${moveX !== 0 || moveY !== 0 || dashTime > 0 ? 'run' : 'idle'}`, true)
       this.playerSprite.setFlipX(moveX === 0 ? this.state.player.facingX < 0 : moveX < 0)
     }
+    this.playerSprite.anims.timeScale = gameSettings.reducedMotion && !playerAttacking ? 0.5 : 1
     const playerHurt = this.state.player.hitCooldown > 0
     const playerScale = playerAttacking ? this.state.characterId === 'shanlan' ? 68 / 96 * 0.56 : 68 / 128 : 68 / 96
     this.playerSprite.setPosition(x, y).setDepth(y).setRotation(playerAttacking ? 0 : moveY * 0.035).setScale(playerScale * (playerHurt ? 1.06 : 1), playerScale * (playerHurt ? 0.92 : 1)).setAlpha(playerHurt ? 0.55 + Math.sin(this.state.time * 50) * 0.25 : 1)

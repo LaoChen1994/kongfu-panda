@@ -277,7 +277,27 @@ kbd { padding: 4px 7px; border: 1px solid #637969; border-bottom-width: 3px; bor
 .overlay-card::before, .overlay-card::after { content: ''; position: absolute; left: 18px; right: 18px; height: 3px; border-radius: 50%; background: linear-gradient(90deg, transparent, #6e512b, transparent); }
 .overlay-card::before { top: 9px; }.overlay-card::after { bottom: 9px; }
 .overlay strong { color: #202622; font-size: 38px; letter-spacing: .12em; text-shadow: 0 2px 0 #fff7; }
-.overlay span { max-width: 680px; margin-top: 8px; color: #4e574d; font-family: 'PingFang SC', sans-serif; font-size: 15px; line-height: 1.65; }
+.overlay-card > span { max-width: 680px; margin-top: 8px; color: #4e574d; font-family: 'PingFang SC', sans-serif; font-size: 15px; line-height: 1.65; }
+.pause-card { width: min(520px, calc(100vw - 48px)); min-width: 0; }
+.pause-actions { display: flex; justify-content: center; gap: 12px; margin: 18px 0; }
+.pause-actions button { min-height: 44px; padding: 8px 20px; border: 1px solid #61451f; border-radius: 8px 11px 8px 12px; color: #fff0bd; background: linear-gradient(#547941, #2f542f); box-shadow: 0 3px 0 #263d25; font: 700 15px 'PingFang SC', sans-serif; cursor: pointer; }
+.pause-actions button + button { color: #654b27; background: #f4e5c3; box-shadow: 0 3px 0 #76552d; }
+.pause-actions kbd { margin-left: 5px; font-size: 14px; }
+.pause-settings { display: grid; gap: 10px; margin: 0; padding: 14px 16px 12px; border: 1px solid #82612855; border-radius: 9px; text-align: left; }
+.pause-settings legend { padding: 0 8px; color: #704c27; font: 700 16px 'PingFang SC', sans-serif; }
+.pause-settings label { display: grid; grid-template-columns: 22px 1fr; align-items: center; gap: 10px; color: #29332b; cursor: pointer; }
+.pause-settings input { width: 18px; height: 18px; accent-color: #4f8f55; }
+.pause-settings label span { display: grid; gap: 1px; font-family: 'PingFang SC', sans-serif; }
+.pause-settings label b { font-size: 15px; }
+.pause-settings label small, .settings-status { color: #626c5b; font: 14px/1.5 'PingFang SC', sans-serif; }
+.settings-status { min-height: 21px; margin-top: 7px; }
+.onboarding-hint { position: absolute; z-index: 4; top: 72px; left: 50%; display: flex; width: min(440px, calc(100% - 36px)); align-items: center; justify-content: space-between; gap: 12px; padding: 9px 10px 9px 15px; border: 2px solid #9d7432; border-radius: 8px 12px 8px 11px; color: #29332b; background: linear-gradient(100deg, #f3e6c8f2, #dfc795f2), var(--paper-texture); box-shadow: 0 7px 20px #07100d88, inset 0 0 0 3px #513d221a; font: 15px/1.5 'PingFang SC', sans-serif; transform: translateX(-50%); }
+.onboarding-hint[hidden] { display: none; }
+.onboarding-hint span { min-width: 0; }
+.onboarding-hint kbd { margin: 0 2px; padding: 2px 5px; border-color: #795b2e; color: #63471f; background: #ead7ad; font-size: 14px; }
+.onboarding-hint button { flex: 0 0 auto; min-height: 34px; padding: 5px 9px; border: 1px solid #795b2e; border-radius: 7px; color: #654b27; background: #f4e5c3; font: 700 14px 'PingFang SC', sans-serif; cursor: pointer; }
+[data-reduced-motion="true"] .health-track i, [data-reduced-motion="true"] .shield-track i, [data-reduced-motion="true"] .xp-track i, [data-reduced-motion="true"] .dash, [data-reduced-motion="true"] .build-panel, [data-reduced-motion="true"] .character-card, [data-reduced-motion="true"] .character-card img, [data-reduced-motion="true"] .choice-card, [data-reduced-motion="true"] .hurt-vignette, [data-reduced-motion="true"] .boss-track i { transition: none; }
+[data-reduced-motion="true"] .evolution-announcement { animation-duration: .01ms; }
 
 .character-record { margin-top: 6px; padding-top: 9px; border-top: 1px solid #82612855; color: #44633b; white-space: pre-line; font: 14px/1.6 'PingFang SC', sans-serif; }
 .records-note { margin: 14px 0 0; color: #5a665b; font: 14px/1.5 'PingFang SC', sans-serif; }
@@ -368,6 +388,9 @@ kbd { padding: 4px 7px; border: 1px solid #637969; border-bottom-width: 3px; bor
   .shop-summary, .shop-inventory { min-height: 0; }
   .shop-actions { grid-column: 1; }
   .character-panel { padding: 18px; }
+  .onboarding-hint { top: 88px; }
+  .pause-card { padding-inline: 20px; }
+  .pause-actions { flex-direction: column; }
   .character-cards { grid-template-columns: repeat(3, minmax(150px, 1fr)); overflow-x: auto; }
   .character-card { min-height: 315px; }
   .character-card img { width: 115px; height: 115px; }
