@@ -20,6 +20,13 @@ body {
   background: radial-gradient(circle at 50% -20%, #315e43 0%, #10251b 38%, #07100c 78%);
 }
 
+.orientation-lock, .mobile-controls { display: none; }
+.orientation-lock { position: fixed; z-index: 100; inset: 0; place-items: center; padding: 24px; color: var(--ink); background: #07100df2; }
+.orientation-lock > div { display: grid; justify-items: center; gap: 8px; width: min(340px, 100%); padding: 28px 24px; border: 2px solid #9d7432; border-radius: 12px 18px 11px 16px; background: linear-gradient(#f3e6c8f2, #ddc79bf2), var(--paper-texture); box-shadow: inset 0 0 0 5px #513d2226, 0 18px 50px #000b; }
+.orientation-lock span { font-size: 46px; line-height: 1; color: #4f8f55; transform: rotate(-35deg); }
+.orientation-lock strong { font-size: 28px; letter-spacing: .1em; }
+.orientation-lock small { color: #5a665b; font: 14px 'PingFang SC', sans-serif; }
+
 .game-shell {
   width: min(1240px, calc(100vw - 28px), calc((100vh - 112px) * 16 / 9));
   margin: 0 auto;
@@ -394,4 +401,85 @@ kbd { padding: 4px 7px; border: 1px solid #637969; border-bottom-width: 3px; bor
   .character-cards { grid-template-columns: repeat(3, minmax(150px, 1fr)); overflow-x: auto; }
   .character-card { min-height: 315px; }
   .character-card img { width: 115px; height: 115px; }
+}
+
+@media (max-width: 960px) and (orientation: landscape) {
+  html, body { width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none; }
+  .game-shell { width: 100vw; height: 100dvh; margin: 0; padding: 0; }
+  .topbar { display: none; }
+  .playfield { width: 100%; height: 100%; aspect-ratio: auto; border: 0; border-radius: 0; touch-action: none; }
+  .mobile-controls:not([hidden]) { display: block; }
+  .mobile-pause, .mobile-dash { position: absolute; z-index: 6; border: 2px solid #d7b866; color: #fff0bd; background: linear-gradient(#547941e8, #29472fe8), var(--paper-texture); box-shadow: 0 5px 14px #0008, inset 0 0 0 3px #f3e6c81c; font-family: 'PingFang SC', sans-serif; touch-action: none; user-select: none; -webkit-user-select: none; }
+  .mobile-pause { top: max(10px, env(safe-area-inset-top)); right: max(10px, env(safe-area-inset-right)); min-width: 56px; min-height: 44px; border-radius: 9px 13px 9px 12px; font-size: 14px; font-weight: 700; }
+  .mobile-joystick { position: absolute; z-index: 6; left: max(16px, env(safe-area-inset-left)); bottom: max(14px, env(safe-area-inset-bottom)); width: 104px; height: 104px; border: 2px solid #9bcb66aa; border-radius: 50%; background: radial-gradient(circle, #f3e6c81a 0 13%, transparent 14% 52%, #10251ba8 53%), var(--paper-texture); box-shadow: inset 0 0 22px #07100d99, 0 7px 20px #0007; touch-action: none; user-select: none; -webkit-user-select: none; }
+  .mobile-joystick::before, .mobile-joystick::after { content: ''; position: absolute; top: 50%; left: 50%; background: #f3e6c82e; transform: translate(-50%, -50%); pointer-events: none; }
+  .mobile-joystick::before { width: 68px; height: 1px; }
+  .mobile-joystick::after { width: 1px; height: 68px; }
+  .mobile-joystick i { position: absolute; inset: 9px; border: 1px dashed #d7b86655; border-radius: 50%; pointer-events: none; }
+  .mobile-joystick span { position: absolute; top: 28px; left: 28px; width: 48px; height: 48px; border: 2px solid #f3e6c899; border-radius: 50%; background: linear-gradient(145deg, #678d53ed, #31583bed); box-shadow: 0 5px 10px #0008, inset 0 0 0 3px #9bcb662b; pointer-events: none; transform: translate(0, 0); }
+  .mobile-joystick.active { border-color: #d8ef9d; filter: brightness(1.08); }
+  .mobile-dash { right: max(20px, env(safe-area-inset-right)); bottom: max(20px, env(safe-area-inset-bottom)); display: grid; width: 78px; height: 78px; place-content: center; gap: 1px; border-radius: 50%; }
+  .mobile-dash strong { font-size: 18px; }
+  .mobile-dash small { font-size: 14px; }
+  .mobile-dash:disabled { color: #9eaaa1; border-color: #7b795f; filter: grayscale(.45); opacity: .78; }
+  .hud { inset: max(8px, env(safe-area-inset-top)) max(76px, calc(env(safe-area-inset-right) + 66px)) auto max(8px, env(safe-area-inset-left)); grid-template-columns: minmax(176px, 220px) 1fr; gap: 8px; }
+  .health-card { gap: 2px 8px; padding: 6px 9px; }
+  .health-track { height: 6px; }
+  .xp-track { height: 3px; }
+  .stats { display: flex; gap: 9px; padding: 7px 10px; white-space: nowrap; }
+  .stats b { font-size: 16px; }
+  .dash { display: none; }
+  .weapon-strip { top: max(62px, calc(env(safe-area-inset-top) + 52px)); right: max(8px, env(safe-area-inset-right)); bottom: auto; left: auto; max-width: 150px; padding: 4px; }
+  .weapon-slot { min-width: 0; padding: 4px 7px 4px 4px; }
+  .weapon-slot img { width: 30px; height: 30px; }
+  .weapon-slot small { display: none; }
+  .build-panel { display: none; }
+  .onboarding-hint { top: max(58px, calc(env(safe-area-inset-top) + 50px)); width: min(390px, calc(100% - 250px)); padding-block: 6px; }
+  .character-select { padding: max(6px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); }
+  .character-panel { width: 100%; padding: 9px 12px 11px; }
+  .character-panel h2 { margin: 1px 0; font-size: 24px; }
+  .character-lead, .records-note { margin: 0 0 6px; font-size: 14px; }
+  .character-cards { grid-template-columns: repeat(3, minmax(190px, 1fr)); gap: 8px; overflow-x: auto; }
+  .character-card { min-height: 258px; gap: 3px; padding: 7px 9px 9px; }
+  .character-card img { width: 82px; height: 82px; margin-top: 0; }
+  .character-card strong { font-size: 21px; }
+  .character-passive { min-height: 38px; line-height: 1.35; }
+  .character-record { margin-top: 2px; padding-top: 4px; line-height: 1.35; }
+  .choice-overlay { padding: max(5px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right)) max(5px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left)); overflow: hidden; }
+  .choice-panel, .choice-panel:has(#shop-layout[hidden]) { width: 100%; height: auto; max-height: 100%; padding: 7px 10px 9px; }
+  .choice-panel:has(#shop-layout:not([hidden])) { display: flex; flex-direction: column; width: 100%; height: 100%; max-height: 100%; min-height: 0; overflow: hidden; padding: 7px 10px 9px; }
+  .choice-panel h2 { margin: 1px 0; font-size: 25px; }
+  .choice-kicker { margin: 0; }
+  .choice-copy, .choice-panel:has(#shop-layout[hidden]) .choice-copy { margin: 0 0 6px; line-height: 1.3; }
+  .choice-panel:has(#shop-layout[hidden]) .choice-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+  .choice-panel:has(#shop-layout[hidden]) .choice-card, .choice-panel:has(#shop-layout[hidden]) .choice-card:has(img) { min-height: 0; gap: 4px; padding: 24px 9px 8px; }
+  .choice-panel:has(#shop-layout[hidden]) .choice-card:has(img) { grid-template-columns: 42px 1fr; grid-template-rows: auto auto 1fr auto; padding-top: 7px; }
+  .choice-panel:has(#shop-layout[hidden]) .choice-card img { grid-row: 1 / 3; width: 42px; height: 42px; }
+  .choice-panel:has(#shop-layout[hidden]) .choice-card strong { font-size: 19px; }
+  .refresh-upgrades { min-height: 44px; margin-top: 6px; }
+  .shop-layout { flex: 1; min-height: 0; max-height: none; grid-template-columns: 142px minmax(280px, 1fr) 184px; grid-template-rows: minmax(0, 1fr) auto; gap: 6px; overflow: auto; }
+  .shop-layout > .shop-column, .shop-market { min-height: 0; max-height: none; overflow-y: auto; }
+  .shop-column { padding: 7px; }
+  .shop-character img { width: 50px; height: 50px; }
+  .shop-cards { grid-template-columns: 1fr; gap: 6px; }
+  .shop-card { min-height: 126px; padding: 7px; }
+  .shop-card > img { width: 48px; height: 48px; }
+  .shop-actions { position: sticky; left: 0; grid-column: 1 / -1; min-height: 44px; }
+  .continue-wave { flex-shrink: 0; min-height: 44px; margin-top: 5px; }
+  .pause-card { max-height: calc(100% - 12px); overflow-y: auto; padding: 16px 20px 25px; }
+  .pause-card > strong { font-size: 30px; }
+  .pause-actions { margin: 8px 0; }
+  .pause-settings { gap: 5px; padding-block: 7px; }
+  .result-overlay { padding: 6px; }
+  .result-panel { max-height: 100%; }
+  .result-header { padding-block: 7px; }
+  .result-header > img { width: 58px; height: 58px; }
+  .result-header h2 { font-size: 25px; }
+  .result-scroll { padding-block: 8px; }
+  .result-actions { padding-block: 7px 10px; }
+}
+
+@media (max-width: 760px) and (orientation: portrait) {
+  .orientation-lock { display: grid; }
+  .game-shell { visibility: hidden; }
 }

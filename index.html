@@ -2,11 +2,14 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#10251c" />
     <title>竹林无双 · 构筑试炼</title>
   </head>
   <body>
+    <div id="orientation-lock" class="orientation-lock" role="status">
+      <div><span aria-hidden="true">↻</span><strong>请横屏游玩</strong><small>旋转手机后即可守卫竹林</small></div>
+    </div>
     <main class="game-shell">
       <header class="topbar">
         <div class="brand">
@@ -93,6 +96,11 @@
         <div id="onboarding-hint" class="onboarding-hint" role="status" hidden>
           <span id="onboarding-copy"></span>
           <button id="onboarding-skip" type="button">跳过引导</button>
+        </div>
+        <div id="mobile-controls" class="mobile-controls" hidden>
+          <button id="mobile-pause" class="mobile-pause" type="button" aria-label="暂停游戏">暂停</button>
+          <div id="mobile-joystick" class="mobile-joystick" aria-label="移动摇杆"><i></i><span></span></div>
+          <button id="mobile-dash" class="mobile-dash" type="button"><strong>闪避</strong><small>就绪</small></button>
         </div>
         <div id="result-overlay" class="result-overlay" hidden>
           <section class="result-panel" role="dialog" aria-modal="true" aria-labelledby="result-title" tabindex="-1">
