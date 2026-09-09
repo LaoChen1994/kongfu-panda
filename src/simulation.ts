@@ -3,12 +3,12 @@ export type RegularEnemyKind = typeof regularEnemyIds[number]
 export type EnemyKind = RegularEnemyKind | 'boss'
 export type CharacterId = 'shanlan' | 'qingtuan' | 'shimo'
 export type SignatureWeaponId = 'bamboo-staff' | 'leaf-dart' | 'iron-bamboo-shield'
-export type UpgradeId = 'power' | 'haste' | 'vitality' | 'footwork' | 'leaf-volley' | 'wide-sweep'
+export type UpgradeId = 'power' | 'haste' | 'vitality' | 'footwork' | 'leaf-volley' | 'wide-sweep' | 'thorn-fur' | 'panda-roll' | 'battle-fury' | 'iron-constitution' | 'bamboo-unity'
 export type ItemId = 'martial-belt' | 'wind-feather' | 'iron-bracer' | 'panda-roller' | 'bamboo-dew-pill' | 'food-god-lunchbox' | 'jade-eyepatch' | 'gale-leggings' | 'mountain-stone' | 'fortune-paw' | 'spirit-bamboo-tube' | 'tiger-seal'
 export const weaponIds = ['iron-pot-gauntlets', 'firecracker-launcher', 'spinning-bamboo-blade', 'panda-wine-gourd', 'bamboo-crossbow-turret'] as const
 export type WeaponId = typeof weaponIds[number]
 export type ShopProductId = ItemId | WeaponId | SignatureWeaponId
-export type DamageSource = WeaponId | 'bamboo-staff' | 'leaf-dart' | 'iron-bamboo-shield' | 'panda-roller'
+export type DamageSource = WeaponId | 'bamboo-staff' | 'leaf-dart' | 'iron-bamboo-shield' | 'panda-roller' | 'thorn-fur' | 'panda-roll'
 export const injurySources = {
   chaser: '竹鼠接触', dasher: '山猴冲撞', shooter: '毒蜂接触', boar: '野猪撞击',
   assassin: '鼬鼠突刺', sorcerer: '狐妖接触', boss: '巨灵接触',
@@ -78,13 +78,18 @@ export const signatureWeapons: Record<SignatureWeaponId, {
   },
 }
 
-export const upgrades: Record<UpgradeId, { name: string; rarity: string; description: string; tag: string }> = {
-  power: { name: '沉肩坠肘', rarity: '普通', description: '全部伤害 +12%', tag: '输出' },
-  haste: { name: '疾风连式', rarity: '普通', description: '攻击速度 +10%', tag: '攻速' },
-  vitality: { name: '竹息养生', rarity: '普通', description: '最大生命 +5，并恢复 5', tag: '生存' },
-  footwork: { name: '踏叶无痕', rarity: '稀有', description: '移动速度 +10%', tag: '机动' },
-  'leaf-volley': { name: '竹叶连射', rarity: '史诗', description: '额外发射 1 枚飞叶，远程伤害 -10%', tag: '远程 · 天赋' },
-  'wide-sweep': { name: '横扫千军', rarity: '稀有', description: '杖/盾攻击范围 +18，攻击速度 -5%', tag: '近战 · 天赋' },
+export const upgrades: Record<UpgradeId, { name: string; rarity: '普通' | '稀有' | '史诗' | '传说'; description: string; preview: string; tag: string; image?: string; unique?: boolean }> = {
+  power: { name: '沉肩坠肘', rarity: '普通', description: '全部伤害 +12%', preview: '所有招式伤害提高 12%', tag: '输出' },
+  haste: { name: '疾风连式', rarity: '普通', description: '攻击速度 +10%', preview: '所有自动攻击间隔缩短', tag: '攻速' },
+  vitality: { name: '竹息养生', rarity: '普通', description: '最大生命 +5，并恢复 5', preview: '立即恢复 5 点生命', tag: '生存' },
+  footwork: { name: '踏叶无痕', rarity: '稀有', description: '移动速度 +10%', preview: '走位和撤离速度提高', tag: '机动' },
+  'leaf-volley': { name: '竹叶连射', rarity: '史诗', description: '额外发射 1 枚飞叶，远程伤害 -10%', preview: '飞叶数量增加，单发伤害降低', tag: '远程 · 天赋' },
+  'wide-sweep': { name: '横扫千军', rarity: '稀有', description: '杖/盾攻击范围 +18，攻击速度 -5%', preview: '近战覆盖扩大，但攻击稍慢', tag: '近战 · 天赋' },
+  'thorn-fur': { name: '荆棘皮毛', rarity: '稀有', description: '受到接触伤害时反击 18 点伤害', preview: '只反击直接接触你的敌人', tag: '生存 · 反击', image: 'assets/upgrades/thorn-fur.png', unique: true },
+  'panda-roll': { name: '熊猫滚滚', rarity: '史诗', description: '闪避结束震击 48 点伤害，冷却 +0.4 秒', preview: '闪避转为范围攻击，基础冷却 2.5秒 → 2.9秒', tag: '机动 · 触发', image: 'assets/upgrades/panda-roll.png', unique: true },
+  'battle-fury': { name: '越战越勇', rarity: '史诗', description: '本波每击破 50 个敌人，全部伤害 +2%', preview: '每波重新累计，不设永久增益', tag: '输出 · 成长', image: 'assets/upgrades/battle-fury.png', unique: true },
+  'iron-constitution': { name: '食铁体质', rarity: '史诗', description: '拾取治疗后获得 4 秒 +8 护甲，治疗量 -10%', preview: '治疗球 10 → 9；短时承伤降低', tag: '生存 · 触发', image: 'assets/upgrades/iron-constitution.png', unique: true },
+  'bamboo-unity': { name: '万竹归心', rarity: '传说', description: '每种竹类武器使全部伤害 +5%，商城更易出现竹类武器', preview: '专属武器计 1 种，最高获得 +15% 伤害', tag: '构筑 · 传说', image: 'assets/upgrades/bamboo-unity.png', unique: true },
 }
 
 export const items: Record<ItemId, { name: string; rarity: string; description: string; preview: string; price: number; image: string; unique?: boolean }> = {
@@ -121,6 +126,9 @@ export type GameState = {
     damage: Partial<Record<DamageSource, number>>
     injuries: Partial<Record<keyof typeof injurySources, number>>
     shieldAbsorbed: number
+    upgradeRefreshes: number
+    talentTriggers: Partial<Record<UpgradeId, number>>
+    maxBattleFuryStacks: number
     lastInjury?: keyof typeof injurySources
   }
   time: number
@@ -145,6 +153,8 @@ export type GameState = {
   pendingUpgrade: boolean
   shopOpen: boolean
   upgradeChoices: UpgradeId[]
+  freeUpgradeRefreshUsed: boolean
+  upgradeRefreshCost: number
   shopChoices: Array<ShopProductId | null>
   lockedShopIndices: number[]
   shopRefreshCost: number
@@ -153,6 +163,7 @@ export type GameState = {
   signatureWeaponEvolved: boolean
   weaponLevels: Partial<Record<WeaponId, number>>
   chosenUpgrades: UpgradeId[]
+  waveKills: number
   bossAttackCount: number
   bossIntroTime: number
   corruptionInset: number
@@ -194,6 +205,7 @@ export type GameState = {
     shield: number
     shieldMax: number
     shieldTimer: number
+    ironArmorTime: number
   }
   enemies: Array<{
     id: number
@@ -231,8 +243,26 @@ const random = (state: GameState): number => {
   return state.seed / 4294967296
 }
 
+export const getBambooWeaponCount = (state: GameState): number => 1
+  + ((state.weaponLevels['spinning-bamboo-blade'] ?? 0) > 0 ? 1 : 0)
+  + ((state.weaponLevels['bamboo-crossbow-turret'] ?? 0) > 0 ? 1 : 0)
+
+const rollUpgradeChoice = (state: GameState, pool: UpgradeId[]): UpgradeId => {
+  const roll = random(state) * 100
+  const rarity = roll < 60 ? '普通' : roll < 87 ? '稀有' : roll < 97 ? '史诗' : '传说'
+  const rarityPool = pool.filter((id) => upgrades[id].rarity === rarity)
+  const choices = rarityPool.length ? rarityPool : pool
+  return choices[Math.floor(random(state) * choices.length)]
+}
+
+const reduceIncomingDamage = (state: GameState, rawDamage: number): number => {
+  const armor = state.player.armor + (state.player.ironArmorTime > 0 ? 8 : 0)
+  return Math.max(1, Math.floor(rawDamage * (1 - armor / (armor + 60))))
+}
+
 const dealEnemyDamage = (state: GameState, enemy: GameState['enemies'][number], rawDamage: number, sourceX: number, sourceY: number, source: DamageSource): number => {
-  let damage = Math.max(1, Math.round(rawDamage * (enemy.kind === 'boss' || enemy.elite ? state.player.eliteDamage : state.player.normalDamage)))
+  const battleFury = state.chosenUpgrades.includes('battle-fury') ? Math.floor(state.waveKills / 50) * 0.02 : 0
+  let damage = Math.max(1, Math.round(rawDamage * (1 + battleFury) * (enemy.kind === 'boss' || enemy.elite ? state.player.eliteDamage : state.player.normalDamage)))
   if (enemy.kind === 'boar') {
     const sourceDistance = Math.max(0.001, Math.hypot(sourceX - enemy.x, sourceY - enemy.y))
     const sourceXDirection = (sourceX - enemy.x) / sourceDistance
@@ -283,7 +313,7 @@ const triggerShieldBreak = (state: GameState): void => {
 export const createGameState = (seed = 20260831, characterId: CharacterId = 'shanlan'): GameState => ({
   characterId,
   seed,
-  runStats: { initialSeed: seed, damage: {}, injuries: {}, shieldAbsorbed: 0 },
+  runStats: { initialSeed: seed, damage: {}, injuries: {}, shieldAbsorbed: 0, upgradeRefreshes: 0, talentTriggers: {}, maxBattleFuryStacks: 0 },
   time: 0,
   wave: 1,
   waveTime: 0,
@@ -306,6 +336,8 @@ export const createGameState = (seed = 20260831, characterId: CharacterId = 'sha
   pendingUpgrade: false,
   shopOpen: false,
   upgradeChoices: [],
+  freeUpgradeRefreshUsed: false,
+  upgradeRefreshCost: 6,
   shopChoices: ['iron-pot-gauntlets', 'firecracker-launcher', 'iron-bracer', 'panda-roller'],
   lockedShopIndices: [],
   shopRefreshCost: 4,
@@ -314,6 +346,7 @@ export const createGameState = (seed = 20260831, characterId: CharacterId = 'sha
   signatureWeaponEvolved: false,
   weaponLevels: {},
   chosenUpgrades: [],
+  waveKills: 0,
   bossAttackCount: 0,
   bossIntroTime: 0,
   corruptionInset: 0,
@@ -327,7 +360,7 @@ export const createGameState = (seed = 20260831, characterId: CharacterId = 'sha
     projectileCount: 1, meleeRange: characterId === 'shanlan' ? 74 : 82, rangedDamage: 1, projectileSpeed: characterId === 'qingtuan' ? 516 : 430,
     criticalChance: 0.1, pickupRange: 140, coinGain: 1, coinRemainder: 0, enemyPressure: 1, eliteDamage: 1, normalDamage: 1, waveHealing: 0, shieldPower: 1,
     dashCooldown: 0, dashTime: 0, dashX: 1, dashY: 0, facingX: 1, facingY: 0, hitCooldown: 0, dashBurstPending: false,
-    shield: 0, shieldMax: 0, shieldTimer: characterId === 'shimo' ? 8 : 0,
+    shield: 0, shieldMax: 0, shieldTimer: characterId === 'shimo' ? 8 : 0, ironArmorTime: 0,
   },
   enemies: [], playerProjectiles: [], enemyProjectiles: [], bossHazards: [], attacks: [], groundZones: [], enemyZones: [], turrets: [], drops: [], effects: [],
 })
@@ -339,6 +372,7 @@ const recalculateBuildStats = (state: GameState): void => {
   let normalDamage = 1
   let criticalChance = 0.1
   let rangedDamage = 1
+  let damage = 1
   for (const id of state.ownedItems) {
     if (id === 'bamboo-dew-pill') maxHp += 10
     if (id === 'jade-eyepatch') { maxHp -= 5; criticalChance += 0.08 }
@@ -349,24 +383,26 @@ const recalculateBuildStats = (state: GameState): void => {
     if (id === 'wind-feather') rangedDamage += 0.05
   }
   for (const id of state.chosenUpgrades) {
+    if (id === 'power') damage += 0.12
     if (id === 'vitality') maxHp += 5
     if (id === 'footwork') moveSpeed += 0.1
     if (id === 'haste') attackSpeed += 0.1
     if (id === 'wide-sweep') attackSpeed -= 0.05
     if (id === 'leaf-volley') rangedDamage *= 0.9
   }
+  if (state.chosenUpgrades.includes('bamboo-unity')) damage += getBambooWeaponCount(state) * 0.05
   state.player.maxHp = Math.max(1, maxHp)
   state.player.moveSpeed = Math.max(0.5, Number(moveSpeed.toFixed(8)))
   state.player.attackSpeed = Math.max(0.55, Number(attackSpeed.toFixed(8)))
   state.player.normalDamage = Math.max(0.5, Number(normalDamage.toFixed(8)))
   state.player.criticalChance = Math.min(1, Number(criticalChance.toFixed(8)))
   state.player.rangedDamage = rangedDamage
+  state.player.damage = Number(damage.toFixed(8))
   state.player.hp = Math.min(state.player.hp, state.player.maxHp)
 }
 
 export const chooseUpgrade = (state: GameState, id: UpgradeId): boolean => {
   if (!state.pendingUpgrade || !state.upgradeChoices.includes(id)) return false
-  if (id === 'power') state.player.damage += 0.12
   if (id === 'leaf-volley') {
     state.player.projectileCount = Math.min(3, state.player.projectileCount + 1)
   }
@@ -378,6 +414,36 @@ export const chooseUpgrade = (state: GameState, id: UpgradeId): boolean => {
   if (id === 'vitality') state.player.hp = Math.min(state.player.maxHp, state.player.hp + 5)
   state.pendingUpgrade = false
   state.upgradeChoices = []
+  return true
+}
+
+export const refreshUpgrades = (state: GameState): boolean => {
+  if (!state.pendingUpgrade) return false
+  if (state.freeUpgradeRefreshUsed && state.player.coins < state.upgradeRefreshCost) return false
+  if (state.freeUpgradeRefreshUsed) state.player.coins -= state.upgradeRefreshCost
+  else state.freeUpgradeRefreshUsed = true
+  state.runStats.upgradeRefreshes += 1
+  const previous = state.upgradeChoices
+  const eligible = (Object.keys(upgrades) as UpgradeId[]).filter((id) => (
+    (id !== 'wide-sweep' || state.characterId !== 'qingtuan')
+    && (id !== 'leaf-volley' || state.characterId === 'qingtuan')
+    && !(id === 'leaf-volley' && state.player.projectileCount >= 3)
+    && (!upgrades[id].unique || !state.chosenUpgrades.includes(id))
+  ))
+  const fresh = eligible.filter((id) => !previous.includes(id))
+  const pool = fresh.length >= 3 ? fresh : eligible
+  const hasMeleeBuild = state.characterId !== 'qingtuan' || (state.weaponLevels['iron-pot-gauntlets'] ?? 0) > 0
+  const hasRangedBuild = state.characterId === 'qingtuan' || (state.weaponLevels['firecracker-launcher'] ?? 0) > 0 || (state.weaponLevels['bamboo-crossbow-turret'] ?? 0) > 0
+  const preferred = pool.filter((id) => (
+    hasMeleeBuild && (id === 'power' || id === 'haste' || id === 'wide-sweep' || id === 'thorn-fur')
+    || hasRangedBuild && (id === 'power' || id === 'haste' || id === 'leaf-volley' || id === 'battle-fury')
+    || state.ownedItems.some((itemId) => itemId === 'iron-bracer' || itemId === 'mountain-stone' || itemId === 'spirit-bamboo-tube') && (id === 'vitality' || id === 'footwork' || id === 'iron-constitution')
+  ))
+  state.upgradeChoices = [rollUpgradeChoice(state, preferred.length ? preferred : pool)]
+  while (state.upgradeChoices.length < 3) {
+    const choice = rollUpgradeChoice(state, pool.filter((id) => !state.upgradeChoices.includes(id)))
+    if (!state.upgradeChoices.includes(choice)) state.upgradeChoices.push(choice)
+  }
   return true
 }
 
@@ -436,7 +502,7 @@ export const refreshShop = (state: GameState): boolean => {
   state.player.coins -= state.shopRefreshCost
   state.shopRefreshCost += 2
   const signatureId = characters[state.characterId].weaponId
-  const pool: ShopProductId[] = [...Object.keys(items) as ItemId[], ...weaponIds, signatureId].filter((id) => (
+  const pool: ShopProductId[] = [...Object.keys(items) as ItemId[], ...weaponIds, signatureId, ...(state.chosenUpgrades.includes('bamboo-unity') ? ['spinning-bamboo-blade', 'spinning-bamboo-blade', 'bamboo-crossbow-turret', 'bamboo-crossbow-turret'] as WeaponId[] : [])].filter((id) => (
     isSignatureWeaponId(id) ? state.signatureWeaponLevel < 5 && !state.signatureWeaponEvolved
       : isWeaponId(id) ? (state.weaponLevels[id] ?? 0) < 5 : !items[id].unique || !state.ownedItems.includes(id)
   ))
@@ -504,6 +570,7 @@ export const sellWeapon = (state: GameState, id: WeaponId): boolean => {
     state.playerProjectiles = state.playerProjectiles.filter((projectile) => projectile.kind !== 'bolt')
   }
   if (id === 'firecracker-launcher') state.playerProjectiles = state.playerProjectiles.filter((projectile) => projectile.kind !== 'firecracker')
+  recalculateBuildStats(state)
   return true
 }
 
@@ -513,6 +580,8 @@ export const continueWave = (state: GameState): boolean => {
   state.shopRefreshCost = 4
   state.shopChoices = state.shopChoices.map((id, index) => state.lockedShopIndices.includes(index) ? id : null)
   state.wave += 1
+  state.waveKills = 0
+  state.freeUpgradeRefreshUsed = false
   state.waveTime = 0
   state.waveDuration = state.wave === 10 ? 90 : 50
   state.enemies = []
@@ -555,6 +624,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
   const previousDashTime = state.player.dashTime
   state.player.dashTime = Math.max(0, state.player.dashTime - dt)
   state.player.hitCooldown = Math.max(0, state.player.hitCooldown - dt)
+  state.player.ironArmorTime = Math.max(0, state.player.ironArmorTime - dt)
   if (state.characterId === 'shimo') {
     state.player.shieldTimer -= dt
     if (state.player.shieldTimer <= 0) {
@@ -577,13 +647,19 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
 
   if (previousDashTime > 0 && state.player.dashTime === 0 && state.player.dashBurstPending) {
     state.player.dashBurstPending = false
-    state.effects.push({ id: state.nextId++, kind: 'dash-burst', x: state.player.x, y: state.player.y, value: 32, life: 0.35, angle: 0 })
+    const itemDamage = state.ownedItems.includes('panda-roller') ? 32 : 0
+    const talentDamage = state.chosenUpgrades.includes('panda-roll') ? 48 : 0
+    state.effects.push({ id: state.nextId++, kind: 'dash-burst', x: state.player.x, y: state.player.y, value: itemDamage + talentDamage, life: 0.35, angle: Math.atan2(state.player.dashY, state.player.dashX) })
     for (const enemy of state.enemies) {
       const dx = enemy.x - state.player.x
       const dy = enemy.y - state.player.y
       const distance = Math.max(0.001, Math.hypot(dx, dy))
       if (distance < 118) {
-        dealEnemyDamage(state, enemy, 32, state.player.x, state.player.y, 'panda-roller')
+        if (itemDamage) dealEnemyDamage(state, enemy, itemDamage, state.player.x, state.player.y, 'panda-roller')
+        if (talentDamage) {
+          dealEnemyDamage(state, enemy, talentDamage, state.player.x, state.player.y, 'panda-roll')
+          state.runStats.talentTriggers['panda-roll'] = (state.runStats.talentTriggers['panda-roll'] ?? 0) + 1
+        }
         if (enemy.kind !== 'boss') {
           enemy.x += (dx / distance) * 42
           enemy.y += (dy / distance) * 42
@@ -601,10 +677,10 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
   }
   if (input.dash && state.player.dashCooldown === 0) {
     state.player.dashTime = 0.22
-    state.player.dashCooldown = 2.5
+    state.player.dashCooldown = 2.5 + (state.chosenUpgrades.includes('panda-roll') ? 0.4 : 0)
     state.player.dashX = inputLength > 0 ? moveX : state.player.facingX
     state.player.dashY = inputLength > 0 ? moveY : state.player.facingY
-    state.player.dashBurstPending = state.ownedItems.includes('panda-roller')
+    state.player.dashBurstPending = state.ownedItems.includes('panda-roller') || state.chosenUpgrades.includes('panda-roll')
   }
   const slowed = state.enemyZones.some((zone) => Math.hypot(state.player.x - zone.x, state.player.y - zone.y) <= zone.radius)
   const speed = (state.player.dashTime > 0 ? 580 : 220) * state.player.moveSpeed * (slowed && state.player.dashTime === 0 ? 0.55 : 1)
@@ -738,7 +814,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
     enemy.y = Math.min(950, Math.max(75, enemy.y))
     if (distance < (enemy.kind === 'boss' ? 82 : 32) && state.player.hitCooldown === 0 && state.player.dashTime === 0) {
       const rawDamage = enemy.kind === 'boss' ? 10 : (enemy.kind === 'dasher' || enemy.kind === 'assassin' || enemy.elite) && enemy.dashTime > 0 ? 4 + Math.floor((state.wave - 1) / 2) : enemy.kind === 'boar' ? 3 + Math.floor((state.wave - 1) / 3) : 2 + Math.floor((state.wave - 1) / 3)
-      const damage = Math.max(1, Math.floor(rawDamage * (1 - state.player.armor / (state.player.armor + 60))))
+      const damage = reduceIncomingDamage(state, rawDamage)
       const shieldBefore = state.player.shield
       const absorbed = Math.min(shieldBefore, damage)
       recordInjury(state, damage, absorbed, enemy.elite && enemy.kind === 'chaser' ? 'elite-chaser' : enemy.kind)
@@ -746,6 +822,11 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
       state.player.hp -= damage - absorbed
       state.player.hitCooldown = 1.15
       state.effects.push({ id: state.nextId++, kind: 'player-hit', x: state.player.x, y: state.player.y, value: damage, life: 0.35, angle: Math.atan2(dy, dx) })
+      if (state.chosenUpgrades.includes('thorn-fur')) {
+        const reflected = dealEnemyDamage(state, enemy, 18, state.player.x, state.player.y, 'thorn-fur')
+        state.runStats.talentTriggers['thorn-fur'] = (state.runStats.talentTriggers['thorn-fur'] ?? 0) + 1
+        state.effects.push({ id: state.nextId++, kind: 'hit', x: enemy.x, y: enemy.y - 28, value: reflected, life: 0.42, angle: Math.atan2(-dy, -dx) })
+      }
       if (shieldBefore > 0 && state.player.shield === 0) triggerShieldBreak(state)
     }
   }
@@ -758,7 +839,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
       const hit = hazard.kind === 'root' ? distance <= hazard.radius : Math.abs(distance - hazard.radius) <= 34
       if (hit && state.player.dashTime === 0 && state.player.hitCooldown === 0) {
         const rawDamage = hazard.kind === 'root' ? 12 : 16
-        const damage = Math.max(1, Math.floor(rawDamage * (1 - state.player.armor / (state.player.armor + 60))))
+        const damage = reduceIncomingDamage(state, rawDamage)
         const shieldBefore = state.player.shield
         const absorbed = Math.min(shieldBefore, damage)
         recordInjury(state, damage, absorbed, hazard.kind)
@@ -1040,7 +1121,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
     projectile.x += projectile.vx * dt
     projectile.y += projectile.vy * dt
     if (state.player.hitCooldown === 0 && state.player.dashTime === 0 && Math.hypot(state.player.x - projectile.x, state.player.y - projectile.y) < 25) {
-      const damage = Math.max(1, Math.floor((2 + Math.floor((state.wave - 1) / 3)) * (1 - state.player.armor / (state.player.armor + 60))))
+      const damage = reduceIncomingDamage(state, 2 + Math.floor((state.wave - 1) / 3))
       const shieldBefore = state.player.shield
       const absorbed = Math.min(shieldBefore, damage)
       recordInjury(state, damage, absorbed, 'enemy-shot')
@@ -1068,7 +1149,14 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
         state.player.coins += Math.floor(coinValue)
         state.player.coinRemainder = coinValue - Math.floor(coinValue)
       }
-      else state.player.hp = Math.min(state.player.maxHp, state.player.hp + drop.value)
+      else {
+        const healing = state.chosenUpgrades.includes('iron-constitution') ? Math.ceil(drop.value * 0.9) : drop.value
+        state.player.hp = Math.min(state.player.maxHp, state.player.hp + healing)
+        if (state.chosenUpgrades.includes('iron-constitution')) {
+          state.player.ironArmorTime = 4
+          state.runStats.talentTriggers['iron-constitution'] = (state.runStats.talentTriggers['iron-constitution'] ?? 0) + 1
+        }
+      }
       drop.value = 0
     }
   }
@@ -1087,6 +1175,8 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
         continue
       }
       state.kills += 1
+      state.waveKills += 1
+      if (state.chosenUpgrades.includes('battle-fury')) state.runStats.maxBattleFuryStacks = Math.max(state.runStats.maxBattleFuryStacks, Math.floor(state.waveKills / 50))
       state.drops.push({ id: state.nextId++, kind: 'xp', x: enemy.x, y: enemy.y, value: enemy.elite ? 10 : 4 })
       if (enemy.elite) {
         state.drops.push({ id: state.nextId++, kind: 'coin', x: enemy.x + 10, y: enemy.y, value: 12 })
@@ -1115,16 +1205,16 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
     const hasMeleeBuild = state.characterId !== 'qingtuan' || (state.weaponLevels['iron-pot-gauntlets'] ?? 0) > 0
     const hasRangedBuild = state.characterId === 'qingtuan' || (state.weaponLevels['firecracker-launcher'] ?? 0) > 0 || (state.weaponLevels['bamboo-crossbow-turret'] ?? 0) > 0
     const pool = (Object.keys(upgrades) as UpgradeId[]).filter((id) => (
-      (id !== 'wide-sweep' || state.characterId !== 'qingtuan') && (id !== 'leaf-volley' || state.characterId === 'qingtuan') && !(id === 'leaf-volley' && state.player.projectileCount >= 3)
+      (id !== 'wide-sweep' || state.characterId !== 'qingtuan') && (id !== 'leaf-volley' || state.characterId === 'qingtuan') && !(id === 'leaf-volley' && state.player.projectileCount >= 3) && (!upgrades[id].unique || !state.chosenUpgrades.includes(id))
     ))
     const preferred = pool.filter((id) => (
-      hasMeleeBuild && (id === 'power' || id === 'haste' || id === 'wide-sweep')
-      || hasRangedBuild && (id === 'power' || id === 'haste' || id === 'leaf-volley')
-      || state.ownedItems.some((itemId) => itemId === 'iron-bracer' || itemId === 'mountain-stone' || itemId === 'spirit-bamboo-tube') && (id === 'vitality' || id === 'footwork')
+      hasMeleeBuild && (id === 'power' || id === 'haste' || id === 'wide-sweep' || id === 'thorn-fur')
+      || hasRangedBuild && (id === 'power' || id === 'haste' || id === 'leaf-volley' || id === 'battle-fury')
+      || state.ownedItems.some((itemId) => itemId === 'iron-bracer' || itemId === 'mountain-stone' || itemId === 'spirit-bamboo-tube') && (id === 'vitality' || id === 'footwork' || id === 'iron-constitution')
     ))
-    state.upgradeChoices = [preferred[Math.floor(random(state) * preferred.length)] ?? pool[Math.floor(random(state) * pool.length)]]
+    state.upgradeChoices = [rollUpgradeChoice(state, preferred.length ? preferred : pool)]
     while (state.upgradeChoices.length < 3) {
-      const choice = pool[Math.floor(random(state) * pool.length)]
+      const choice = rollUpgradeChoice(state, pool.filter((id) => !state.upgradeChoices.includes(id)))
       if (!state.upgradeChoices.includes(choice)) state.upgradeChoices.push(choice)
     }
     state.pendingUpgrade = true
@@ -1133,7 +1223,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
     if (boss) boss.enraged = true
   } else if (!state.victory && state.waveTime >= state.waveDuration) {
     const signatureId = characters[state.characterId].weaponId
-    const pool: ShopProductId[] = [...Object.keys(items) as ItemId[], ...weaponIds, signatureId].filter((id) => (
+    const pool: ShopProductId[] = [...Object.keys(items) as ItemId[], ...weaponIds, signatureId, ...(state.chosenUpgrades.includes('bamboo-unity') ? ['spinning-bamboo-blade', 'spinning-bamboo-blade', 'bamboo-crossbow-turret', 'bamboo-crossbow-turret'] as WeaponId[] : [])].filter((id) => (
       isSignatureWeaponId(id) ? state.signatureWeaponLevel < 5 && !state.signatureWeaponEvolved
         : isWeaponId(id) ? (state.weaponLevels[id] ?? 0) < 5 : !items[id].unique || !state.ownedItems.includes(id)
     ))

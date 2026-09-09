@@ -1,4 +1,4 @@
-import { buyItem, characters, chooseUpgrade, continueWave, createGameState, enemyDefinitions, isSignatureWeaponId, refreshShop, regularEnemyIds, sellItem, sellWeapon, signatureWeapons, stepGame, toggleShopLock, weaponIds } from './simulation.js'
+import { buyItem, characters, chooseUpgrade, continueWave, createGameState, enemyDefinitions, getBambooWeaponCount, isSignatureWeaponId, refreshShop, refreshUpgrades, regularEnemyIds, sellItem, sellWeapon, signatureWeapons, stepGame, toggleShopLock, upgrades, weaponIds } from './simulation.js'
 import { parseBattleRecords } from './records.js'
 
 // 战报只计实际损失生命；同帧多次命中和出售武器不能篡改历史输出。
@@ -149,6 +149,101 @@ vitalityCheck.player.hp = 6
 vitalityCheck.pendingUpgrade = true
 vitalityCheck.upgradeChoices = ['vitality', 'power', 'haste']
 if (!chooseUpgrade(vitalityCheck, 'vitality') || vitalityCheck.player.maxHp !== 15 || vitalityCheck.player.hp !== 11) throw new Error('竹息养生应增加 5 点最大生命并恢复 5 点生命')
+
+const refreshUpgradeCheck = createGameState(230, 'shanlan')
+refreshUpgradeCheck.pendingUpgrade = true
+refreshUpgradeCheck.player.coins = 12
+refreshUpgradeCheck.upgradeChoices = ['power', 'haste', 'vitality']
+if (!refreshUpgrades(refreshUpgradeCheck) || refreshUpgradeCheck.player.coins !== 12 || !refreshUpgradeCheck.freeUpgradeRefreshUsed || refreshUpgradeCheck.runStats.upgradeRefreshes !== 1) throw new Error('每波第一次强化刷新必须免费并计入战报')
+if (refreshUpgradeCheck.upgradeChoices.some((id) => ['power', 'haste', 'vitality'].includes(id))) throw new Error('刷新必须替换当前三项候选')
+if (!refreshUpgrades(refreshUpgradeCheck) || Number(refreshUpgradeCheck.player.coins) !== 6 || Number(refreshUpgradeCheck.runStats.upgradeRefreshes) !== 2) throw new Error('同波后续强化刷新必须消耗 6 铜钱')
+refreshUpgradeCheck.player.coins = 0
+if (refreshUpgrades(refreshUpgradeCheck)) throw new Error('铜钱不足时不能继续刷新强化')
+
+const lateRefreshCheck = createGameState(236, 'qingtuan')
+for (const id of ['thorn-fur', 'panda-roll', 'battle-fury', 'iron-constitution', 'bamboo-unity'] as const) {
+  lateRefreshCheck.pendingUpgrade = true
+  lateRefreshCheck.upgradeChoices = [id]
+  chooseUpgrade(lateRefreshCheck, id)
+}
+lateRefreshCheck.player.projectileCount = 3
+lateRefreshCheck.pendingUpgrade = true
+lateRefreshCheck.upgradeChoices = ['power', 'haste', 'vitality']
+if (!refreshUpgrades(lateRefreshCheck) || lateRefreshCheck.upgradeChoices.length !== 3 || new Set(lateRefreshCheck.upgradeChoices).size !== 3) throw new Error('后期有效强化较少时刷新仍须返回三个不同候选')
+
+const raritySeen = new Set<string>()
+for (let seed = 1; seed <= 500; seed += 1) {
+  const rarityCheck = createGameState(seed)
+  rarityCheck.player.xp = rarityCheck.player.nextXp
+  stepGame(rarityCheck, { x: 0, y: 0, dash: false }, 0.01)
+  for (const id of rarityCheck.upgradeChoices) raritySeen.add(upgrades[id].rarity)
+}
+if (!['普通', '稀有', '史诗', '传说'].every((rarity) => raritySeen.has(rarity))) throw new Error('强化池必须能按种子生成四档稀有度')
+
+const thornCheck = createGameState(231)
+thornCheck.pendingUpgrade = true
+thornCheck.upgradeChoices = ['thorn-fur']
+chooseUpgrade(thornCheck, 'thorn-fur')
+thornCheck.spawnTimer = 99
+thornCheck.bambooCooldown = 99
+thornCheck.enemies = [{ id: 1, kind: 'chaser', x: 800, y: 500, hp: 100, maxHp: 100, cooldown: 99, dashTime: 0, vx: 0, vy: 0 }]
+stepGame(thornCheck, { x: 0, y: 0, dash: false }, 0.01)
+if (thornCheck.runStats.damage['thorn-fur'] !== 18 || thornCheck.runStats.talentTriggers['thorn-fur'] !== 1) throw new Error('荆棘皮毛应在接触受伤时反击并记录贡献')
+thornCheck.pendingUpgrade = true
+thornCheck.upgradeChoices = ['power', 'haste', 'vitality']
+refreshUpgrades(thornCheck)
+if (thornCheck.upgradeChoices.includes('thorn-fur')) throw new Error('已经习得的唯一行为天赋不得再次出现')
+
+const rollCheck = createGameState(232)
+rollCheck.pendingUpgrade = true
+rollCheck.upgradeChoices = ['panda-roll']
+chooseUpgrade(rollCheck, 'panda-roll')
+rollCheck.spawnTimer = 99
+rollCheck.bambooCooldown = 99
+rollCheck.enemies = [{ id: 1, kind: 'chaser', x: 925, y: 500, hp: 100, maxHp: 100, cooldown: 99, dashTime: 0, vx: 0, vy: 0 }]
+for (let tick = 0; tick < 6; tick += 1) stepGame(rollCheck, { x: 1, y: 0, dash: tick === 0 }, 0.05)
+if (rollCheck.runStats.damage['panda-roll'] !== 48 || rollCheck.runStats.talentTriggers['panda-roll'] !== 1 || rollCheck.player.dashCooldown > 2.9) throw new Error('熊猫滚滚应增加闪避冷却并在结束时震击')
+
+const ironCheck = createGameState(233)
+ironCheck.pendingUpgrade = true
+ironCheck.upgradeChoices = ['iron-constitution']
+chooseUpgrade(ironCheck, 'iron-constitution')
+ironCheck.spawnTimer = 99
+ironCheck.bambooCooldown = 99
+ironCheck.player.hp = 1
+ironCheck.drops = [{ id: 1, kind: 'heal', x: 800, y: 500, value: 10 }]
+stepGame(ironCheck, { x: 0, y: 0, dash: false }, 0.01)
+if (ironCheck.player.hp !== 10 || ironCheck.player.ironArmorTime <= 3.9 || ironCheck.runStats.talentTriggers['iron-constitution'] !== 1) throw new Error('食铁体质应降低治疗量并给予临时护甲')
+ironCheck.player.hp = 20
+ironCheck.player.hitCooldown = 0
+ironCheck.bossHazards = [{ id: 2, kind: 'root', x: 800, y: 500, radius: 76, life: 0.005, duration: 0.005, triggered: false }]
+stepGame(ironCheck, { x: 0, y: 0, dash: false }, 0.01)
+if (ironCheck.player.hp !== 10) throw new Error('食铁体质触发期间必须按 +8 护甲减免伤害')
+
+const bambooCheck = createGameState(234)
+bambooCheck.pendingUpgrade = true
+bambooCheck.upgradeChoices = ['bamboo-unity']
+chooseUpgrade(bambooCheck, 'bamboo-unity')
+if (bambooCheck.player.damage !== 1.05 || getBambooWeaponCount(bambooCheck) !== 1) throw new Error('万竹归心必须计入专属竹类武器')
+bambooCheck.shopOpen = true
+bambooCheck.player.coins = 100
+bambooCheck.shopChoices[0] = 'spinning-bamboo-blade'
+buyItem(bambooCheck, 0)
+if (Number(bambooCheck.player.damage) !== 1.1 || getBambooWeaponCount(bambooCheck) !== 2) throw new Error('获得新竹类武器后万竹归心必须立即提高伤害')
+sellWeapon(bambooCheck, 'spinning-bamboo-blade')
+if (Number(bambooCheck.player.damage) !== 1.05 || getBambooWeaponCount(bambooCheck) !== 1) throw new Error('出售竹类武器后万竹归心必须立即回退伤害')
+
+const furyCheck = createGameState(235)
+furyCheck.pendingUpgrade = true
+furyCheck.upgradeChoices = ['battle-fury']
+chooseUpgrade(furyCheck, 'battle-fury')
+furyCheck.waveKills = 50
+furyCheck.spawnTimer = 99
+furyCheck.bambooCooldown = 0
+furyCheck.player.criticalChance = 0
+furyCheck.enemies = [{ id: 1, kind: 'chaser', x: 860, y: 500, hp: 100, maxHp: 100, cooldown: 99, dashTime: 0, vx: 0, vy: 0 }]
+stepGame(furyCheck, { x: 0, y: 0, dash: false }, 0.01)
+if (furyCheck.runStats.damage['bamboo-staff'] !== 45) throw new Error('越战越勇达到 50 击破后必须提供 2% 伤害')
 
 const progression = createGameState(3)
 progression.pendingUpgrade = true
