@@ -62,6 +62,11 @@ const pauseRestart = document.querySelector<HTMLButtonElement>('#pause-restart')
 const settingShake = document.querySelector<HTMLInputElement>('#setting-shake')!
 const settingReducedMotion = document.querySelector<HTMLInputElement>('#setting-reduced-motion')!
 const settingsStatus = document.querySelector<HTMLElement>('#settings-status')!
+const mobileControls = document.querySelector<HTMLElement>('#mobile-controls')!
+const mobileJoystick = document.querySelector<HTMLElement>('#mobile-joystick')!
+const mobileJoystickStick = mobileJoystick.querySelector<HTMLElement>('span')!
+const mobileDash = document.querySelector<HTMLButtonElement>('#mobile-dash')!
+const mobilePause = document.querySelector<HTMLButtonElement>('#mobile-pause')!
 settingShake.checked = gameSettings.screenShake
 settingReducedMotion.checked = gameSettings.reducedMotion
 settingsStatus.textContent = settingsAvailable ? '设置会保存在当前浏览器' : '浏览器未允许保存，本次设置仍会生效'
@@ -152,6 +157,17 @@ class BattleScene extends Phaser.Scene {
   private evolutionShown = false
   private sawOnboardingUpgrade = false
   private sawOnboardingShop = false
+  private mobilePointerId: number | null = null
+  private mobileInputX = 0
+  private mobileInputY = 0
+
+  private resetMobileJoystick = (): void => {
+    this.mobilePointerId = null
+    this.mobileInputX = 0
+    this.mobileInputY = 0
+    mobileJoystick.classList.remove('active')
+    mobileJoystickStick.style.transform = 'translate(0, 0)'
+  }
 
   private setOnboardingStep = (step: number): void => {
     onboardingStep = step
@@ -165,9 +181,10 @@ class BattleScene extends Phaser.Scene {
     const hint = document.querySelector<HTMLElement>('#onboarding-hint')!
     hint.hidden = onboardingStep >= 4 || this.loading || this.paused || this.state.pendingUpgrade || this.state.shopOpen || this.state.gameOver || this.state.victory
     if (hint.hidden) return
+    const mobileLayout = matchMedia('(max-width: 960px) and (orientation: landscape)').matches
     document.querySelector<HTMLElement>('#onboarding-copy')!.innerHTML = [
-      '<kbd>WASD</kbd> 或方向键移动，侠客会自动攻击最近的敌人',
-      '<kbd>SPACE</kbd> 闪避穿出包围，闪避期间不会受伤',
+      mobileLayout ? '拖动左侧摇杆移动，侠客会自动攻击最近的敌人' : '<kbd>WASD</kbd> 或方向键移动，侠客会自动攻击最近的敌人',
+      mobileLayout ? '点击右侧闪避穿出包围，闪避期间不会受伤' : '<kbd>SPACE</kbd> 闪避穿出包围，闪避期间不会受伤',
       '收集敌人掉落的灵竹，灵竹满后可选择一门强化',
       '坚持到本波结束，在商城购买武器和宝物后继续',
     ][onboardingStep]
@@ -384,6 +401,56 @@ class BattleScene extends Phaser.Scene {
       w: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W), a: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
       s: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S), d: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
     }
+    mobileJoystick.addEventListener('pointerdown', (event) => {
+      if (this.paused || this.state.pendingUpgrade || this.state.shopOpen || this.state.gameOver || this.state.victory) return
+      event.preventDefault()
+      this.mobilePointerId = event.pointerId
+      mobileJoystick.setPointerCapture(event.pointerId)
+      mobileJoystick.classList.add('active')
+      const bounds = mobileJoystick.getBoundingClientRect()
+      const dx = event.clientX - bounds.left - bounds.width / 2
+      const dy = event.clientY - bounds.top - bounds.height / 2
+      const distance = Math.hypot(dx, dy)
+      const scale = distance > 34 ? 34 / distance : 1
+      this.mobileInputX = Math.max(-1, Math.min(1, dx / 34))
+      this.mobileInputY = Math.max(-1, Math.min(1, dy / 34))
+      mobileJoystickStick.style.transform = `translate(${dx * scale}px, ${dy * scale}px)`
+      if (onboardingStep === 0) this.setOnboardingStep(1)
+    })
+    mobileJoystick.addEventListener('pointermove', (event) => {
+      if (event.pointerId !== this.mobilePointerId) return
+      event.preventDefault()
+      const bounds = mobileJoystick.getBoundingClientRect()
+      const dx = event.clientX - bounds.left - bounds.width / 2
+      const dy = event.clientY - bounds.top - bounds.height / 2
+      const distance = Math.hypot(dx, dy)
+      const scale = distance > 34 ? 34 / distance : 1
+      this.mobileInputX = Math.max(-1, Math.min(1, dx / 34))
+      this.mobileInputY = Math.max(-1, Math.min(1, dy / 34))
+      mobileJoystickStick.style.transform = `translate(${dx * scale}px, ${dy * scale}px)`
+    })
+    mobileJoystick.addEventListener('pointerup', this.resetMobileJoystick)
+    mobileJoystick.addEventListener('pointercancel', this.resetMobileJoystick)
+    mobileJoystick.addEventListener('lostpointercapture', this.resetMobileJoystick)
+    mobileDash.addEventListener('pointerdown', (event) => {
+      event.preventDefault()
+      if (this.paused || this.state.pendingUpgrade || this.state.shopOpen || this.state.gameOver || this.state.victory) return
+      this.dashQueued = true
+      if (onboardingStep === 1) this.setOnboardingStep(2)
+    })
+    mobilePause.onclick = () => {
+      if (this.state.pendingUpgrade || this.state.shopOpen || this.state.gameOver || this.state.victory) return
+      this.paused = true
+      this.resetMobileJoystick()
+      pauseOverlay.hidden = false
+      document.querySelector<HTMLElement>('#overlay-title')!.textContent = '竹息凝神'
+      document.querySelector<HTMLElement>('#overlay-copy')!.textContent = '战斗与计时已暂停'
+      pauseContinue.focus()
+    }
+    window.addEventListener('blur', this.resetMobileJoystick)
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) this.resetMobileJoystick()
+    })
     resultRetry.onclick = () => {
       this.state = createGameState(crypto.getRandomValues(new Uint32Array(1))[0], this.state.characterId)
       this.lastAttackId = 0
@@ -450,6 +517,7 @@ class BattleScene extends Phaser.Scene {
       if (event.code === 'Enter' && this.state.shopOpen) continueWave(this.state)
       if (event.code === 'Escape' && !this.state.gameOver && !this.state.victory && !this.state.pendingUpgrade && !this.state.shopOpen) {
         this.paused = !this.paused
+        this.resetMobileJoystick()
         pauseOverlay.hidden = !this.paused
         document.querySelector<HTMLElement>('#overlay-title')!.textContent = '竹息凝神'
         document.querySelector<HTMLElement>('#overlay-copy')!.textContent = '战斗与计时已暂停'
@@ -651,16 +719,19 @@ class BattleScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     if (this.loading) return
-    const inputX = Number(this.keys.right.isDown || this.keys.d.isDown) - Number(this.keys.left.isDown || this.keys.a.isDown)
-    const inputY = Number(this.keys.down.isDown || this.keys.s.isDown) - Number(this.keys.up.isDown || this.keys.w.isDown)
-    if (!this.paused) {
+    const keyboardX = Number(this.keys.right.isDown || this.keys.d.isDown) - Number(this.keys.left.isDown || this.keys.a.isDown)
+    const keyboardY = Number(this.keys.down.isDown || this.keys.s.isDown) - Number(this.keys.up.isDown || this.keys.w.isDown)
+    const inputX = this.mobilePointerId === null ? keyboardX : this.mobileInputX
+    const inputY = this.mobilePointerId === null ? keyboardY : this.mobileInputY
+    const portraitBlocked = matchMedia('(max-width: 760px) and (orientation: portrait)').matches
+    if (!this.paused && !portraitBlocked) {
       if (this.hitStop > 0) this.hitStop = Math.max(0, this.hitStop - delta / 1000)
       else {
         stepGame(this.state, {
           x: inputX,
           y: inputY,
           dash: this.dashQueued,
-        }, delta / 1000)
+        }, Math.min(delta, 100) / 1000)
       }
     }
     this.dashQueued = false
@@ -668,6 +739,9 @@ class BattleScene extends Phaser.Scene {
     if (onboardingStep === 2 && this.sawOnboardingUpgrade && !this.state.pendingUpgrade) this.setOnboardingStep(3)
     if (onboardingStep === 3 && this.state.shopOpen) this.sawOnboardingShop = true
     if (onboardingStep === 3 && this.sawOnboardingShop && !this.state.shopOpen) this.setOnboardingStep(4)
+    const mobileBlocked = portraitBlocked || this.paused || this.state.pendingUpgrade || this.state.shopOpen || this.state.gameOver || this.state.victory
+    mobileControls.hidden = mobileBlocked
+    if (mobileBlocked && this.mobilePointerId !== null) this.resetMobileJoystick()
     this.renderChoiceOverlay()
     this.renderOnboarding()
     this.cameras.main.centerOn(this.state.player.x, this.state.player.y)
@@ -1144,6 +1218,8 @@ class BattleScene extends Phaser.Scene {
       dash.classList.toggle('ready', this.state.player.dashCooldown === 0)
       dash.classList.toggle('near-player', this.state.player.x > 1400 && this.state.player.y < 180)
     }
+    mobileDash.disabled = this.state.player.dashCooldown > 0
+    mobileDash.querySelector<HTMLElement>('small')!.textContent = this.state.player.dashCooldown === 0 ? '就绪' : `${this.state.player.dashCooldown.toFixed(1)}s`
     const hurtVignette = document.querySelector<HTMLElement>('#hurt-vignette')
     if (hurtVignette) hurtVignette.classList.toggle('active', this.state.effects.some((effect) => effect.kind === 'player-hit'))
     const buildTags = document.querySelector<HTMLElement>('#build-tags')
