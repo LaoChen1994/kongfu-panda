@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import './style.css'
-import { buyItem, characters, chooseUpgrade, continueWave, createGameState, enemyDefinitions, injurySources, isSignatureWeaponId, isWeaponId, items, refreshShop, sellItem, sellWeapon, signatureWeapons, stepGame, toggleShopLock, upgrades, weaponIds, weapons, type CharacterId } from './simulation.js'
+import { buyItem, characters, chooseUpgrade, continueWave, createGameState, enemyDefinitions, getBambooWeaponCount, injurySources, isSignatureWeaponId, isWeaponId, items, refreshShop, refreshUpgrades, sellItem, sellWeapon, signatureWeapons, stepGame, toggleShopLock, upgrades, weaponIds, weapons, type CharacterId } from './simulation.js'
 import { parseBattleRecords } from './records.js'
 
 const assetRoot = `${import.meta.env.BASE_URL}assets/`
@@ -175,7 +175,23 @@ class BattleScene extends Phaser.Scene {
     } else if (import.meta.env.DEV && new URLSearchParams(location.search).has('playtest-upgrade')) {
       this.state.player.hp = Math.min(6, this.state.player.maxHp)
       this.state.pendingUpgrade = true
-      this.state.upgradeChoices = ['vitality', 'power', 'haste']
+      this.state.player.coins = 12
+      this.state.upgradeChoices = new URLSearchParams(location.search).get('playtest-upgrade') === 'talents' ? ['thorn-fur', 'panda-roll', 'bamboo-unity'] : ['vitality', 'power', 'haste']
+    } else if (import.meta.env.DEV && new URLSearchParams(location.search).has('playtest-talents-combat')) {
+      for (const id of ['thorn-fur', 'panda-roll', 'battle-fury', 'iron-constitution', 'bamboo-unity'] as const) {
+        this.state.pendingUpgrade = true
+        this.state.upgradeChoices = [id]
+        chooseUpgrade(this.state, id)
+      }
+      this.state.waveKills = 50
+      this.state.runStats.maxBattleFuryStacks = 1
+      this.state.waveDuration = 999
+      this.state.spawnTimer = 99
+      this.state.bambooCooldown = 99
+      this.state.player.maxHp = 200
+      this.state.player.hp = 190
+      this.state.drops = [{ id: this.state.nextId++, kind: 'heal', x: this.state.player.x, y: this.state.player.y, value: 10 }]
+      this.state.enemies = [{ id: this.state.nextId++, kind: 'chaser', x: this.state.player.x + 26, y: this.state.player.y, hp: 500, maxHp: 500, cooldown: 99, dashTime: 0, vx: 0, vy: 0 }]
     } else if (import.meta.env.DEV && new URLSearchParams(location.search).has('playtest-weapons-combat')) {
       this.state.weaponLevels = { 'iron-pot-gauntlets': 3, 'firecracker-launcher': 4 }
     } else if (import.meta.env.DEV && new URLSearchParams(location.search).has('playtest-complete-weapons-shop')) {
@@ -241,7 +257,7 @@ class BattleScene extends Phaser.Scene {
         this.state.shopChoices[0] = characters[this.state.characterId].weaponId
         buyItem(this.state, 0)
       }
-      for (const id of ['vitality', 'power', 'haste', 'footwork', 'vitality', 'power'] as const) {
+      for (const id of ['vitality', 'power', 'haste', 'footwork', 'vitality', 'power', 'thorn-fur', 'panda-roll', 'battle-fury', 'iron-constitution', 'bamboo-unity'] as const) {
         this.state.pendingUpgrade = true
         this.state.upgradeChoices = [id]
         chooseUpgrade(this.state, id)
@@ -249,8 +265,11 @@ class BattleScene extends Phaser.Scene {
       }
       this.state.wave = 9
       continueWave(this.state)
+      this.state.runStats.talentTriggers = { 'thorn-fur': 8, 'panda-roll': 12, 'iron-constitution': 4 }
+      this.state.runStats.maxBattleFuryStacks = 2
+      this.state.waveKills = 100
       const boss = this.state.enemies.find((enemy) => enemy.kind === 'boss')
-      if (boss) { boss.x = 850; boss.y = 500; boss.hp = 600; boss.maxHp = 600 }
+      if (boss) { boss.x = 850; boss.y = 500; boss.hp = 120; boss.maxHp = 600 }
     }
     this.cameras.main.setBackgroundColor('#173527')
     this.add.tileSprite(800, 500, 1600, 1000, 'bamboo-ground').setDepth(-10)
@@ -371,10 +390,11 @@ class BattleScene extends Phaser.Scene {
     const shopItemCount = document.querySelector<HTMLElement>('#shop-item-count')
     const shopStats = document.querySelector<HTMLElement>('#shop-stats')
     const refreshButton = document.querySelector<HTMLButtonElement>('#refresh-shop')
-    if (!overlay || !cards || !title || !kicker || !copy || !continueButton || !shopLayout || !shopCards || !shopWeapons || !shopInventory || !shopItemCount || !shopStats || !refreshButton) return
+    const refreshUpgradeButton = document.querySelector<HTMLButtonElement>('#refresh-upgrades')
+    if (!overlay || !cards || !title || !kicker || !copy || !continueButton || !shopLayout || !shopCards || !shopWeapons || !shopInventory || !shopItemCount || !shopStats || !refreshButton || !refreshUpgradeButton) return
     if (this.state.gameOver || this.state.victory) { overlay.hidden = true; return }
 
-    const mode = this.state.pendingUpgrade ? `upgrade-${this.state.player.level}` : this.state.shopOpen ? `shop-${this.state.wave}-${this.state.player.coins}-${this.state.shopChoices.join('-')}-${this.state.lockedShopIndices.join('-')}-${this.state.ownedItems.join('-')}-${this.state.signatureWeaponLevel}-${this.state.signatureWeaponEvolved}-${Object.entries(this.state.weaponLevels).join('-')}` : ''
+    const mode = this.state.pendingUpgrade ? `upgrade-${this.state.player.level}-${this.state.player.coins}-${this.state.freeUpgradeRefreshUsed}-${this.state.upgradeChoices.join('-')}` : this.state.shopOpen ? `shop-${this.state.wave}-${this.state.player.coins}-${this.state.shopChoices.join('-')}-${this.state.lockedShopIndices.join('-')}-${this.state.ownedItems.join('-')}-${this.state.signatureWeaponLevel}-${this.state.signatureWeaponEvolved}-${Object.entries(this.state.weaponLevels).join('-')}` : ''
     overlay.hidden = !mode
     if (!mode || mode === this.overlayMode) return
     this.overlayMode = mode
@@ -388,12 +408,22 @@ class BattleScene extends Phaser.Scene {
       copy.textContent = '战斗已暂停 · 让这一局形成自己的招式'
       cards.style.gridTemplateColumns = 'repeat(3, 1fr)'
       continueButton.hidden = true
+      refreshUpgradeButton.hidden = false
+      refreshUpgradeButton.textContent = this.state.freeUpgradeRefreshUsed ? `刷新强化 · ${this.state.upgradeRefreshCost} 铜钱` : '本波首次刷新 · 免费'
+      refreshUpgradeButton.disabled = this.state.freeUpgradeRefreshUsed && this.state.player.coins < this.state.upgradeRefreshCost
+      refreshUpgradeButton.onclick = () => {
+        if (refreshUpgrades(this.state)) this.overlayMode = ''
+      }
       this.state.upgradeChoices.forEach((id, index) => {
         const upgrade = upgrades[id]
+        const preview = structuredClone(this.state)
+        chooseUpgrade(preview, id)
+        const changes = buildStatFields.filter(({ key }) => Math.abs(preview.player[key] - this.state.player[key]) > 1e-8)
         const button = document.createElement('button')
         button.className = 'choice-card'
         button.type = 'button'
-        button.innerHTML = `<kbd>${index + 1}</kbd><small>${upgrade.rarity} · ${upgrade.tag}</small><strong>${upgrade.name}</strong><span>${upgrade.description}</span><em>立即生效</em>`
+        button.dataset.rarity = upgrade.rarity
+        button.innerHTML = `<kbd>${index + 1}</kbd>${upgrade.image ? `<img src="${import.meta.env.BASE_URL}${upgrade.image}" alt="">` : ''}<small>${upgrade.rarity} · ${upgrade.tag}</small><strong>${upgrade.name}</strong><span>${upgrade.description}</span><em>${changes.map(({ key, label, scale, unit }) => `${label} ${Math.round(this.state.player[key] * scale)}${unit} → ${Math.round(preview.player[key] * scale)}${unit}`).join('；') || upgrade.preview}</em>`
         button.addEventListener('click', () => chooseUpgrade(this.state, id))
         cards.append(button)
       })
@@ -401,6 +431,7 @@ class BattleScene extends Phaser.Scene {
     } else {
       cards.hidden = true
       shopLayout.hidden = false
+      refreshUpgradeButton.hidden = true
       kicker.textContent = `竹林补给 · 第 ${this.state.wave} 波结束`
       title.textContent = '整备下一波构筑'
       copy.textContent = `现有 ${this.state.player.coins} 铜钱 · 商品可重复购买，唯一宝物除外`
@@ -694,7 +725,18 @@ class BattleScene extends Phaser.Scene {
           graphics.lineStyle(4, index === 0 ? 0xe3a83b : 0xcdf08a, alpha).lineBetween(effect.x, effect.y, effect.x + Math.cos(angle) * 28, effect.y + Math.sin(angle) * 28)
         }
       }
-      if (effect.kind === 'dash-burst') graphics.lineStyle(8, 0x9bcb66, alpha).strokeCircle(effect.x, effect.y, 118 * (1 - effect.life / 0.35))
+      if (effect.kind === 'dash-burst') {
+        const progress = 1 - effect.life / 0.35
+        const radius = 45 + 73 * progress
+        graphics.lineStyle(7, 0x9bcb66, alpha * 0.82).beginPath().arc(effect.x, effect.y, radius, effect.angle - 2.35, effect.angle + 0.15).strokePath()
+        graphics.lineStyle(4, 0xe3a83b, alpha * 0.7).beginPath().arc(effect.x, effect.y, radius - 12, effect.angle + 0.55, effect.angle + 2.55).strokePath()
+        for (let index = 0; index < 7; index += 1) {
+          const angle = effect.angle - 2.25 + index * 0.72
+          const leafX = effect.x + Math.cos(angle) * (radius + (index % 2) * 8)
+          const leafY = effect.y + Math.sin(angle) * (radius + (index % 2) * 8)
+          graphics.fillStyle(index % 3 === 0 ? 0xf3e6c8 : 0xcdf08a, alpha).fillTriangle(leafX + Math.cos(angle) * 9, leafY + Math.sin(angle) * 9, leafX + Math.cos(angle + 1.15) * 5, leafY + Math.sin(angle + 1.15) * 5, leafX + Math.cos(angle - 1.15) * 5, leafY + Math.sin(angle - 1.15) * 5)
+        }
+      }
       if (effect.kind === 'shield-break') {
         const distance = 35 + 82 * (1 - effect.life / 0.42)
         for (let index = 0; index < 10; index += 1) {
@@ -921,6 +963,16 @@ class BattleScene extends Phaser.Scene {
     if (shieldRow) shieldRow.hidden = this.state.characterId !== 'shimo'
     if (shieldFill) shieldFill.style.width = `${this.state.player.shieldMax > 0 ? this.state.player.shield / this.state.player.shieldMax * 100 : 0}%`
     if (shieldText) shieldText.textContent = `${Math.ceil(this.state.player.shield)} / ${this.state.player.shieldMax || Math.ceil(this.state.player.maxHp * 0.08)}`
+    const talentStatus = document.querySelector<HTMLElement>('#talent-status')
+    if (talentStatus) {
+      const status = [
+        this.state.player.ironArmorTime > 0 ? `食铁护甲 +8 · ${this.state.player.ironArmorTime.toFixed(1)}s` : '',
+        this.state.chosenUpgrades.includes('battle-fury') ? `越战越勇 +${Math.floor(this.state.waveKills / 50) * 2}%` : '',
+        this.state.chosenUpgrades.includes('bamboo-unity') ? `万竹归心 +${getBambooWeaponCount(this.state) * 5}%` : '',
+      ].filter(Boolean).join(' · ')
+      talentStatus.hidden = !status
+      talentStatus.textContent = status
+    }
     const values: Record<string, string> = {
       '#character-name': characters[this.state.characterId].name,
       '#health-text': `${Math.ceil(this.state.player.hp)} / ${this.state.player.maxHp}`,
@@ -1014,6 +1066,8 @@ class BattleScene extends Phaser.Scene {
         { name: `${this.state.characterId === 'shimo' && this.state.signatureWeaponEvolved ? signature.evolution.name : characters.shimo.weaponName}（含破盾反击）`, image: this.state.characterId === 'shimo' && this.state.signatureWeaponEvolved ? signature.evolution.image : characters.shimo.weaponImage, value: stats.damage['iron-bamboo-shield'] ?? 0 },
         ...weaponIds.map((id) => ({ name: weapons[id].name, image: weapons[id].image, value: stats.damage[id] ?? 0 })),
         { name: items['panda-roller'].name, image: items['panda-roller'].image, value: stats.damage['panda-roller'] ?? 0 },
+        { name: upgrades['thorn-fur'].name, image: upgrades['thorn-fur'].image ?? '', value: stats.damage['thorn-fur'] ?? 0 },
+        { name: upgrades['panda-roll'].name, image: upgrades['panda-roll'].image ?? '', value: stats.damage['panda-roll'] ?? 0 },
       ].filter((entry) => entry.value > 0).sort((a, b) => b.value - a.value)
       const totalDamage = damageEntries.reduce((sum, entry) => sum + entry.value, 0)
       const totalInjury = Object.values(stats.injuries).reduce((sum, value) => sum + value, 0)
@@ -1039,8 +1093,11 @@ class BattleScene extends Phaser.Scene {
       document.querySelector<HTMLElement>('#result-loadout')!.innerHTML = `<span class="${this.state.signatureWeaponEvolved ? 'evolved' : ''}"><img src="${import.meta.env.BASE_URL}${this.state.signatureWeaponEvolved ? signature.evolution.image : signature.image}" alt="">${this.state.signatureWeaponEvolved ? signature.evolution.name : signature.name} · ${this.state.signatureWeaponEvolved ? '觉醒' : `Lv.${this.state.signatureWeaponLevel}`}</span>${weaponIds.filter((id) => this.state.weaponLevels[id]).map((id) => `<span><img src="${import.meta.env.BASE_URL}${weapons[id].image}" alt="">${weapons[id].name} · Lv.${this.state.weaponLevels[id]}</span>`).join('')}`
       document.querySelector<HTMLElement>('#result-item-count')!.textContent = `${this.state.ownedItems.length} 件宝物`
       document.querySelector<HTMLElement>('#result-items')!.innerHTML = [...new Set(this.state.ownedItems)].map((id) => `<div><img src="${import.meta.env.BASE_URL}${items[id].image}" alt=""><span><b>${items[id].name} ×${this.state.ownedItems.filter((ownedId) => ownedId === id).length}</b><small>每件：${items[id].description}</small></span></div>`).join('') || '<p class="result-empty">本局没有携带宝物。</p>'
-      document.querySelector<HTMLElement>('#result-upgrade-count')!.textContent = `${this.state.chosenUpgrades.length} 次选择`
-      document.querySelector<HTMLElement>('#result-upgrades')!.innerHTML = [...new Set(this.state.chosenUpgrades)].map((id) => `<div><b>${upgrades[id].name} ×${this.state.chosenUpgrades.filter((chosen) => chosen === id).length}</b><small>每次：${upgrades[id].description}</small></div>`).join('') || '<p class="result-empty">尚未习得强化。</p>'
+      document.querySelector<HTMLElement>('#result-upgrade-count')!.textContent = `${this.state.chosenUpgrades.length} 次选择 · ${stats.upgradeRefreshes} 次刷新`
+      document.querySelector<HTMLElement>('#result-upgrades')!.innerHTML = [...new Set(this.state.chosenUpgrades)].map((id) => {
+        const contribution = id === 'thorn-fur' ? `反击 ${stats.talentTriggers[id] ?? 0} 次` : id === 'panda-roll' ? `震击命中 ${stats.talentTriggers[id] ?? 0} 个目标` : id === 'battle-fury' ? `最高 ${stats.maxBattleFuryStacks} 层` : id === 'iron-constitution' ? `触发临时护甲 ${stats.talentTriggers[id] ?? 0} 次` : id === 'bamboo-unity' ? `终局 ${getBambooWeaponCount(this.state)} 种竹武器，伤害 +${getBambooWeaponCount(this.state) * 5}%` : ''
+        return `<div>${upgrades[id].image ? `<img src="${import.meta.env.BASE_URL}${upgrades[id].image}" alt="">` : ''}<span><b>${upgrades[id].name} ×${this.state.chosenUpgrades.filter((chosen) => chosen === id).length}</b><small>每次：${upgrades[id].description}${contribution ? ` · ${contribution}` : ''}</small></span></div>`
+      }).join('') || '<p class="result-empty">尚未习得强化。</p>'
       const debugRun = import.meta.env.DEV && [...new URLSearchParams(location.search).keys()].some((key) => key.startsWith('playtest-'))
       if (!debugRun) {
         try { battleRecords = parseBattleRecords(localStorage.getItem('panda-battle-records')) } catch { recordsAvailable = false }
