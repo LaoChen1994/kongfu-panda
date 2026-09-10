@@ -160,6 +160,17 @@ class BattleScene extends Phaser.Scene {
   private mobilePointerId: number | null = null
   private mobileInputX = 0
   private mobileInputY = 0
+  private mobileShopTab: 'market' | 'summary' | 'inventory' = 'market'
+
+  private setMobileShopTab = (tab: 'market' | 'summary' | 'inventory'): void => {
+    this.mobileShopTab = tab
+    document.querySelectorAll<HTMLButtonElement>('[data-shop-tab]').forEach((button) => {
+      button.setAttribute('aria-selected', String(button.dataset.shopTab === tab))
+    })
+    document.querySelectorAll<HTMLElement>('[data-shop-panel]').forEach((panel) => {
+      panel.classList.toggle('mobile-active', panel.dataset.shopPanel === tab)
+    })
+  }
 
   private resetMobileJoystick = (): void => {
     this.mobilePointerId = null
@@ -401,6 +412,13 @@ class BattleScene extends Phaser.Scene {
       w: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W), a: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
       s: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S), d: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
     }
+    document.querySelectorAll<HTMLButtonElement>('[data-shop-tab]').forEach((button) => {
+      button.onclick = () => {
+        const tab = button.dataset.shopTab
+        if (tab === 'market' || tab === 'summary' || tab === 'inventory') this.setMobileShopTab(tab)
+      }
+    })
+    this.setMobileShopTab('market')
     mobileJoystick.addEventListener('pointerdown', (event) => {
       if (this.paused || this.state.pendingUpgrade || this.state.shopOpen || this.state.gameOver || this.state.victory) return
       event.preventDefault()
@@ -550,6 +568,7 @@ class BattleScene extends Phaser.Scene {
     const kicker = document.querySelector<HTMLElement>('#choice-kicker')
     const copy = document.querySelector<HTMLElement>('#choice-copy')
     const continueButton = document.querySelector<HTMLButtonElement>('#continue-wave')
+    const shopTabs = document.querySelector<HTMLElement>('#shop-tabs')
     const shopLayout = document.querySelector<HTMLElement>('#shop-layout')
     const shopCards = document.querySelector<HTMLElement>('#shop-cards')
     const shopWeapons = document.querySelector<HTMLElement>('#shop-weapons')
@@ -558,7 +577,7 @@ class BattleScene extends Phaser.Scene {
     const shopStats = document.querySelector<HTMLElement>('#shop-stats')
     const refreshButton = document.querySelector<HTMLButtonElement>('#refresh-shop')
     const refreshUpgradeButton = document.querySelector<HTMLButtonElement>('#refresh-upgrades')
-    if (!overlay || !cards || !title || !kicker || !copy || !continueButton || !shopLayout || !shopCards || !shopWeapons || !shopInventory || !shopItemCount || !shopStats || !refreshButton || !refreshUpgradeButton) return
+    if (!overlay || !cards || !title || !kicker || !copy || !continueButton || !shopTabs || !shopLayout || !shopCards || !shopWeapons || !shopInventory || !shopItemCount || !shopStats || !refreshButton || !refreshUpgradeButton) return
     if (this.state.gameOver || this.state.victory) { overlay.hidden = true; return }
 
     const mode = this.state.pendingUpgrade ? `upgrade-${this.state.player.level}-${this.state.player.coins}-${this.state.freeUpgradeRefreshUsed}-${this.state.upgradeChoices.join('-')}` : this.state.shopOpen ? `shop-${this.state.wave}-${this.state.player.coins}-${this.state.shopChoices.join('-')}-${this.state.lockedShopIndices.join('-')}-${this.state.ownedItems.join('-')}-${this.state.signatureWeaponLevel}-${this.state.signatureWeaponEvolved}-${Object.entries(this.state.weaponLevels).join('-')}` : ''
@@ -569,6 +588,7 @@ class BattleScene extends Phaser.Scene {
     cards.innerHTML = ''
     if (this.state.pendingUpgrade) {
       cards.hidden = false
+      shopTabs.hidden = true
       shopLayout.hidden = true
       kicker.textContent = `境界突破 · Lv.${this.state.player.level}`
       title.textContent = '选择一门强化'
@@ -597,7 +617,9 @@ class BattleScene extends Phaser.Scene {
       this.playTone(520, 0.18, 0.045)
     } else {
       cards.hidden = true
+      shopTabs.hidden = false
       shopLayout.hidden = false
+      this.setMobileShopTab(this.mobileShopTab)
       refreshUpgradeButton.hidden = true
       kicker.textContent = `竹林补给 · 第 ${this.state.wave} 波结束`
       title.textContent = '整备下一波构筑'
@@ -739,6 +761,7 @@ class BattleScene extends Phaser.Scene {
     if (onboardingStep === 2 && this.sawOnboardingUpgrade && !this.state.pendingUpgrade) this.setOnboardingStep(3)
     if (onboardingStep === 3 && this.state.shopOpen) this.sawOnboardingShop = true
     if (onboardingStep === 3 && this.sawOnboardingShop && !this.state.shopOpen) this.setOnboardingStep(4)
+    if (!this.state.shopOpen && this.mobileShopTab !== 'market') this.setMobileShopTab('market')
     const mobileBlocked = portraitBlocked || this.paused || this.state.pendingUpgrade || this.state.shopOpen || this.state.gameOver || this.state.victory
     mobileControls.hidden = mobileBlocked
     if (mobileBlocked && this.mobilePointerId !== null) this.resetMobileJoystick()
