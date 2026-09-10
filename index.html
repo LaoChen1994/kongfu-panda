@@ -131,15 +131,20 @@
             <p id="choice-copy" class="choice-copy">战斗已暂停，选择会立即改变本局构筑</p>
             <div id="choice-cards" class="choice-cards"></div>
             <button id="refresh-upgrades" class="refresh-upgrades" type="button" hidden>免费刷新强化</button>
+            <div id="shop-tabs" class="shop-tabs" role="tablist" aria-label="商城页面" hidden>
+              <button type="button" role="tab" aria-selected="true" aria-controls="shop-market" data-shop-tab="market">商品</button>
+              <button type="button" role="tab" aria-selected="false" aria-controls="shop-summary" data-shop-tab="summary">属性</button>
+              <button type="button" role="tab" aria-selected="false" aria-controls="shop-inventory-panel" data-shop-tab="inventory">行囊</button>
+            </div>
             <div id="shop-layout" class="shop-layout" hidden>
-              <aside class="shop-column shop-summary" aria-label="当前属性">
+              <aside id="shop-summary" class="shop-column shop-summary" role="tabpanel" aria-label="当前属性" data-shop-panel="summary">
                 <h3>侠客属性</h3>
                 <div id="shop-stats"></div>
               </aside>
-              <section class="shop-market" aria-label="补给商品">
+              <section id="shop-market" class="shop-market mobile-active" role="tabpanel" aria-label="补给商品" data-shop-panel="market">
                 <div id="shop-cards" class="shop-cards"></div>
               </section>
-              <aside class="shop-column shop-inventory" aria-label="武器与宝物栏">
+              <aside id="shop-inventory-panel" class="shop-column shop-inventory" role="tabpanel" aria-label="武器与宝物栏" data-shop-panel="inventory">
                 <h3>通用武器 <small>3 槽</small></h3>
                 <div id="shop-weapons"></div>
                 <h3 class="treasure-heading">行囊 <small><b id="shop-item-count">0</b> 件宝物 · 点击出售一件</small></h3>
@@ -148,9 +153,9 @@
               <div class="shop-actions">
                 <button id="refresh-shop" type="button">刷新商品 · 4 铜钱</button>
                 <span>商品可分别锁定 · 出售返还 60%</span>
+                <button id="continue-wave" class="continue-wave" type="button" hidden>整备完毕 · 进入下一波</button>
               </div>
             </div>
-            <button id="continue-wave" class="continue-wave" type="button" hidden>整备完毕 · 进入下一波</button>
           </div>
         </div>
         <div id="hurt-vignette" class="hurt-vignette"></div>
