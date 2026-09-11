@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import './style.css'
-import { buyItem, characters, chooseUpgrade, continueWave, createGameState, enemyDefinitions, getBambooWeaponCount, injurySources, isSignatureWeaponId, isWeaponId, items, refreshShop, refreshUpgrades, sellItem, sellWeapon, signatureWeapons, stepGame, toggleShopLock, upgrades, weaponIds, weapons, type CharacterId } from './simulation.js'
+import { buyItem, characters, chooseUpgrade, continueWave, createGameState, enemyDefinitions, getBambooWeaponCount, getShopPrice, injurySources, isSignatureWeaponId, isWeaponId, items, refreshShop, refreshUpgrades, sellItem, sellWeapon, signatureWeapons, stepGame, toggleShopLock, upgrades, weaponIds, weapons, type CharacterId } from './simulation.js'
 import { parseBattleRecords } from './records.js'
 
 const assetRoot = `${import.meta.env.BASE_URL}assets/`
@@ -92,10 +92,18 @@ const buildStatFields = [
   { key: 'rangedDamage', label: '远程伤害', scale: 100, unit: '%' },
   { key: 'attackSpeed', label: '攻击速度', scale: 100, unit: '%' },
   { key: 'criticalChance', label: '暴击率', scale: 100, unit: '%' },
+  { key: 'dodgeChance', label: '闪避率', scale: 100, unit: '%' },
   { key: 'moveSpeed', label: '移动速度', scale: 100, unit: '%' },
+  { key: 'cooldownMultiplier', label: '武器冷却间隔', scale: 100, unit: '%' },
+  { key: 'basicAttackDamage', label: '武器伤害', scale: 100, unit: '%' },
   { key: 'meleeRange', label: '杖/盾攻击范围', scale: 1, unit: '' },
   { key: 'projectileCount', label: '飞叶数量·青团', scale: 1, unit: '' },
+  { key: 'extraProjectiles', label: '额外投射物', scale: 1, unit: '' },
+  { key: 'projectileDamage', label: '单发投射物伤害', scale: 100, unit: '%' },
   { key: 'projectileSpeed', label: '飞叶速度·青团', scale: 1, unit: '' },
+  { key: 'reflectDamage', label: '接触反伤', scale: 1, unit: '' },
+  { key: 'luck', label: '幸运', scale: 100, unit: '%' },
+  { key: 'shopPriceMultiplier', label: '商城价格', scale: 100, unit: '%' },
   { key: 'pickupRange', label: '拾取范围', scale: 1, unit: '' },
   { key: 'coinGain', label: '铜钱获取', scale: 100, unit: '%' },
   { key: 'enemyPressure', label: '敌潮压力', scale: 100, unit: '%' },
@@ -256,6 +264,10 @@ class BattleScene extends Phaser.Scene {
         this.state.player.coins = 80
         this.state.shopChoices = ['martial-belt', 'wind-feather', 'iron-bracer', 'panda-roller']
       }
+    } else if (import.meta.env.DEV && new URLSearchParams(location.search).has('playtest-items')) {
+      this.state.shopOpen = true
+      this.state.player.coins = 500
+      this.state.shopChoices = ['barbed-backplate', 'twin-bamboo', 'monk-beads', 'lucky-bell']
     } else if (import.meta.env.DEV && new URLSearchParams(location.search).has('playtest-evolution')) {
       const signature = signatureWeapons[characters[this.state.characterId].weaponId]
       if (new URLSearchParams(location.search).get('playtest-evolution') === 'combat') {
@@ -626,9 +638,10 @@ class BattleScene extends Phaser.Scene {
       copy.textContent = onboardingStep === 3 ? `首次整备 · 用 ${this.state.player.coins} 铜钱补强构筑，再进入下一波` : `现有 ${this.state.player.coins} 铜钱 · 商品可重复购买，唯一宝物除外`
       continueButton.hidden = false
       continueButton.onclick = () => continueWave(this.state)
+      const shopSoldOut = this.state.shopChoices.every((id) => id === null)
       const allProductsLocked = this.state.shopChoices.every((id, index) => id !== null && this.state.lockedShopIndices.includes(index))
-      refreshButton.textContent = allProductsLocked ? '全部商品已锁定' : `刷新商品 · ${this.state.shopRefreshCost} 铜钱`
-      refreshButton.disabled = allProductsLocked || this.state.player.coins < this.state.shopRefreshCost
+      refreshButton.textContent = allProductsLocked ? '全部商品已锁定' : shopSoldOut ? '补齐商品 · 免费' : `刷新商品 · ${this.state.shopRefreshCost} 铜钱`
+      refreshButton.disabled = allProductsLocked || (!shopSoldOut && this.state.player.coins < this.state.shopRefreshCost)
       refreshButton.onclick = () => {
         if (refreshShop(this.state)) this.overlayMode = ''
       }
@@ -647,8 +660,10 @@ class BattleScene extends Phaser.Scene {
         const signatureWeapon = isSignatureWeaponId(id)
         const commonWeapon = isWeaponId(id)
         const product = commonWeapon ? weapons[id] : signatureWeapon ? signatureWeapons[id] : items[id]
+        const price = getShopPrice(this.state, product.price)
         const weaponLevel = signatureWeapon ? this.state.signatureWeaponLevel : commonWeapon ? this.state.weaponLevels[id] ?? 0 : 0
-        const uniqueOwned = Boolean(!commonWeapon && !signatureWeapon && items[id].unique && this.state.ownedItems.includes(id))
+        const stackLimit = !commonWeapon && !signatureWeapon ? items[id].unique ? 1 : items[id].maxStacks : undefined
+        const stackLimitReached = stackLimit !== undefined && this.state.ownedItems.filter((itemId) => itemId === id).length >= stackLimit
         const weaponFull = commonWeapon && weaponLevel === 0 && Object.keys(this.state.weaponLevels).length >= 3
         const maxLevel = (commonWeapon || signatureWeapon) && weaponLevel >= 5
         const buyButton = document.createElement('button')
@@ -658,10 +673,10 @@ class BattleScene extends Phaser.Scene {
         article.innerHTML = `<kbd>${index + 1}</kbd><img src="${import.meta.env.BASE_URL}${product.image}" alt=""><small>${product.rarity} · ${signatureWeapon ? `专属武器 · Lv.${weaponLevel} → Lv.${weaponLevel + 1}` : commonWeapon ? `武器 · ${weaponLevel >= 5 ? 'Lv.5 · 已满级' : weaponLevel > 0 ? `Lv.${weaponLevel} → Lv.${weaponLevel + 1}` : '新武器'}` : '宝物'}</small><strong>${product.name}</strong><span>${product.description}</span><em>${product.preview}</em>`
         if (!commonWeapon && !signatureWeapon) {
           const preview = structuredClone(this.state)
-          preview.player.coins = Math.max(preview.player.coins, product.price)
+          preview.player.coins = Math.max(preview.player.coins, price)
           const available = buyItem(preview, index)
           const changes = buildStatFields.filter(({ key }) => Math.abs(preview.player[key] - this.state.player[key]) > 1e-8)
-          article.querySelector('em')!.textContent = available ? changes.map(({ key, label, scale, unit }) => `${label} ${Math.round(this.state.player[key] * scale)}${unit} → ${Math.round(preview.player[key] * scale)}${unit}`).join('；') || product.preview : '唯一宝物 · 已拥有，不能重复购买'
+          article.querySelector('em')!.textContent = available ? changes.map(({ key, label, scale, unit }) => `${label} ${Math.round(this.state.player[key] * scale)}${unit} → ${Math.round(preview.player[key] * scale)}${unit}`).join('；') || product.preview : stackLimit === 1 ? '唯一宝物 · 已拥有，不能重复购买' : `已达持有上限 · 最多 ${stackLimit} 件`
           const notice = document.createElement('small')
           notice.className = 'shop-limit'
           notice.textContent = [
@@ -672,13 +687,17 @@ class BattleScene extends Phaser.Scene {
             id === 'wind-feather' ? '弹速仅作用于青团飞叶；远程伤害作用于所有远程武器' : '',
             id === 'bamboo-dew-pill' ? `立即恢复 ${Math.max(0, Math.round(preview.player.hp - this.state.player.hp))} 生命` : '',
             id === 'food-god-lunchbox' ? `整备恢复 ${Math.round((0.35 + this.state.player.waveHealing) * 100)}% → ${Math.round((0.35 + preview.player.waveHealing) * 100)}%，不超过生命上限` : '',
+            id === 'barbed-backplate' ? '只反击造成实际命中的接触敌人；闪避率最低为 0%' : '',
+            id === 'twin-bamboo' ? '作用于飞叶、爆竹和竹弩；额外投射物最多 +2' : '',
+            id === 'monk-beads' ? '冷却缩减作用于所有自动武器；武器伤害最低 50%' : '',
+            id === 'lucky-bell' ? `后续商品按 ${Math.round(preview.player.shopPriceMultiplier * 100)}% 价格结算；每 15% 幸运把史诗出现率提高 3 个百分点` : '',
           ].filter(Boolean).join('；')
           if (notice.textContent) article.append(notice)
         }
         buyButton.type = 'button'
         buyButton.className = 'shop-buy'
-        buyButton.disabled = uniqueOwned || weaponFull || maxLevel || this.state.player.coins < product.price
-        buyButton.textContent = uniqueOwned ? '已拥有' : weaponFull ? '通用武器栏已满' : maxLevel ? '已达 Lv.5' : this.state.player.coins < product.price ? `缺少 ${product.price - this.state.player.coins} 铜钱` : `${product.price} 铜钱 · ${weaponLevel > 0 ? '合成升级' : '购买'}`
+        buyButton.disabled = stackLimitReached || weaponFull || maxLevel || this.state.player.coins < price
+        buyButton.textContent = stackLimitReached ? stackLimit === 1 ? '已拥有' : `已达 ${stackLimit} 件上限` : weaponFull ? '通用武器栏已满' : maxLevel ? '已达 Lv.5' : this.state.player.coins < price ? `缺少 ${price - this.state.player.coins} 铜钱` : `${price} 铜钱 · ${weaponLevel > 0 ? '合成升级' : '购买'}`
         buyButton.addEventListener('click', () => {
           if (buyItem(this.state, index)) this.overlayMode = ''
         })
@@ -692,6 +711,7 @@ class BattleScene extends Phaser.Scene {
         article.append(buyButton, lockButton)
         shopCards.append(article)
       })
+      if (shopSoldOut) shopCards.innerHTML = '<p class="shop-empty">本轮补给已取完<br><small>可免费补齐商品，或整备进入下一波</small></p>'
       shopWeapons.innerHTML = ''
       const signature = signatureWeapons[characters[this.state.characterId].weaponId]
       const signatureRow = document.createElement('div')

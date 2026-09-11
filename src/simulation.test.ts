@@ -1,4 +1,4 @@
-import { buyItem, characters, chooseUpgrade, continueWave, createGameState, enemyDefinitions, getBambooWeaponCount, isSignatureWeaponId, refreshShop, refreshUpgrades, regularEnemyIds, sellItem, sellWeapon, signatureWeapons, stepGame, toggleShopLock, upgrades, weaponIds } from './simulation.js'
+import { buyItem, characters, chooseUpgrade, continueWave, createGameState, enemyDefinitions, getBambooWeaponCount, getShopPrice, isSignatureWeaponId, refreshShop, refreshUpgrades, regularEnemyIds, sellItem, sellWeapon, signatureWeapons, stepGame, toggleShopLock, upgrades, weaponIds } from './simulation.js'
 import { parseBattleRecords } from './records.js'
 
 // 战报只计实际损失生命；同帧多次命中和出售武器不能篡改历史输出。
@@ -287,6 +287,54 @@ if (!buyItem(buildItemCheck, 3) || buildItemCheck.player.pickupRange !== 182 || 
 const buildItemCoins = buildItemCheck.player.coins
 if (!sellItem(buildItemCheck, buildItemCheck.ownedItems.indexOf('jade-eyepatch')) || Math.abs(buildItemCheck.player.criticalChance - 0.1) > 0.0001 || Math.abs(buildItemCheck.player.maxHp - 30) > 0.0001 || buildItemCheck.player.coins !== buildItemCoins + 22) throw new Error('出售构筑宝物应撤销对应属性并返还 60% 铜钱')
 
+const secondItemCheck = createGameState(271, 'qingtuan')
+secondItemCheck.shopOpen = true
+secondItemCheck.player.coins = 1000
+secondItemCheck.shopChoices = ['barbed-backplate', 'twin-bamboo', 'monk-beads', 'lucky-bell']
+for (let index = 0; index < 4; index += 1) if (!buyItem(secondItemCheck, index)) throw new Error('第二批宝物应能正常购买')
+if (secondItemCheck.player.reflectDamage !== 12 || secondItemCheck.player.dodgeChance !== 0) throw new Error('倒刺背甲应提供 12 点接触反伤，闪避率最低为 0%')
+if (secondItemCheck.player.extraProjectiles !== 1 || secondItemCheck.player.projectileDamage !== 0.85) throw new Error('双生竹节应增加一枚投射物并降低 15% 单发伤害')
+if (secondItemCheck.player.cooldownMultiplier !== 0.9 || secondItemCheck.player.basicAttackDamage !== 0.95) throw new Error('武僧念珠应缩短 10% 冷却并降低 5% 武器伤害')
+if (secondItemCheck.player.luck !== 0.15 || secondItemCheck.player.shopPriceMultiplier !== 1.05 || getShopPrice(secondItemCheck, 40) !== 42) throw new Error('幸运铜铃应增加幸运并让后续商城价格上涨 5%')
+secondItemCheck.shopChoices = ['twin-bamboo', 'twin-bamboo', 'martial-belt', 'wind-feather']
+if (!buyItem(secondItemCheck, 0) || buyItem(secondItemCheck, 1) || Number(secondItemCheck.player.extraProjectiles) !== 2 || secondItemCheck.player.coins !== 732) throw new Error('双生竹节最多允许持有两件，幸运铜铃加价应参与实际扣款')
+while (secondItemCheck.ownedItems.length) sellItem(secondItemCheck, 0)
+if (Number(secondItemCheck.player.reflectDamage) !== 0 || Number(secondItemCheck.player.extraProjectiles) !== 0 || Number(secondItemCheck.player.projectileDamage) !== 1 || Number(secondItemCheck.player.cooldownMultiplier) !== 1 || Number(secondItemCheck.player.basicAttackDamage) !== 1 || Number(secondItemCheck.player.luck) !== 0 || Number(secondItemCheck.player.shopPriceMultiplier) !== 1) throw new Error('出售第二批宝物后必须恢复基础属性')
+
+const secondItemCombatCheck = createGameState(272, 'qingtuan')
+secondItemCombatCheck.shopOpen = true
+secondItemCombatCheck.player.coins = 1000
+secondItemCombatCheck.shopChoices = ['barbed-backplate', 'twin-bamboo', 'monk-beads', 'lucky-bell']
+buyItem(secondItemCombatCheck, 0)
+buyItem(secondItemCombatCheck, 1)
+buyItem(secondItemCombatCheck, 2)
+secondItemCombatCheck.shopOpen = false
+secondItemCombatCheck.spawnTimer = 99
+secondItemCombatCheck.leafCooldown = 99
+secondItemCombatCheck.player.criticalChance = 0
+secondItemCombatCheck.enemies = [{ id: 1, kind: 'chaser', x: 800, y: 500, hp: 200, maxHp: 200, cooldown: 99, dashTime: 0, vx: 0, vy: 0 }]
+stepGame(secondItemCombatCheck, { x: 0, y: 0, dash: false }, 0.01)
+if (secondItemCombatCheck.enemies[0].hp !== 188 || secondItemCombatCheck.runStats.damage['barbed-backplate'] !== 12) throw new Error('倒刺背甲只应在实际接触受伤后反伤 12 点')
+secondItemCombatCheck.player.hitCooldown = 99
+secondItemCombatCheck.leafCooldown = 0
+secondItemCombatCheck.enemies[0].x = 1100
+stepGame(secondItemCombatCheck, { x: 0, y: 0, dash: false }, 0.01)
+if (secondItemCombatCheck.playerProjectiles.filter((projectile) => projectile.kind === 'leaf').length !== 2 || secondItemCombatCheck.playerProjectiles[0]?.damage !== 19) throw new Error('双生竹节应让青团双发，并与念珠共同作用于单发伤害')
+if (Math.abs(secondItemCombatCheck.leafCooldown - 0.792) > 1e-8) throw new Error('武僧念珠应让青团攻击冷却从 0.88 秒缩短为 0.792 秒')
+secondItemCombatCheck.playerProjectiles = []
+secondItemCombatCheck.leafCooldown = 99
+secondItemCombatCheck.firecrackerCooldown = 0
+secondItemCombatCheck.weaponLevels['firecracker-launcher'] = 1
+stepGame(secondItemCombatCheck, { x: 0, y: 0, dash: false }, 0.01)
+if (secondItemCombatCheck.playerProjectiles.filter((projectile) => projectile.kind === 'firecracker').length !== 2) throw new Error('双生竹节应让爆竹筒额外发射一枚爆竹')
+secondItemCombatCheck.playerProjectiles = []
+secondItemCombatCheck.firecrackerCooldown = 99
+secondItemCombatCheck.turretDeployCooldown = 99
+secondItemCombatCheck.weaponLevels['bamboo-crossbow-turret'] = 1
+secondItemCombatCheck.turrets = [{ id: 2, x: 800, y: 500, life: 10, cooldown: 0, level: 1, angle: 0 }]
+stepGame(secondItemCombatCheck, { x: 0, y: 0, dash: false }, 0.01)
+if (secondItemCombatCheck.playerProjectiles.filter((projectile) => projectile.kind === 'bolt').length !== 2) throw new Error('双生竹节应让竹弩机关额外发射一枚弩箭')
+
 const waveHealingCheck = createGameState(28)
 waveHealingCheck.shopOpen = true
 waveHealingCheck.player.coins = 100
@@ -315,6 +363,18 @@ allLockedShopCheck.shopOpen = true
 allLockedShopCheck.player.coins = 100
 for (let index = 0; index < 4; index += 1) toggleShopLock(allLockedShopCheck, index)
 if (refreshShop(allLockedShopCheck) || allLockedShopCheck.player.coins !== 100) throw new Error('全部商品锁定时刷新不得扣除铜钱')
+
+const soldOutShopCheck = createGameState(251)
+soldOutShopCheck.shopOpen = true
+soldOutShopCheck.player.coins = 0
+soldOutShopCheck.shopChoices = [null, null, null, null]
+if (!refreshShop(soldOutShopCheck) || soldOutShopCheck.player.coins !== 0 || soldOutShopCheck.shopRefreshCost !== 4) throw new Error('本轮商品全部买空后应能免费补齐，且不提高正常刷新费用')
+if (soldOutShopCheck.shopChoices.some((id) => id === null) || new Set(soldOutShopCheck.shopChoices).size !== 4) throw new Error('免费补齐后应恢复四件互不重复的商品')
+if (refreshShop(soldOutShopCheck)) throw new Error('免费补齐后应恢复正常付费刷新限制')
+soldOutShopCheck.player.coins = 1000
+for (let index = 0; index < 4; index += 1) if (!buyItem(soldOutShopCheck, index)) throw new Error('补齐后的商品应能再次全部购买')
+const coinsAfterSecondSellout = soldOutShopCheck.player.coins
+if (!refreshShop(soldOutShopCheck) || soldOutShopCheck.player.coins !== coinsAfterSecondSellout || soldOutShopCheck.shopRefreshCost !== 4) throw new Error('每次买空四件商品后都应免费补齐')
 
 const uniqueLockCheck = createGameState(16)
 uniqueLockCheck.shopOpen = true

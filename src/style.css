@@ -203,6 +203,8 @@ kbd { padding: 4px 7px; border: 1px solid #637969; border-bottom-width: 3px; bor
 .shop-card .shop-limit { grid-column: 1 / -1; color: #8a4c27; font: 14px/1.5 'PingFang SC', sans-serif; }
 .shop-card > em { overflow-wrap: anywhere; }
 .shop-cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 9px; }
+.shop-empty { grid-column: 1 / -1; align-self: center; margin: 0; color: #6f654f; font: 18px/1.7 'PingFang SC', sans-serif; text-align: center; }
+.shop-empty small { color: #8a806c; font-size: 14px; }
 .shop-card { position: relative; display: grid; grid-template-columns: 62px 1fr auto; grid-template-rows: auto auto auto 1fr auto; min-height: 145px; gap: 3px 8px; padding: 10px; border: 2px solid #76562b; border-radius: 10px 8px 12px 9px; background: #fff7dfc9; box-shadow: 0 4px 0 #6b4e29, 0 7px 12px #4a341d29; }
 .shop-card[data-rarity="稀有"] { border-color: #547b51; box-shadow: 0 4px 0 #3f623e, 0 7px 12px #4a341d29; }
 .shop-card[data-rarity="史诗"] { border-color: #80589b; box-shadow: 0 4px 0 #593d70, 0 7px 14px #7651a83d; }
