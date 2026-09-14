@@ -265,9 +265,24 @@ class BattleScene extends Phaser.Scene {
         this.state.shopChoices = ['martial-belt', 'wind-feather', 'iron-bracer', 'panda-roller']
       }
     } else if (import.meta.env.DEV && new URLSearchParams(location.search).has('playtest-items')) {
-      this.state.shopOpen = true
+      const thirdItemCombat = new URLSearchParams(location.search).get('playtest-items') === 'third-combat'
+      this.state.shopOpen = !thirdItemCombat
       this.state.player.coins = 500
-      this.state.shopChoices = ['barbed-backplate', 'twin-bamboo', 'monk-beads', 'lucky-bell']
+      this.state.shopChoices = new URLSearchParams(location.search).get('playtest-items')?.startsWith('third')
+        ? ['tumbler-charm', 'chain-copper-clasp', 'guild-token', 'wine-immortal-gourd']
+        : ['barbed-backplate', 'twin-bamboo', 'monk-beads', 'lucky-bell']
+      if (thirdItemCombat) {
+        this.state.ownedItems = ['tumbler-charm', 'chain-copper-clasp', 'guild-token', 'wine-immortal-gourd']
+        this.state.player.hp = 1
+        this.state.wave = 7
+        this.state.spawnTimer = 99
+        this.state.bambooCooldown = 99
+        this.state.leafCooldown = 99
+        this.state.enemies = [{ id: this.state.nextId++, kind: 'chaser', x: 1040, y: 500, hp: 500, maxHp: 500, cooldown: 99, dashTime: 0, vx: 0, vy: 0 }]
+        this.state.playerProjectiles = Array.from({ length: 5 }, (): (typeof this.state.playerProjectiles)[number] => ({ id: this.state.nextId++, kind: 'leaf', x: 1040, y: 500, vx: 0, vy: 0, damage: 20, critical: false, blastRadius: 0 }))
+        this.state.enemyProjectiles = [{ id: this.state.nextId++, x: 800, y: 500, vx: 0, vy: 0 }]
+        this.state.drops = [{ id: this.state.nextId++, kind: 'heal', x: 800, y: 500, value: 10 }]
+      }
     } else if (import.meta.env.DEV && new URLSearchParams(location.search).has('playtest-evolution')) {
       const signature = signatureWeapons[characters[this.state.characterId].weaponId]
       if (new URLSearchParams(location.search).get('playtest-evolution') === 'combat') {
@@ -691,6 +706,10 @@ class BattleScene extends Phaser.Scene {
             id === 'twin-bamboo' ? '作用于飞叶、爆竹和竹弩；额外投射物最多 +2' : '',
             id === 'monk-beads' ? '冷却缩减作用于所有自动武器；武器伤害最低 50%' : '',
             id === 'lucky-bell' ? `后续商品按 ${Math.round(preview.player.shopPriceMultiplier * 100)}% 价格结算；每 15% 幸运把史诗出现率提高 3 个百分点` : '',
+            id === 'tumbler-charm' ? '每局仅触发一次；触发后保留 1 点生命并沿用本次受击无敌时间' : '',
+            id === 'chain-copper-clasp' ? '仅连续武器命中叠层；更换目标重置，最高 +20%' : '',
+            id === 'guild-token' ? `免费补齐仍免费；正常刷新费用 ${this.state.shopRefreshCost} → ${preview.shopRefreshCost}` : '',
+            id === 'wine-immortal-gourd' ? '实际治疗溢出时触发；持续 5 秒，重复触发刷新时间' : '',
           ].filter(Boolean).join('；')
           if (notice.textContent) article.append(notice)
         }
@@ -750,7 +769,7 @@ class BattleScene extends Phaser.Scene {
           const delta = Math.round((this.state.player[key] - withoutItem.player[key]) * scale)
           return `${label} ${delta > 0 ? '+' : ''}${delta}${unit === '%' ? '百分点' : unit}`
         }).join('；')
-        button.innerHTML = `<img src="${import.meta.env.BASE_URL}${item.image}" alt=""><span><strong>${item.name} ×${count}</strong><small>单件：${item.description}</small><small>当前合计：${id === 'panda-roller' ? '闪避结束震击 32 伤害（唯一）' : total || '已受属性上下限约束'}${id === 'bamboo-dew-pill' ? '；即时治疗不累计' : ''}</small><em>出售一件 +${Math.floor(item.price * 0.6)} 铜钱</em></span>`
+        button.innerHTML = `<img src="${import.meta.env.BASE_URL}${item.image}" alt=""><span><strong>${item.name} ×${count}</strong><small>单件：${item.description}</small><small>当前合计：${id === 'panda-roller' ? '闪避结束震击 32 伤害（唯一）' : id === 'tumbler-charm' ? `每局一次 · ${this.state.lastStandUsed ? '已触发' : '待命'}` : id === 'chain-copper-clasp' ? `同目标连击 ${this.state.comboHits}/5 · 当前 +${this.state.comboHits * 4}%` : id === 'guild-token' ? `每次刷新至少稀有 · 当前刷新 ${this.state.shopRefreshCost} 铜钱` : id === 'wine-immortal-gourd' ? `溢出治疗触发 5 秒 +20% 全伤${this.state.player.overflowDamageTime > 0 ? ` · 剩余 ${this.state.player.overflowDamageTime.toFixed(1)} 秒` : ''}` : total || '已受属性上下限约束'}${id === 'bamboo-dew-pill' ? '；即时治疗不累计' : ''}</small><em>出售一件 +${Math.floor(item.price * 0.6)} 铜钱</em></span>`
         button.addEventListener('click', () => {
           if (sellItem(this.state, this.state.ownedItems.indexOf(id))) this.overlayMode = ''
         })
@@ -967,6 +986,20 @@ class BattleScene extends Phaser.Scene {
           graphics.fillStyle(index % 3 === 0 ? 0xf3e6c8 : 0x53b8b2, alpha).fillTriangle(effect.x + Math.cos(angle) * distance, effect.y + Math.sin(angle) * distance, effect.x + Math.cos(angle + 0.1) * (distance - 15), effect.y + Math.sin(angle + 0.1) * (distance - 15), effect.x + Math.cos(angle - 0.12) * (distance - 8), effect.y + Math.sin(angle - 0.12) * (distance - 8))
         }
       }
+      if (effect.kind === 'last-stand') {
+        const progress = 1 - effect.life / 0.8
+        for (let index = 0; index < 3; index += 1) {
+          const start = -2.55 + index * 1.72 + progress * 0.18
+          graphics.lineStyle(7 - index, index === 1 ? 0xe3a83b : 0x9bcb66, alpha * (0.92 - index * 0.14)).beginPath().arc(effect.x, effect.y + 12, 36 + index * 12 + progress * 28, start, start + 0.92).strokePath()
+        }
+        for (let index = 0; index < 5; index += 1) {
+          const angle = -2.25 + index * 1.03
+          const distance = 42 + progress * (34 + index * 3)
+          const leafX = effect.x + Math.cos(angle) * distance
+          const leafY = effect.y + 12 + Math.sin(angle) * distance
+          graphics.fillStyle(index % 2 === 0 ? 0xf3e6c8 : 0xcdf08a, alpha).fillTriangle(leafX + Math.cos(angle) * 8, leafY + Math.sin(angle) * 8, leafX + Math.cos(angle + 1.2) * 5, leafY + Math.sin(angle + 1.2) * 5, leafX + Math.cos(angle - 1.2) * 5, leafY + Math.sin(angle - 1.2) * 5)
+        }
+      }
       if (effect.kind === 'enemy-shot') {
         const progress = 1 - effect.life / 0.24
         const muzzleX = effect.x + Math.cos(effect.angle) * progress * 20
@@ -1027,11 +1060,11 @@ class BattleScene extends Phaser.Scene {
           this.playTone(210, 0.045, 0.018)
         }
       }
-      if ((effect.kind === 'hit' || effect.kind === 'crit' || effect.kind === 'projectile-hit' || effect.kind === 'projectile-crit' || effect.kind === 'firecracker-hit' || effect.kind === 'firecracker-crit' || effect.kind === 'player-hit') && !this.effectTexts.has(effect.id)) {
+      if ((effect.kind === 'hit' || effect.kind === 'crit' || effect.kind === 'projectile-hit' || effect.kind === 'projectile-crit' || effect.kind === 'firecracker-hit' || effect.kind === 'firecracker-crit' || effect.kind === 'player-hit' || effect.kind === 'last-stand') && !this.effectTexts.has(effect.id)) {
         const critical = effect.kind === 'crit' || effect.kind === 'projectile-crit' || effect.kind === 'firecracker-crit'
-        const text = this.add.text(effect.x, effect.y, `${effect.kind === 'player-hit' ? '-' : ''}${effect.value}`, {
-          fontFamily: 'PingFang SC, sans-serif', fontSize: critical ? '24px' : '17px',
-          fontStyle: 'bold', color: critical ? '#ffe06a' : effect.kind === 'player-hit' ? '#ff766d' : '#fff0c5',
+        const text = this.add.text(effect.x, effect.y, effect.kind === 'last-stand' ? '不倒' : `${effect.kind === 'player-hit' ? '-' : ''}${effect.value}`, {
+          fontFamily: 'PingFang SC, sans-serif', fontSize: critical || effect.kind === 'last-stand' ? '24px' : '17px',
+          fontStyle: 'bold', color: critical ? '#ffe06a' : effect.kind === 'last-stand' ? '#cdf08a' : effect.kind === 'player-hit' ? '#ff766d' : '#fff0c5',
           stroke: '#202622', strokeThickness: 4,
         }).setOrigin(0.5).setDepth(5000)
         this.effectTexts.set(effect.id, text)
@@ -1196,6 +1229,9 @@ class BattleScene extends Phaser.Scene {
         this.state.player.ironArmorTime > 0 ? `食铁护甲 +8 · ${this.state.player.ironArmorTime.toFixed(1)}s` : '',
         this.state.chosenUpgrades.includes('battle-fury') ? `越战越勇 +${Math.floor(this.state.waveKills / 50) * 2}%` : '',
         this.state.chosenUpgrades.includes('bamboo-unity') ? `万竹归心 +${getBambooWeaponCount(this.state) * 5}%` : '',
+        this.state.ownedItems.includes('tumbler-charm') ? `不倒翁 ${this.state.lastStandUsed ? '已触发' : '待命'}` : '',
+        this.state.ownedItems.includes('chain-copper-clasp') && this.state.comboHits > 0 ? `连环铜扣 +${this.state.comboHits * 4}%` : '',
+        this.state.player.overflowDamageTime > 0 ? `酒仙余劲 +20% · ${this.state.player.overflowDamageTime.toFixed(1)}s` : '',
       ].filter(Boolean).join(' · ')
       talentStatus.hidden = !status
       talentStatus.textContent = status

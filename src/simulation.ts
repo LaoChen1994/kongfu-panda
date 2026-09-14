@@ -4,7 +4,7 @@ export type EnemyKind = RegularEnemyKind | 'boss'
 export type CharacterId = 'shanlan' | 'qingtuan' | 'shimo'
 export type SignatureWeaponId = 'bamboo-staff' | 'leaf-dart' | 'iron-bamboo-shield'
 export type UpgradeId = 'power' | 'haste' | 'vitality' | 'footwork' | 'leaf-volley' | 'wide-sweep' | 'thorn-fur' | 'panda-roll' | 'battle-fury' | 'iron-constitution' | 'bamboo-unity'
-export type ItemId = 'martial-belt' | 'wind-feather' | 'iron-bracer' | 'panda-roller' | 'bamboo-dew-pill' | 'food-god-lunchbox' | 'jade-eyepatch' | 'gale-leggings' | 'mountain-stone' | 'fortune-paw' | 'spirit-bamboo-tube' | 'tiger-seal' | 'barbed-backplate' | 'twin-bamboo' | 'monk-beads' | 'lucky-bell'
+export type ItemId = 'martial-belt' | 'wind-feather' | 'iron-bracer' | 'panda-roller' | 'bamboo-dew-pill' | 'food-god-lunchbox' | 'jade-eyepatch' | 'gale-leggings' | 'mountain-stone' | 'fortune-paw' | 'spirit-bamboo-tube' | 'tiger-seal' | 'barbed-backplate' | 'twin-bamboo' | 'monk-beads' | 'lucky-bell' | 'tumbler-charm' | 'chain-copper-clasp' | 'guild-token' | 'wine-immortal-gourd'
 export const weaponIds = ['iron-pot-gauntlets', 'firecracker-launcher', 'spinning-bamboo-blade', 'panda-wine-gourd', 'bamboo-crossbow-turret'] as const
 export type WeaponId = typeof weaponIds[number]
 export type ShopProductId = ItemId | WeaponId | SignatureWeaponId
@@ -109,6 +109,10 @@ export const items: Record<ItemId, { name: string; rarity: string; description: 
   'twin-bamboo': { name: '双生竹节', rarity: '史诗', description: '投射物 +1，单发投射物伤害 -15%', preview: '飞叶、爆竹和弩箭增发 1 枚 · 最多 2 件', price: 72, image: 'assets/items/twin-bamboo.png', maxStacks: 2 },
   'monk-beads': { name: '武僧念珠', rarity: '稀有', description: '冷却缩减 +10%，武器伤害 -5%', preview: '所有武器更快出手，但单次伤害降低', price: 40, image: 'assets/items/monk-beads.png' },
   'lucky-bell': { name: '幸运铜铃', rarity: '稀有', description: '幸运 +15%，商城价格 +5%', preview: '史诗商品更易出现，但后续购买更贵', price: 40, image: 'assets/items/lucky-bell.png' },
+  'tumbler-charm': { name: '不倒翁护符', rarity: '史诗', description: '致命伤保留 1 点生命，每局一次', preview: '触发后沿用本次受击无敌时间', price: 70, image: 'assets/items/tumbler-charm.png', unique: true },
+  'chain-copper-clasp': { name: '连环铜扣', rarity: '稀有', description: '连续命中同一目标时，每次伤害 +4%', preview: '最高 +20%，更换目标后重置', price: 42, image: 'assets/items/chain-copper-clasp.png', unique: true },
+  'guild-token': { name: '商会令牌', rarity: '史诗', description: '刷新至少出现一件稀有商品，刷新费用 +3', preview: '免费补齐仍免费，正常刷新更贵', price: 64, image: 'assets/items/guild-token.png', unique: true },
+  'wine-immortal-gourd': { name: '酒仙葫芦', rarity: '史诗', description: '治疗溢出时获得 5 秒全部伤害 +20%', preview: '重复触发刷新持续时间', price: 62, image: 'assets/items/wine-immortal-gourd.png', unique: true },
 }
 
 export const weapons: Record<WeaponId, { name: string; rarity: string; description: string; preview: string; price: number; image: string }> = {
@@ -171,6 +175,9 @@ export type GameState = {
   bossAttackCount: number
   bossIntroTime: number
   corruptionInset: number
+  lastStandUsed: boolean
+  comboTargetId: number | null
+  comboHits: number
   player: {
     x: number
     y: number
@@ -218,6 +225,7 @@ export type GameState = {
     shieldMax: number
     shieldTimer: number
     ironArmorTime: number
+    overflowDamageTime: number
   }
   enemies: Array<{
     id: number
@@ -245,7 +253,7 @@ export type GameState = {
   enemyZones: Array<{ id: number; x: number; y: number; radius: number; life: number; duration: number }>
   turrets: Array<{ id: number; x: number; y: number; life: number; cooldown: number; level: number; angle: number }>
   drops: Array<{ id: number; kind: 'xp' | 'coin' | 'heal'; x: number; y: number; value: number }>
-  effects: Array<{ id: number; kind: 'hit' | 'crit' | 'projectile-hit' | 'projectile-crit' | 'firecracker-hit' | 'firecracker-crit' | 'firecracker-blast' | 'kill' | 'player-hit' | 'dash-burst' | 'shield-break' | 'enemy-shot' | 'boss-summon' | 'armor-block'; x: number; y: number; value: number; life: number; angle: number }>
+  effects: Array<{ id: number; kind: 'hit' | 'crit' | 'projectile-hit' | 'projectile-crit' | 'firecracker-hit' | 'firecracker-crit' | 'firecracker-blast' | 'kill' | 'player-hit' | 'dash-burst' | 'shield-break' | 'last-stand' | 'enemy-shot' | 'boss-summon' | 'armor-block'; x: number; y: number; value: number; life: number; angle: number }>
 }
 
 export type PlayerInput = { x: number; y: number; dash: boolean }
@@ -274,7 +282,17 @@ const reduceIncomingDamage = (state: GameState, rawDamage: number): number => {
 
 const dealEnemyDamage = (state: GameState, enemy: GameState['enemies'][number], rawDamage: number, sourceX: number, sourceY: number, source: DamageSource): number => {
   const battleFury = state.chosenUpgrades.includes('battle-fury') ? Math.floor(state.waveKills / 50) * 0.02 : 0
-  let damage = Math.max(1, Math.round(rawDamage * (1 + battleFury) * (enemy.kind === 'boss' || enemy.elite ? state.player.eliteDamage : state.player.normalDamage)))
+  const weaponHit = source !== 'panda-roller' && source !== 'thorn-fur' && source !== 'panda-roll' && source !== 'barbed-backplate'
+  let comboDamage = 1
+  if (weaponHit && state.ownedItems.includes('chain-copper-clasp')) {
+    if (state.comboTargetId !== enemy.id) {
+      state.comboTargetId = enemy.id
+      state.comboHits = 0
+    }
+    comboDamage += Math.min(5, state.comboHits) * 0.04
+    state.comboHits = Math.min(5, state.comboHits + 1)
+  }
+  let damage = Math.max(1, Math.round(rawDamage * (1 + battleFury) * comboDamage * (state.player.overflowDamageTime > 0 ? 1.2 : 1) * (enemy.kind === 'boss' || enemy.elite ? state.player.eliteDamage : state.player.normalDamage)))
   if (enemy.kind === 'boar') {
     const sourceDistance = Math.max(0.001, Math.hypot(sourceX - enemy.x, sourceY - enemy.y))
     const sourceXDirection = (sourceX - enemy.x) / sourceDistance
@@ -291,8 +309,7 @@ const dealEnemyDamage = (state: GameState, enemy: GameState['enemies'][number], 
   return damage
 }
 
-const recordInjury = (state: GameState, damage: number, absorbed: number, source: keyof typeof injurySources): void => {
-  const lostHp = Math.min(Math.max(0, state.player.hp), damage - absorbed)
+const recordInjury = (state: GameState, lostHp: number, absorbed: number, source: keyof typeof injurySources): void => {
   state.runStats.shieldAbsorbed += absorbed
   if (lostHp > 0) {
     state.runStats.injuries[source] = (state.runStats.injuries[source] ?? 0) + lostHp
@@ -330,13 +347,27 @@ const applyPlayerHit = (state: GameState, rawDamage: number, source: keyof typeo
   const damage = reduceIncomingDamage(state, rawDamage)
   const shieldBefore = state.player.shield
   const absorbed = Math.min(shieldBefore, damage)
-  recordInjury(state, damage, absorbed, source)
+  const fatalDamage = damage - absorbed >= state.player.hp
+  const saved = fatalDamage && state.ownedItems.includes('tumbler-charm') && !state.lastStandUsed
+  const lostHp = saved ? Math.max(0, state.player.hp - 1) : Math.min(state.player.hp, damage - absorbed)
+  recordInjury(state, lostHp, absorbed, source)
   state.player.shield -= absorbed
-  state.player.hp -= damage - absorbed
+  state.player.hp -= lostHp
   state.player.hitCooldown = hitCooldown
   state.effects.push({ id: state.nextId++, kind: 'player-hit', x: state.player.x, y: state.player.y, value: damage, life: 0.35, angle })
+  if (saved) {
+    state.lastStandUsed = true
+    state.effects.push({ id: state.nextId++, kind: 'last-stand', x: state.player.x, y: state.player.y, value: 1, life: 0.8, angle: 0 })
+  }
   if (shieldBefore > 0 && state.player.shield === 0) triggerShieldBreak(state)
   return true
+}
+
+const applyHealing = (state: GameState, amount: number): number => {
+  const healing = Math.min(amount, Math.max(0, state.player.maxHp - state.player.hp))
+  state.player.hp += healing
+  if (amount > healing && state.ownedItems.includes('wine-immortal-gourd')) state.player.overflowDamageTime = 5
+  return healing
 }
 
 export const createGameState = (seed = 20260831, characterId: CharacterId = 'shanlan'): GameState => ({
@@ -379,6 +410,9 @@ export const createGameState = (seed = 20260831, characterId: CharacterId = 'sha
   bossAttackCount: 0,
   bossIntroTime: 0,
   corruptionInset: 0,
+  lastStandUsed: false,
+  comboTargetId: null,
+  comboHits: 0,
   player: {
     x: 800, y: 500,
     hp: characterId === 'qingtuan' ? 10 : characterId === 'shimo' ? 30 : 20,
@@ -390,7 +424,7 @@ export const createGameState = (seed = 20260831, characterId: CharacterId = 'sha
     criticalChance: 0.1, dodgeChance: 0, reflectDamage: 0, cooldownMultiplier: 1, basicAttackDamage: 1, luck: 0, shopPriceMultiplier: 1,
     pickupRange: 140, coinGain: 1, coinRemainder: 0, enemyPressure: 1, eliteDamage: 1, normalDamage: 1, waveHealing: 0, shieldPower: 1,
     dashCooldown: 0, dashTime: 0, dashX: 1, dashY: 0, facingX: 1, facingY: 0, hitCooldown: 0, dashBurstPending: false,
-    shield: 0, shieldMax: 0, shieldTimer: characterId === 'shimo' ? 8 : 0, ironArmorTime: 0,
+    shield: 0, shieldMax: 0, shieldTimer: characterId === 'shimo' ? 8 : 0, ironArmorTime: 0, overflowDamageTime: 0,
   },
   enemies: [], playerProjectiles: [], enemyProjectiles: [], bossHazards: [], attacks: [], groundZones: [], enemyZones: [], turrets: [], drops: [], effects: [],
 })
@@ -461,7 +495,7 @@ export const chooseUpgrade = (state: GameState, id: UpgradeId): boolean => {
   }
   state.chosenUpgrades.push(id)
   recalculateBuildStats(state)
-  if (id === 'vitality') state.player.hp = Math.min(state.player.maxHp, state.player.hp + 5)
+  if (id === 'vitality') applyHealing(state, 5)
   state.pendingUpgrade = false
   state.upgradeChoices = []
   return true
@@ -540,8 +574,9 @@ export const buyItem = (state: GameState, index: number): boolean => {
   if (id === 'tiger-seal') {
     state.player.eliteDamage += 0.18
   }
+  if (id === 'guild-token') state.shopRefreshCost += 3
   recalculateBuildStats(state)
-  if (id === 'bamboo-dew-pill') state.player.hp = Math.min(state.player.maxHp, state.player.hp + 10)
+  if (id === 'bamboo-dew-pill') applyHealing(state, 10)
   const signature = signatureWeapons[characters[state.characterId].weaponId]
   if (!state.signatureWeaponEvolved && state.signatureWeaponLevel === 5 && state.ownedItems.includes(signature.evolution.requiredItem)) {
     state.signatureWeaponEvolved = true
@@ -562,11 +597,13 @@ export const refreshShop = (state: GameState): boolean => {
       : isWeaponId(id) ? (state.weaponLevels[id] ?? 0) < 5 : state.ownedItems.filter((itemId) => itemId === id).length < (items[id].unique ? 1 : items[id].maxStacks ?? Infinity)
   ))
   const selected = state.lockedShopIndices.map((index) => state.shopChoices[index]).filter((id): id is ShopProductId => id !== null)
+  const guaranteedIndex = state.ownedItems.includes('guild-token') && !selected.some((id) => (isWeaponId(id) ? weapons[id] : isSignatureWeaponId(id) ? signatureWeapons[id] : items[id]).rarity !== '普通')
+    ? state.shopChoices.findIndex((_id, index) => !state.lockedShopIndices.includes(index)) : -1
   state.shopChoices = state.shopChoices.map((id, index) => {
     if (state.lockedShopIndices.includes(index)) return id
     const available = pool.filter((candidate) => !selected.includes(candidate))
     const rarityRoll = random(state) * 100 + state.player.luck * 20
-    const rarity = rarityRoll < 60 ? '普通' : rarityRoll < 87 ? '稀有' : '史诗'
+    const rarity = index === guaranteedIndex ? rarityRoll < 87 ? '稀有' : '史诗' : rarityRoll < 60 ? '普通' : rarityRoll < 87 ? '稀有' : '史诗'
     const rarityPool = available.filter((candidate) => (isWeaponId(candidate) ? weapons[candidate] : isSignatureWeaponId(candidate) ? signatureWeapons[candidate] : items[candidate]).rarity === rarity)
     const choices = rarityPool.length ? rarityPool : available
     const choice = choices[Math.floor(random(state) * choices.length)] ?? null
@@ -612,6 +649,12 @@ export const sellItem = (state: GameState, index: number): boolean => {
   if (id === 'tiger-seal') {
     state.player.eliteDamage = Math.max(1, state.player.eliteDamage - 0.18)
   }
+  if (id === 'chain-copper-clasp') {
+    state.comboTargetId = null
+    state.comboHits = 0
+  }
+  if (id === 'guild-token') state.shopRefreshCost = Math.max(4, state.shopRefreshCost - 3)
+  if (id === 'wine-immortal-gourd') state.player.overflowDamageTime = 0
   recalculateBuildStats(state)
   return true
 }
@@ -634,7 +677,7 @@ export const sellWeapon = (state: GameState, id: WeaponId): boolean => {
 export const continueWave = (state: GameState): boolean => {
   if (!state.shopOpen) return false
   state.shopOpen = false
-  state.shopRefreshCost = 4
+  state.shopRefreshCost = 4 + (state.ownedItems.includes('guild-token') ? 3 : 0)
   state.shopChoices = state.shopChoices.map((id, index) => state.lockedShopIndices.includes(index) ? id : null)
   state.wave += 1
   state.waveKills = 0
@@ -667,7 +710,7 @@ export const continueWave = (state: GameState): boolean => {
       cooldown: 2.6, dashTime: 0, vx: 0, vy: 0, phase: 1, enraged: false,
     })
   }
-  state.player.hp = Math.min(state.player.maxHp, state.player.hp + Math.ceil(state.player.maxHp * (0.35 + state.player.waveHealing)))
+  applyHealing(state, Math.ceil(state.player.maxHp * (0.35 + state.player.waveHealing)))
   return true
 }
 
@@ -682,6 +725,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
   state.player.dashTime = Math.max(0, state.player.dashTime - dt)
   state.player.hitCooldown = Math.max(0, state.player.hitCooldown - dt)
   state.player.ironArmorTime = Math.max(0, state.player.ironArmorTime - dt)
+  state.player.overflowDamageTime = Math.max(0, state.player.overflowDamageTime - dt)
   if (state.characterId === 'shimo') {
     state.player.shieldTimer -= dt
     if (state.player.shieldTimer <= 0) {
@@ -938,7 +982,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
           kind: dragonStaff ? 'dragon-staff' : whirlwind ? 'whirlwind' : state.characterId === 'shimo' && state.signatureWeaponEvolved ? 'mountain-shield' : state.characterId === 'shimo' ? 'shield' : 'staff',
         })
       }
-      if (whirlwind) state.player.hp = Math.min(state.player.maxHp, state.player.hp + Math.max(1, Math.ceil(state.player.maxHp * 0.01)))
+      if (whirlwind) applyHealing(state, Math.max(1, Math.ceil(state.player.maxHp * 0.01)))
     }
     state.bambooCooldown = 0.62 / attackRate
   }
@@ -1193,7 +1237,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
       }
       else {
         const healing = state.chosenUpgrades.includes('iron-constitution') ? Math.ceil(drop.value * 0.9) : drop.value
-        state.player.hp = Math.min(state.player.maxHp, state.player.hp + healing)
+        applyHealing(state, healing)
         if (state.chosenUpgrades.includes('iron-constitution')) {
           state.player.ironArmorTime = 4
           state.runStats.talentTriggers['iron-constitution'] = (state.runStats.talentTriggers['iron-constitution'] ?? 0) + 1
@@ -1230,6 +1274,10 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
     }
   }
   state.enemies = state.enemies.filter((enemy) => enemy.hp > 0)
+  if (state.comboTargetId !== null && !state.enemies.some((enemy) => enemy.id === state.comboTargetId)) {
+    state.comboTargetId = null
+    state.comboHits = 0
+  }
   state.playerProjectiles = state.playerProjectiles.filter((projectile) => projectile.damage > 0 && projectile.x > 0 && projectile.x < 1600 && projectile.y > 0 && projectile.y < 1000)
   state.groundZones = state.groundZones.filter((zone) => zone.life > 0)
   state.enemyZones = state.enemyZones.filter((zone) => zone.life > 0).slice(-6)

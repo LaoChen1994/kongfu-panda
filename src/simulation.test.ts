@@ -1,4 +1,4 @@
-import { buyItem, characters, chooseUpgrade, continueWave, createGameState, enemyDefinitions, getBambooWeaponCount, getShopPrice, isSignatureWeaponId, refreshShop, refreshUpgrades, regularEnemyIds, sellItem, sellWeapon, signatureWeapons, stepGame, toggleShopLock, upgrades, weaponIds } from './simulation.js'
+import { buyItem, characters, chooseUpgrade, continueWave, createGameState, enemyDefinitions, getBambooWeaponCount, getShopPrice, isSignatureWeaponId, isWeaponId, items, refreshShop, refreshUpgrades, regularEnemyIds, sellItem, sellWeapon, signatureWeapons, stepGame, toggleShopLock, upgrades, weaponIds, weapons } from './simulation.js'
 import { parseBattleRecords } from './records.js'
 
 // 战报只计实际损失生命；同帧多次命中和出售武器不能篡改历史输出。
@@ -334,6 +334,71 @@ secondItemCombatCheck.weaponLevels['bamboo-crossbow-turret'] = 1
 secondItemCombatCheck.turrets = [{ id: 2, x: 800, y: 500, life: 10, cooldown: 0, level: 1, angle: 0 }]
 stepGame(secondItemCombatCheck, { x: 0, y: 0, dash: false }, 0.01)
 if (secondItemCombatCheck.playerProjectiles.filter((projectile) => projectile.kind === 'bolt').length !== 2) throw new Error('双生竹节应让竹弩机关额外发射一枚弩箭')
+
+const thirdItemCheck = createGameState(273, 'qingtuan')
+thirdItemCheck.shopOpen = true
+thirdItemCheck.player.coins = 1000
+thirdItemCheck.shopChoices = ['tumbler-charm', 'chain-copper-clasp', 'guild-token', 'wine-immortal-gourd']
+for (let index = 0; index < 4; index += 1) if (!buyItem(thirdItemCheck, index)) throw new Error('第三批宝物应能正常购买')
+if (thirdItemCheck.shopRefreshCost !== 7) throw new Error('商会令牌应让正常刷新费用增加 3 铜钱')
+thirdItemCheck.shopChoices[0] = 'tumbler-charm'
+if (buyItem(thirdItemCheck, 0)) throw new Error('第三批唯一宝物不能重复购买')
+thirdItemCheck.shopChoices = ['martial-belt', 'iron-bracer', 'gale-leggings', 'fortune-paw']
+const coinsBeforeGuildRefresh = thirdItemCheck.player.coins
+if (!refreshShop(thirdItemCheck) || thirdItemCheck.player.coins !== coinsBeforeGuildRefresh - 7 || Number(thirdItemCheck.shopRefreshCost) !== 9) throw new Error('商会令牌的正常刷新应正确扣款并沿用递增费用')
+if (!thirdItemCheck.shopChoices.some((id) => id && (isWeaponId(id) ? weapons[id] : isSignatureWeaponId(id) ? signatureWeapons[id] : items[id]).rarity !== '普通')) throw new Error('商会令牌刷新必须至少出现一件稀有或史诗商品')
+thirdItemCheck.shopChoices = [null, null, null, null]
+const coinsBeforeFreeRefill = thirdItemCheck.player.coins
+if (!refreshShop(thirdItemCheck) || thirdItemCheck.player.coins !== coinsBeforeFreeRefill || Number(thirdItemCheck.shopRefreshCost) !== 9) throw new Error('商会令牌不能让售罄后的免费补齐收费或涨价')
+if (!continueWave(thirdItemCheck) || thirdItemCheck.shopRefreshCost !== 7) throw new Error('下一波应把商会令牌刷新费用重置为 7 铜钱')
+
+const lastStandCheck = createGameState(274, 'qingtuan')
+lastStandCheck.ownedItems.push('tumbler-charm')
+lastStandCheck.wave = 7
+lastStandCheck.player.hp = 3
+lastStandCheck.spawnTimer = 99
+lastStandCheck.leafCooldown = 99
+lastStandCheck.enemyProjectiles = [{ id: 1, x: 800, y: 500, vx: 0, vy: 0 }]
+stepGame(lastStandCheck, { x: 0, y: 0, dash: false }, 0.01)
+if (lastStandCheck.player.hp !== 1 || !lastStandCheck.lastStandUsed || lastStandCheck.gameOver || !lastStandCheck.effects.some((effect) => effect.kind === 'last-stand') || lastStandCheck.runStats.injuries['enemy-shot'] !== 2) throw new Error('不倒翁护符首次抵挡致命伤时应保留 1 点生命并记录实际损失')
+lastStandCheck.player.hitCooldown = 0
+lastStandCheck.enemyProjectiles = [{ id: 2, x: 800, y: 500, vx: 0, vy: 0 }]
+stepGame(lastStandCheck, { x: 0, y: 0, dash: false }, 0.01)
+if (!lastStandCheck.gameOver || Number(lastStandCheck.player.hp) !== 0) throw new Error('不倒翁护符每局只能抵挡一次致命伤害')
+
+const comboCheck = createGameState(275, 'qingtuan')
+comboCheck.ownedItems.push('chain-copper-clasp')
+comboCheck.spawnTimer = 99
+comboCheck.bambooCooldown = 99
+comboCheck.leafCooldown = 99
+comboCheck.enemies = [
+  { id: 1, kind: 'chaser', x: 1100, y: 500, hp: 1000, maxHp: 1000, cooldown: 99, dashTime: 0, vx: 0, vy: 0 },
+  { id: 2, kind: 'chaser', x: 1100, y: 700, hp: 1000, maxHp: 1000, cooldown: 99, dashTime: 0, vx: 0, vy: 0 },
+]
+for (let hit = 0; hit < 3; hit += 1) {
+  comboCheck.playerProjectiles = [{ id: 10 + hit, kind: 'leaf', x: comboCheck.enemies[0].x, y: comboCheck.enemies[0].y, vx: 0, vy: 0, damage: 100, critical: false, blastRadius: 0 }]
+  stepGame(comboCheck, { x: 0, y: 0, dash: false }, 0.01)
+}
+if (comboCheck.enemies[0].hp !== 688 || comboCheck.comboHits !== 3) throw new Error('连环铜扣应让同目标三次武器命中依次造成 100、104、108 伤害')
+comboCheck.playerProjectiles = [{ id: 20, kind: 'leaf', x: comboCheck.enemies[1].x, y: comboCheck.enemies[1].y, vx: 0, vy: 0, damage: 100, critical: false, blastRadius: 0 }]
+stepGame(comboCheck, { x: 0, y: 0, dash: false }, 0.01)
+if (comboCheck.enemies[1].hp !== 900 || Number(comboCheck.comboHits) !== 1 || comboCheck.comboTargetId !== 2) throw new Error('连环铜扣更换目标后应从基础伤害重新累计')
+comboCheck.enemies[1].hp = 0
+stepGame(comboCheck, { x: 0, y: 0, dash: false }, 0.01)
+if (Number(comboCheck.comboHits) !== 0 || Number(comboCheck.comboTargetId) !== 0) throw new Error('连环铜扣当前目标被击破后应清空连击状态')
+
+const overflowCheck = createGameState(276, 'qingtuan')
+overflowCheck.ownedItems.push('wine-immortal-gourd')
+overflowCheck.spawnTimer = 99
+overflowCheck.bambooCooldown = 99
+overflowCheck.leafCooldown = 99
+overflowCheck.drops = [{ id: 1, kind: 'heal', x: 800, y: 500, value: 10 }]
+overflowCheck.enemies = [{ id: 2, kind: 'chaser', x: 1100, y: 500, hp: 500, maxHp: 500, cooldown: 99, dashTime: 0, vx: 0, vy: 0 }]
+stepGame(overflowCheck, { x: 0, y: 0, dash: false }, 0.01)
+if (overflowCheck.player.overflowDamageTime !== 5) throw new Error('满生命拾取治疗应触发酒仙葫芦 5 秒增伤')
+overflowCheck.playerProjectiles = [{ id: 3, kind: 'leaf', x: overflowCheck.enemies[0].x, y: overflowCheck.enemies[0].y, vx: 0, vy: 0, damage: 100, critical: false, blastRadius: 0 }]
+stepGame(overflowCheck, { x: 0, y: 0, dash: false }, 0.01)
+if (overflowCheck.enemies[0].hp !== 380 || overflowCheck.player.overflowDamageTime >= 5) throw new Error('酒仙葫芦生效期间应提供 20% 全部伤害并正常倒计时')
 
 const waveHealingCheck = createGameState(28)
 waveHealingCheck.shopOpen = true
