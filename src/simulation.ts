@@ -112,7 +112,7 @@ export const items: Record<ItemId, { name: string; rarity: string; description: 
   'tumbler-charm': { name: '不倒翁护符', rarity: '史诗', description: '致命伤保留 1 点生命，每局一次', preview: '触发后沿用本次受击无敌时间', price: 70, image: 'assets/items/tumbler-charm.png', unique: true },
   'chain-copper-clasp': { name: '连环铜扣', rarity: '稀有', description: '连续命中同一目标时，每次伤害 +4%', preview: '最高 +20%，更换目标后重置', price: 42, image: 'assets/items/chain-copper-clasp.png', unique: true },
   'guild-token': { name: '商会令牌', rarity: '史诗', description: '刷新至少出现一件稀有商品，刷新费用 +3', preview: '免费补齐仍免费，正常刷新更贵', price: 64, image: 'assets/items/guild-token.png', unique: true },
-  'wine-immortal-gourd': { name: '酒仙葫芦', rarity: '史诗', description: '治疗溢出时获得 5 秒全部伤害 +20%', preview: '重复触发刷新持续时间', price: 62, image: 'assets/items/wine-immortal-gourd.png', unique: true },
+  'wine-immortal-gourd': { name: '竹露葫芦', rarity: '史诗', description: '治疗溢出时获得 5 秒全部伤害 +20%', preview: '重复触发刷新持续时间', price: 62, image: 'assets/items/wine-immortal-gourd.png', unique: true },
   'army-breaker-token': { name: '破军令', rarity: '传说', description: '武器暴击击杀引爆周围 90 范围，基础伤害 40；暴击伤害 -20%', preview: '暴击倍率 175% → 140%；爆炸不连锁', price: 140, image: 'assets/items/army-breaker-token.png', unique: true },
   'thunder-drum': { name: '雷纹手鼓', rarity: '史诗', description: '每 10 次攻击释放 24 伤害闪电，最多连接 3 个敌人；攻速 -5%', preview: '每跳范围 180；齐射只计 1 次，持续灼烧不计', price: 80, image: 'assets/items/thunder-drum.png', unique: true },
   'bamboo-totem': { name: '竹林图腾', rarity: '史诗', description: '站定 2 秒获得 +25% 全部伤害；移动后在 2 秒内衰减', preview: '重新站定需再次蓄力；闪避也会中断站定', price: 80, image: 'assets/items/bamboo-totem.png', unique: true },
@@ -123,7 +123,7 @@ export const weapons: Record<WeaponId, { name: string; rarity: string; descripti
   'iron-pot-gauntlets': { name: '铁锅拳套', rarity: '普通', description: '极短距离快速拳击，Lv.3 起追加第二拳', preview: '升级提高伤害与拳风范围', price: 22, image: 'assets/weapons/iron-pot-gauntlets.png' },
   'firecracker-launcher': { name: '爆竹筒', rarity: '稀有', description: '发射慢速爆竹，命中造成范围爆炸', preview: '升级扩大爆炸，Lv.3 起双弹齐射', price: 42, image: 'assets/weapons/firecracker-launcher.png' },
   'spinning-bamboo-blade': { name: '旋转竹刃', rarity: '普通', description: '竹刃绕身切割近身敌人，Lv.3 起增加第二把', preview: '升级增加伤害、轨道与竹刃数量', price: 24, image: 'assets/weapons/spinning-bamboo-blade.png' },
-  'panda-wine-gourd': { name: '熊猫酒葫芦', rarity: '稀有', description: '投出酒焰灼烧一片区域，Lv.3 起同时点燃两处', preview: '升级扩大酒焰并延长持续时间', price: 44, image: 'assets/weapons/panda-wine-gourd.png' },
+  'panda-wine-gourd': { name: '灵茶葫芦', rarity: '稀有', description: '投出茶焰灼烧一片区域，Lv.3 起同时点燃两处', preview: '升级扩大茶焰并延长持续时间', price: 44, image: 'assets/weapons/panda-wine-gourd.png' },
   'bamboo-crossbow-turret': { name: '竹弩机关', rarity: '稀有', description: '部署自动索敌的竹弩台，Lv.3 起同时部署两台', preview: '升级增加箭伤、射速与机关数量', price: 48, image: 'assets/weapons/bamboo-crossbow-turret.png' },
 }
 
