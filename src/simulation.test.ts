@@ -1,5 +1,6 @@
 import { buyItem, characters, chooseUpgrade, continueWave, createGameState, enemyDefinitions, getBambooWeaponCount, getShopPrice, isSignatureWeaponId, isWeaponId, items, refreshShop, refreshUpgrades, regularEnemyIds, sellItem, sellWeapon, signatureWeapons, stepGame, toggleShopLock, upgrades, weaponIds, weapons } from './simulation.js'
 import { parseBattleRecords } from './records.js'
+import './i18n.test.js'
 
 if (Object.keys(items).length !== 24) throw new Error('MVP 应有 24 件道具')
 for (const id of ['army-breaker-token', 'thunder-drum', 'bamboo-totem', 'taiji-jade'] as const) {

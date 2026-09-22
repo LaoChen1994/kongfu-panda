@@ -1,9 +1,14 @@
+import { t, locale, setLocale, resolveLocale, applyStaticTranslations } from './i18n.js'
 import Phaser from 'phaser'
 import './style.css'
 import { buyItem, characters, chooseUpgrade, continueWave, createGameState, enemyDefinitions, getBambooWeaponCount, getShopPrice, injurySources, isSignatureWeaponId, isWeaponId, items, refreshShop, refreshUpgrades, sellItem, sellWeapon, signatureWeapons, stepGame, toggleShopLock, upgrades, weaponIds, weapons, type CharacterId } from './simulation.js'
 import { parseBattleRecords } from './records.js'
 
 const assetRoot = `${import.meta.env.BASE_URL}assets/`
+let savedLocale: string | null = null
+try { savedLocale = localStorage.getItem('panda-language') } catch { /* 无痕模式仍可切换语言 */ }
+setLocale(resolveLocale(savedLocale, navigator.language))
+applyStaticTranslations()
 let selectedCharacter: CharacterId = 'shanlan'
 let gameStarting = false
 let battleRecords = parseBattleRecords(null)
@@ -36,13 +41,16 @@ try {
 } catch {
   onboardingStep = onboardingPlaytestMode === 'upgrade' ? 2 : onboardingPlaytestMode === 'shop' ? 3 : onboardingPlaytest ? 0 : 4
 }
-for (const id of ['shanlan', 'qingtuan', 'shimo'] as const) {
-  const record = battleRecords[id]
-  document.querySelector<HTMLElement>(`[data-record="${id}"]`)!.textContent = record.runs
-    ? `出战 ${record.runs} 局 · 通关 ${record.wins} 次\n最高第 ${record.bestWave} 波 · 最多击破 ${record.bestKills}${record.bestClearTime ? `\n最快通关 ${Math.floor(record.bestClearTime / 60)}分${record.bestClearTime % 60}秒` : ''}`
-    : '尚未出战 · 写下第一份战绩'
+const renderCharacterRecords = () => {
+  for (const id of ['shanlan', 'qingtuan', 'shimo'] as const) {
+    const record = battleRecords[id]
+    document.querySelector<HTMLElement>(`[data-record="${id}"]`)!.textContent = record.runs
+      ? t('出战 {0} 局 · 通关 {1} 次\n最高第 {2} 波 · 最多击破 {3}{4}', record.runs, record.wins, record.bestWave, record.bestKills, record.bestClearTime ? t('\n最快通关 {0}分{1}秒', Math.floor(record.bestClearTime / 60), record.bestClearTime % 60) : '')
+      : t('尚未出战 · 写下第一份战绩')
+  }
+  if (!recordsAvailable) document.querySelector<HTMLElement>('#records-note')!.textContent = t('浏览器未允许保存战绩，本次仍可正常游玩。')
 }
-if (!recordsAvailable) document.querySelector<HTMLElement>('#records-note')!.textContent = '浏览器未允许保存战绩，本次仍可正常游玩。'
+renderCharacterRecords()
 const resultOverlay = document.querySelector<HTMLElement>('#result-overlay')!
 const resultRetry = document.querySelector<HTMLButtonElement>('#result-retry')!
 document.querySelector<HTMLButtonElement>('#result-select')!.onclick = () => {
@@ -69,16 +77,33 @@ const mobileDash = document.querySelector<HTMLButtonElement>('#mobile-dash')!
 const mobilePause = document.querySelector<HTMLButtonElement>('#mobile-pause')!
 settingShake.checked = gameSettings.screenShake
 settingReducedMotion.checked = gameSettings.reducedMotion
-settingsStatus.textContent = settingsAvailable ? '设置会保存在当前浏览器' : '浏览器未允许保存，本次设置仍会生效'
+settingsStatus.textContent = settingsAvailable ? t('设置会保存在当前浏览器') : t('浏览器未允许保存，本次设置仍会生效')
+for (const button of document.querySelectorAll<HTMLButtonElement>('[data-language]')) {
+  button.setAttribute('aria-pressed', String(button.dataset.language === locale))
+  button.addEventListener('click', () => {
+    const next = button.dataset.language
+    if (next !== 'zh-CN' && next !== 'en') return
+    setLocale(next)
+    let languageSaved = true
+    try { localStorage.setItem('panda-language', next) } catch { languageSaved = false }
+    applyStaticTranslations()
+    renderCharacterRecords()
+    document.querySelector<HTMLElement>('#overlay-title')!.textContent = t('竹息凝神')
+    document.querySelector<HTMLElement>('#overlay-copy')!.textContent = t('战斗与计时已暂停')
+    settingsStatus.textContent = languageSaved ? t('设置已保存') : t('浏览器未允许保存，本次设置仍会生效')
+    for (const control of document.querySelectorAll('[data-language]')) control.setAttribute('aria-pressed', String(control.getAttribute('data-language') === locale))
+    button.blur()
+  })
+}
 document.querySelector<HTMLElement>('.pause-settings')!.addEventListener('change', () => {
   gameSettings = { version: 1, screenShake: settingShake.checked, reducedMotion: settingReducedMotion.checked }
   document.documentElement.dataset.reducedMotion = String(gameSettings.reducedMotion)
   try {
     localStorage.setItem('panda-game-settings', JSON.stringify(gameSettings))
-    settingsStatus.textContent = '设置已保存'
+    settingsStatus.textContent = t('设置已保存')
   } catch {
     settingsAvailable = false
-    settingsStatus.textContent = '浏览器未允许保存，本次设置仍会生效'
+    settingsStatus.textContent = t('浏览器未允许保存，本次设置仍会生效')
   }
 })
 const buildStatFields = [
@@ -203,10 +228,10 @@ class BattleScene extends Phaser.Scene {
     if (hint.hidden) return
     const mobileLayout = matchMedia('(max-width: 960px) and (orientation: landscape)').matches
     document.querySelector<HTMLElement>('#onboarding-copy')!.innerHTML = [
-      mobileLayout ? '拖动左侧摇杆移动，侠客会自动攻击最近的敌人' : '<kbd>WASD</kbd> 或方向键移动，侠客会自动攻击最近的敌人',
-      mobileLayout ? '点击右侧闪避穿出包围，闪避期间不会受伤' : '<kbd>SPACE</kbd> 闪避穿出包围，闪避期间不会受伤',
-      '收集敌人掉落的灵竹，灵竹满后可选择一门强化',
-      '坚持到本波结束，在商城购买武器和宝物后继续',
+      mobileLayout ? t('拖动左侧摇杆移动，侠客会自动攻击最近的敌人') : `<kbd>WASD</kbd>${t(' 或方向键移动，侠客会自动攻击最近的敌人')}`,
+      mobileLayout ? t('点击右侧闪避穿出包围，闪避期间不会受伤') : `<kbd>SPACE</kbd>${t(' 闪避穿出包围，闪避期间不会受伤')}`,
+      t('收集敌人掉落的灵竹，灵竹满后可选择一门强化'),
+      t('坚持到本波结束，在商城购买武器和宝物后继续'),
     ][onboardingStep]
   }
 
@@ -215,11 +240,11 @@ class BattleScene extends Phaser.Scene {
       if (this.loadFailed) return
       loadingProgress.value = Math.floor(progress * 100)
       loadingPercent.textContent = `${loadingProgress.value}%`
-      if (progress === 1) loadingMessage.textContent = '资源已就绪，正在布置战场…'
+      if (progress === 1) loadingMessage.textContent = t('资源已就绪，正在布置战场…')
     })
     this.load.on('loaderror', () => {
       this.loadFailed = true
-      loadingMessage.textContent = '部分资源加载失败，请检查网络后重新加载。'
+      loadingMessage.textContent = t('部分资源加载失败，请检查网络后重新加载。')
       loadingRetry.hidden = false
     })
     this.load.image('bamboo-ground', `${assetRoot}environments/bamboo-ground.png`)
@@ -445,7 +470,7 @@ class BattleScene extends Phaser.Scene {
       loadingOverlay.hidden = true
     })
     const keyboard = this.input.keyboard
-    if (!keyboard) throw new Error('浏览器不支持键盘输入')
+    if (!keyboard) throw new Error(t('浏览器不支持键盘输入'))
     this.keys = {
       up: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.UP), down: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN),
       left: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT), right: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT),
@@ -501,8 +526,8 @@ class BattleScene extends Phaser.Scene {
       this.paused = true
       this.resetMobileJoystick()
       pauseOverlay.hidden = false
-      document.querySelector<HTMLElement>('#overlay-title')!.textContent = '竹息凝神'
-      document.querySelector<HTMLElement>('#overlay-copy')!.textContent = '战斗与计时已暂停'
+      document.querySelector<HTMLElement>('#overlay-title')!.textContent = t('竹息凝神')
+      document.querySelector<HTMLElement>('#overlay-copy')!.textContent = t('战斗与计时已暂停')
       pauseContinue.focus()
     }
     window.addEventListener('blur', this.resetMobileJoystick)
@@ -577,8 +602,8 @@ class BattleScene extends Phaser.Scene {
         this.paused = !this.paused
         this.resetMobileJoystick()
         pauseOverlay.hidden = !this.paused
-        document.querySelector<HTMLElement>('#overlay-title')!.textContent = '竹息凝神'
-        document.querySelector<HTMLElement>('#overlay-copy')!.textContent = '战斗与计时已暂停'
+        document.querySelector<HTMLElement>('#overlay-title')!.textContent = t('竹息凝神')
+        document.querySelector<HTMLElement>('#overlay-copy')!.textContent = t('战斗与计时已暂停')
         if (this.paused) pauseContinue.focus()
         else {
           pauseContinue.blur()
@@ -622,21 +647,21 @@ class BattleScene extends Phaser.Scene {
 
     const mode = this.state.pendingUpgrade ? `upgrade-${this.state.player.level}-${this.state.player.coins}-${this.state.freeUpgradeRefreshUsed}-${this.state.upgradeChoices.join('-')}` : this.state.shopOpen ? `shop-${this.state.wave}-${this.state.player.coins}-${this.state.shopChoices.join('-')}-${this.state.lockedShopIndices.join('-')}-${this.state.ownedItems.join('-')}-${this.state.signatureWeaponLevel}-${this.state.signatureWeaponEvolved}-${Object.entries(this.state.weaponLevels).join('-')}` : ''
     overlay.hidden = !mode
-    if (!mode || mode === this.overlayMode) return
-    this.overlayMode = mode
+    if (!mode || `${locale}-${mode}` === this.overlayMode) return
+    this.overlayMode = `${locale}-${mode}`
     overlay.scrollTop = 0
     cards.innerHTML = ''
     if (this.state.pendingUpgrade) {
       cards.hidden = false
       shopTabs.hidden = true
       shopLayout.hidden = true
-      kicker.textContent = `境界突破 · Lv.${this.state.player.level}`
-      title.textContent = '选择一门强化'
-      copy.textContent = onboardingStep === 2 ? '首次突破 · 选择一项强化，战斗会在选择后继续' : '战斗已暂停 · 让这一局形成自己的招式'
+      kicker.textContent = t('境界突破 · Lv.{0}', this.state.player.level)
+      title.textContent = t('选择一门强化')
+      copy.textContent = onboardingStep === 2 ? t('首次突破 · 选择一项强化，战斗会在选择后继续') : t('战斗已暂停 · 让这一局形成自己的招式')
       cards.style.gridTemplateColumns = 'repeat(3, 1fr)'
       continueButton.hidden = true
       refreshUpgradeButton.hidden = false
-      refreshUpgradeButton.textContent = this.state.freeUpgradeRefreshUsed ? `刷新强化 · ${this.state.upgradeRefreshCost} 铜钱` : '本波首次刷新 · 免费'
+      refreshUpgradeButton.textContent = this.state.freeUpgradeRefreshUsed ? t('刷新强化 · {0} 铜钱', this.state.upgradeRefreshCost) : t('本波首次刷新 · 免费')
       refreshUpgradeButton.disabled = this.state.freeUpgradeRefreshUsed && this.state.player.coins < this.state.upgradeRefreshCost
       refreshUpgradeButton.onclick = () => {
         if (refreshUpgrades(this.state)) this.overlayMode = ''
@@ -650,7 +675,7 @@ class BattleScene extends Phaser.Scene {
         button.className = 'choice-card'
         button.type = 'button'
         button.dataset.rarity = upgrade.rarity
-        button.innerHTML = `<kbd>${index + 1}</kbd>${upgrade.image ? `<img src="${import.meta.env.BASE_URL}${upgrade.image}" alt="">` : ''}<small>${upgrade.rarity} · ${upgrade.tag}</small><strong>${upgrade.name}</strong><span>${upgrade.description}</span><em>${changes.map(({ key, label, scale, unit }) => `${label} ${Math.round(this.state.player[key] * scale)}${unit} → ${Math.round(preview.player[key] * scale)}${unit}`).join('；') || upgrade.preview}</em>`
+        button.innerHTML = `<kbd>${index + 1}</kbd>${upgrade.image ? `<img src="${import.meta.env.BASE_URL}${upgrade.image}" alt="">` : ''}<small>${t(upgrade.rarity)} · ${t(upgrade.tag)}</small><strong>${t(upgrade.name)}</strong><span>${t(upgrade.description)}</span><em>${changes.map(({ key, label, scale, unit }) => `${t(label)} ${Math.round(this.state.player[key] * scale)}${unit} → ${Math.round(preview.player[key] * scale)}${unit}`).join(t('；')) || t(upgrade.preview)}</em>`
         button.addEventListener('click', () => chooseUpgrade(this.state, id))
         cards.append(button)
       })
@@ -661,25 +686,25 @@ class BattleScene extends Phaser.Scene {
       shopLayout.hidden = false
       this.setMobileShopTab(this.mobileShopTab)
       refreshUpgradeButton.hidden = true
-      kicker.textContent = `竹林补给 · 第 ${this.state.wave} 波结束`
-      title.textContent = '整备下一波构筑'
-      copy.textContent = onboardingStep === 3 ? `首次整备 · 用 ${this.state.player.coins} 铜钱补强构筑，再进入下一波` : `现有 ${this.state.player.coins} 铜钱 · 商品可重复购买，唯一宝物除外`
+      kicker.textContent = t('竹林补给 · 第 {0} 波结束', this.state.wave)
+      title.textContent = t('整备下一波构筑')
+      copy.textContent = onboardingStep === 3 ? t('首次整备 · 用 {0} 铜钱补强构筑，再进入下一波', this.state.player.coins) : t('现有 {0} 铜钱 · 商品可重复购买，唯一宝物除外', this.state.player.coins)
       continueButton.hidden = false
       continueButton.onclick = () => continueWave(this.state)
       const shopSoldOut = this.state.shopChoices.every((id) => id === null)
       const allProductsLocked = this.state.shopChoices.every((id, index) => id !== null && this.state.lockedShopIndices.includes(index))
-      refreshButton.textContent = allProductsLocked ? '全部商品已锁定' : shopSoldOut ? '补齐商品 · 免费' : `刷新商品 · ${this.state.shopRefreshCost} 铜钱`
+      refreshButton.textContent = allProductsLocked ? t('全部商品已锁定') : shopSoldOut ? t('补齐商品 · 免费') : t('刷新商品 · {0} 铜钱', this.state.shopRefreshCost)
       refreshButton.disabled = allProductsLocked || (!shopSoldOut && this.state.player.coins < this.state.shopRefreshCost)
       refreshButton.onclick = () => {
         if (refreshShop(this.state)) this.overlayMode = ''
       }
       const character = characters[this.state.characterId]
       shopStats.innerHTML = `
-        <div class="shop-character"><img src="${import.meta.env.BASE_URL}${character.portrait}" alt=""><strong>${character.name}</strong><span>${character.role}</span></div>
+        <div class="shop-character"><img src="${import.meta.env.BASE_URL}${character.portrait}" alt=""><strong>${t(character.name)}</strong><span>${t(character.role)}</span></div>
         <dl>
-          <div><dt>生命</dt><dd>${Math.ceil(this.state.player.hp)} / ${this.state.player.maxHp}</dd></div>
-          ${buildStatFields.filter(({ key }) => key !== 'maxHp').map(({ key, label, scale, unit }) => `<div><dt>${label}</dt><dd>${key === 'shieldPower' && this.state.characterId !== 'shimo' || (key === 'projectileCount' || key === 'projectileSpeed') && this.state.characterId !== 'qingtuan' || key === 'meleeRange' && this.state.characterId === 'qingtuan' ? '不适用' : `${Math.round(this.state.player[key] * scale)}${unit}`}</dd></div>`).join('')}
-        </dl><p class="stat-help">伤害与速度百分比为当前倍率；基础波次恢复 35%。近战作用于杖、盾、拳套和竹刃；远程作用于飞叶、爆竹、酒焰和竹弩。暴击仅作用于杖、盾、飞叶、拳套和爆竹。行囊合计为这组宝物的净贡献，已计入上下限与天赋。</p>`
+          <div><dt>${t('生命')}</dt><dd>${Math.ceil(this.state.player.hp)} / ${this.state.player.maxHp}</dd></div>
+          ${buildStatFields.filter(({ key }) => key !== 'maxHp').map(({ key, label, scale, unit }) => `<div><dt>${t(label)}</dt><dd>${key === 'shieldPower' && this.state.characterId !== 'shimo' || (key === 'projectileCount' || key === 'projectileSpeed') && this.state.characterId !== 'qingtuan' || key === 'meleeRange' && this.state.characterId === 'qingtuan' ? t('不适用') : `${Math.round(this.state.player[key] * scale)}${unit}`}</dd></div>`).join('')}
+        </dl><p class="stat-help">${t('伤害与速度百分比为当前倍率；基础波次恢复 35%。近战作用于杖、盾、拳套和竹刃；远程作用于飞叶、爆竹、茶焰和竹弩。暴击仅作用于杖、盾、飞叶、拳套和爆竹。行囊合计为这组宝物的净贡献，已计入上下限与天赋。')}</p>`
       shopCards.innerHTML = ''
       this.state.shopChoices.forEach((id, index) => {
         const article = document.createElement('article')
@@ -698,48 +723,48 @@ class BattleScene extends Phaser.Scene {
         const lockButton = document.createElement('button')
         const locked = this.state.lockedShopIndices.includes(index)
         article.dataset.rarity = product.rarity
-        article.innerHTML = `<kbd>${index + 1}</kbd><img src="${import.meta.env.BASE_URL}${product.image}" alt=""><small>${product.rarity} · ${signatureWeapon ? `专属武器 · Lv.${weaponLevel} → Lv.${weaponLevel + 1}` : commonWeapon ? `武器 · ${weaponLevel >= 5 ? 'Lv.5 · 已满级' : weaponLevel > 0 ? `Lv.${weaponLevel} → Lv.${weaponLevel + 1}` : '新武器'}` : '宝物'}</small><strong>${product.name}</strong><span>${product.description}</span><em>${product.preview}</em>`
+        article.innerHTML = `<kbd>${index + 1}</kbd><img src="${import.meta.env.BASE_URL}${product.image}" alt=""><small>${t(product.rarity)} · ${signatureWeapon ? t('专属武器 · Lv.{0} → Lv.{1}', weaponLevel, weaponLevel + 1) : commonWeapon ? t('武器 · {0}', weaponLevel >= 5 ? t('Lv.5 · 已满级') : weaponLevel > 0 ? `Lv.${weaponLevel} → Lv.${weaponLevel + 1}` : t('新武器')) : t('宝物')}</small><strong>${t(product.name)}</strong><span>${t(product.description)}</span><em>${t(product.preview)}</em>`
         if (!commonWeapon && !signatureWeapon) {
           const preview = structuredClone(this.state)
           preview.player.coins = Math.max(preview.player.coins, price)
           const available = buyItem(preview, index)
           const changes = buildStatFields.filter(({ key }) => Math.abs(preview.player[key] - this.state.player[key]) > 1e-8)
-          article.querySelector('em')!.textContent = available ? changes.map(({ key, label, scale, unit }) => `${label} ${Math.round(this.state.player[key] * scale)}${unit} → ${Math.round(preview.player[key] * scale)}${unit}`).join('；') || product.preview : stackLimit === 1 ? '唯一宝物 · 已拥有，不能重复购买' : `已达持有上限 · 最多 ${stackLimit} 件`
+          article.querySelector('em')!.textContent = available ? changes.map(({ key, label, scale, unit }) => `${t(label)} ${Math.round(this.state.player[key] * scale)}${unit} → ${Math.round(preview.player[key] * scale)}${unit}`).join(t('；')) || t(product.preview) : stackLimit === 1 ? t('唯一宝物 · 已拥有，不能重复购买') : t('已达持有上限 · 最多 {0} 件', stackLimit ?? 0)
           const notice = document.createElement('small')
           notice.className = 'shop-limit'
           notice.textContent = [
-            id === 'jade-eyepatch' ? '生命下限 1；暴击上限 100%，溢出不再增加' : '',
-            id === 'mountain-stone' || id === 'spirit-bamboo-tube' || id === 'iron-bracer' ? '移动速度下限 50%' : '',
-            id === 'tiger-seal' ? '普通敌人伤害下限 50%' : '',
-            id === 'mountain-stone' && this.state.characterId !== 'shimo' ? '当前角色无护盾，护盾加成不生效' : '',
-            id === 'wind-feather' ? '弹速仅作用于青团飞叶；远程伤害作用于所有远程武器' : '',
-            id === 'bamboo-dew-pill' ? `立即恢复 ${Math.max(0, Math.round(preview.player.hp - this.state.player.hp))} 生命` : '',
-            id === 'food-god-lunchbox' ? `整备恢复 ${Math.round((0.35 + this.state.player.waveHealing) * 100)}% → ${Math.round((0.35 + preview.player.waveHealing) * 100)}%，不超过生命上限` : '',
-            id === 'barbed-backplate' ? '只反击造成实际命中的接触敌人；闪避率最低为 0%' : '',
-            id === 'twin-bamboo' ? '作用于飞叶、爆竹和竹弩；额外投射物最多 +2' : '',
-            id === 'monk-beads' ? '冷却缩减作用于所有自动武器；武器伤害最低 50%' : '',
-            id === 'lucky-bell' ? `后续商品按 ${Math.round(preview.player.shopPriceMultiplier * 100)}% 价格结算；每 15% 幸运把史诗出现率提高 3 个百分点` : '',
-            id === 'tumbler-charm' ? '每局仅触发一次；触发后保留 1 点生命并沿用本次受击无敌时间' : '',
-            id === 'chain-copper-clasp' ? '仅连续武器命中叠层；更换目标重置，最高 +20%' : '',
-            id === 'guild-token' ? `免费补齐仍免费；正常刷新费用 ${this.state.shopRefreshCost} → ${preview.shopRefreshCost}` : '',
-            id === 'wine-immortal-gourd' ? '实际治疗溢出时触发；持续 5 秒，重复触发刷新时间' : '',
-            id === 'army-breaker-token' ? '仅武器暴击击杀触发；爆炸不可暴击或再次引爆' : '',
-            id === 'thunder-drum' ? '每跳范围 180；齐射计 1 次，持续伤害不计；无目标不计，换波清零' : '',
-            id === 'bamboo-totem' ? '站定时注意敌方预警；增伤按战斗时间计时，暂停不流失' : '',
-            id === 'taiji-jade' ? this.state.characterId === 'shimo' ? '护盾实际增加或破裂才触发；生命上限最低 1' : '当前角色无护盾来源，气功波不生效；仍会降低生命上限' : '',
-          ].filter(Boolean).join('；')
+            id === 'jade-eyepatch' ? t('生命下限 1；暴击上限 100%，溢出不再增加') : '',
+            id === 'mountain-stone' || id === 'spirit-bamboo-tube' || id === 'iron-bracer' ? t('移动速度下限 50%') : '',
+            id === 'tiger-seal' ? t('普通敌人伤害下限 50%') : '',
+            id === 'mountain-stone' && this.state.characterId !== 'shimo' ? t('当前角色无护盾，护盾加成不生效') : '',
+            id === 'wind-feather' ? t('弹速仅作用于青团飞叶；远程伤害作用于所有远程武器') : '',
+            id === 'bamboo-dew-pill' ? t('立即恢复 {0} 生命', Math.max(0, Math.round(preview.player.hp - this.state.player.hp))) : '',
+            id === 'food-god-lunchbox' ? t('整备恢复 {0}% → {1}%，不超过生命上限', Math.round((0.35 + this.state.player.waveHealing) * 100), Math.round((0.35 + preview.player.waveHealing) * 100)) : '',
+            id === 'barbed-backplate' ? t('只反击造成实际命中的接触敌人；闪避率最低为 0%') : '',
+            id === 'twin-bamboo' ? t('作用于飞叶、爆竹和竹弩；额外投射物最多 +2') : '',
+            id === 'monk-beads' ? t('冷却缩减作用于所有自动武器；武器伤害最低 50%') : '',
+            id === 'lucky-bell' ? t('后续商品按 {0}% 价格结算；每 15% 幸运把史诗出现率提高 3 个百分点', Math.round(preview.player.shopPriceMultiplier * 100)) : '',
+            id === 'tumbler-charm' ? t('每局仅触发一次；触发后保留 1 点生命并沿用本次受击无敌时间') : '',
+            id === 'chain-copper-clasp' ? t('仅连续武器命中叠层；更换目标重置，最高 +20%') : '',
+            id === 'guild-token' ? t('免费补齐仍免费；正常刷新费用 {0} → {1}', this.state.shopRefreshCost, preview.shopRefreshCost) : '',
+            id === 'wine-immortal-gourd' ? t('实际治疗溢出时触发；持续 5 秒，重复触发刷新时间') : '',
+            id === 'army-breaker-token' ? t('仅武器暴击击杀触发；爆炸不可暴击或再次引爆') : '',
+            id === 'thunder-drum' ? t('每跳范围 180；齐射计 1 次，持续伤害不计；无目标不计，换波清零') : '',
+            id === 'bamboo-totem' ? t('站定时注意敌方预警；增伤按战斗时间计时，暂停不流失') : '',
+            id === 'taiji-jade' ? this.state.characterId === 'shimo' ? t('护盾实际增加或破裂才触发；生命上限最低 1') : t('当前角色无护盾来源，气功波不生效；仍会降低生命上限') : '',
+          ].filter(Boolean).join(t('；'))
           if (notice.textContent) article.append(notice)
         }
         buyButton.type = 'button'
         buyButton.className = 'shop-buy'
         buyButton.disabled = stackLimitReached || weaponFull || maxLevel || this.state.player.coins < price
-        buyButton.textContent = stackLimitReached ? stackLimit === 1 ? '已拥有' : `已达 ${stackLimit} 件上限` : weaponFull ? '通用武器栏已满' : maxLevel ? '已达 Lv.5' : this.state.player.coins < price ? `缺少 ${price - this.state.player.coins} 铜钱` : `${price} 铜钱 · ${weaponLevel > 0 ? '合成升级' : '购买'}`
+        buyButton.textContent = stackLimitReached ? stackLimit === 1 ? t('已拥有') : t('已达 {0} 件上限', stackLimit) : weaponFull ? t('通用武器栏已满') : maxLevel ? t('已达 Lv.5') : this.state.player.coins < price ? t('缺少 {0} 铜钱', price - this.state.player.coins) : t('{0} 铜钱 · {1}', price, weaponLevel > 0 ? t('合成升级') : t('购买'))
         buyButton.addEventListener('click', () => {
           if (buyItem(this.state, index)) this.overlayMode = ''
         })
         lockButton.type = 'button'
         lockButton.className = `shop-lock${locked ? ' locked' : ''}`
-        lockButton.textContent = locked ? '已锁定' : '锁定'
+        lockButton.textContent = locked ? t('已锁定') : t('锁定')
         lockButton.setAttribute('aria-pressed', String(locked))
         lockButton.addEventListener('click', () => {
           if (toggleShopLock(this.state, index)) this.overlayMode = ''
@@ -747,24 +772,24 @@ class BattleScene extends Phaser.Scene {
         article.append(buyButton, lockButton)
         shopCards.append(article)
       })
-      if (shopSoldOut) shopCards.innerHTML = '<p class="shop-empty">本轮补给已取完<br><small>可免费补齐商品，或整备进入下一波</small></p>'
+      if (shopSoldOut) shopCards.innerHTML = `<p class="shop-empty">${t('本轮补给已取完')}<br><small>${t('可免费补齐商品，或整备进入下一波')}</small></p>`
       shopWeapons.innerHTML = ''
       const signature = signatureWeapons[characters[this.state.characterId].weaponId]
       const signatureRow = document.createElement('div')
       signatureRow.className = `shop-weapon signature-weapon${this.state.signatureWeaponEvolved ? ' evolved' : ''}`
-      signatureRow.innerHTML = `<img src="${import.meta.env.BASE_URL}${this.state.signatureWeaponEvolved ? signature.evolution.image : signature.image}" alt=""><span><strong>${this.state.signatureWeaponEvolved ? signature.evolution.name : signature.name} · ${this.state.signatureWeaponEvolved ? '已觉醒' : `Lv.${this.state.signatureWeaponLevel}`}</strong><small>${this.state.signatureWeaponEvolved ? signature.evolution.description : `不可出售 · Lv.5 + ${items[signature.evolution.requiredItem].name} 可进化`}</small></span>`
+      signatureRow.innerHTML = `<img src="${import.meta.env.BASE_URL}${this.state.signatureWeaponEvolved ? signature.evolution.image : signature.image}" alt=""><span><strong>${this.state.signatureWeaponEvolved ? t(signature.evolution.name) : t(signature.name)} · ${this.state.signatureWeaponEvolved ? t('已觉醒') : `Lv.${this.state.signatureWeaponLevel}`}</strong><small>${this.state.signatureWeaponEvolved ? t(signature.evolution.description) : t('不可出售 · Lv.5 + {0} 可进化', t(items[signature.evolution.requiredItem].name))}</small></span>`
       shopWeapons.append(signatureRow)
       const ownedWeaponIds = weaponIds.filter((id) => (this.state.weaponLevels[id] ?? 0) > 0)
-      if (ownedWeaponIds.length === 0) shopWeapons.insertAdjacentHTML('beforeend', '<p>尚未获得通用武器</p>')
+      if (ownedWeaponIds.length === 0) shopWeapons.insertAdjacentHTML('beforeend', `<p>${t('尚未获得通用武器')}</p>`)
       ownedWeaponIds.forEach((id) => {
         const weapon = weapons[id]
         const level = this.state.weaponLevels[id] ?? 0
         const row = document.createElement('div')
         const sellButton = document.createElement('button')
         row.className = 'shop-weapon'
-        row.innerHTML = `<img src="${import.meta.env.BASE_URL}${weapon.image}" alt=""><span><strong>${weapon.name} · Lv.${level}</strong><small>${weapon.description}</small></span>`
+        row.innerHTML = `<img src="${import.meta.env.BASE_URL}${weapon.image}" alt=""><span><strong>${t(weapon.name)} · Lv.${level}</strong><small>${t(weapon.description)}</small></span>`
         sellButton.type = 'button'
-        sellButton.textContent = `出售 +${Math.floor(weapon.price * level * 0.6)}`
+        sellButton.textContent = t('出售 +{0}', Math.floor(weapon.price * level * 0.6))
         sellButton.addEventListener('click', () => {
           if (sellWeapon(this.state, id)) this.overlayMode = ''
         })
@@ -773,7 +798,7 @@ class BattleScene extends Phaser.Scene {
       })
       shopInventory.innerHTML = ''
       shopItemCount.textContent = String(this.state.ownedItems.length)
-      if (this.state.ownedItems.length === 0) shopInventory.innerHTML = '<p>尚未获得宝物</p>'
+      if (this.state.ownedItems.length === 0) shopInventory.innerHTML = `<p>${t('尚未获得宝物')}</p>`
       const ownedItemIds = this.state.ownedItems.filter((id, index, ownedItems) => ownedItems.indexOf(id) === index)
       ownedItemIds.forEach((id) => {
         const item = items[id]
@@ -784,9 +809,9 @@ class BattleScene extends Phaser.Scene {
         while (withoutItem.ownedItems.includes(id)) sellItem(withoutItem, withoutItem.ownedItems.indexOf(id))
         const total = buildStatFields.filter(({ key }) => Math.abs(this.state.player[key] - withoutItem.player[key]) > 1e-8).map(({ key, label, scale, unit }) => {
           const delta = Math.round((this.state.player[key] - withoutItem.player[key]) * scale)
-          return `${label} ${delta > 0 ? '+' : ''}${delta}${unit === '%' ? '百分点' : unit}`
-        }).join('；')
-        button.innerHTML = `<img src="${import.meta.env.BASE_URL}${item.image}" alt=""><span><strong>${item.name} ×${count}</strong><small>单件：${item.description}</small><small>当前合计：${id === 'panda-roller' ? '闪避结束震击 32 伤害（唯一）' : id === 'tumbler-charm' ? `每局一次 · ${this.state.lastStandUsed ? '已触发' : '待命'}` : id === 'chain-copper-clasp' ? `同目标连击 ${this.state.comboHits}/5 · 当前 +${this.state.comboHits * 4}%` : id === 'guild-token' ? `每次刷新至少稀有 · 当前刷新 ${this.state.shopRefreshCost} 铜钱` : id === 'wine-immortal-gourd' ? `溢出治疗触发 5 秒 +20% 全伤${this.state.player.overflowDamageTime > 0 ? ` · 剩余 ${this.state.player.overflowDamageTime.toFixed(1)} 秒` : ''}` : id === 'bamboo-totem' ? `站定 ${this.state.stationaryTime.toFixed(1)}/2 秒 · 当前增伤 ${Math.round(this.state.totemBonus * 100)}%` : id === 'thunder-drum' ? `攻击计数 ${this.state.thunderAttacks}/10 · 每跳 180 · 齐射计 1 次；${total}` : id === 'taiji-jade' ? `${this.state.characterId === 'shimo' ? '护盾增加/破裂触发气功波' : '当前无护盾来源 · 气功波不生效'}；${total}` : id === 'army-breaker-token' ? `暴击击杀触发爆炸；${total}` : total || '已受属性上下限约束'}${id === 'bamboo-dew-pill' ? '；即时治疗不累计' : ''}</small><em>出售一件 +${Math.floor(item.price * 0.6)} 铜钱</em></span>`
+          return `${t(label)} ${delta > 0 ? '+' : ''}${delta}${unit === '%' ? t('百分点') : unit}`
+        }).join(t('；'))
+        button.innerHTML = `<img src="${import.meta.env.BASE_URL}${item.image}" alt=""><span><strong>${t(item.name)} ×${count}</strong><small>${t('单件：{0}', t(item.description))}</small><small>${t('当前合计：{0}{1}', id === 'panda-roller' ? t('闪避结束震击 32 伤害（唯一）') : id === 'tumbler-charm' ? t('每局一次 · {0}', this.state.lastStandUsed ? t('已触发') : t('待命')) : id === 'chain-copper-clasp' ? t('同目标连击 {0}/5 · 当前 +{1}%', this.state.comboHits, this.state.comboHits * 4) : id === 'guild-token' ? t('每次刷新至少稀有 · 当前刷新 {0} 铜钱', this.state.shopRefreshCost) : id === 'wine-immortal-gourd' ? t('溢出治疗触发 5 秒 +20% 全伤{0}', this.state.player.overflowDamageTime > 0 ? t(' · 剩余 {0} 秒', this.state.player.overflowDamageTime.toFixed(1)) : '') : id === 'bamboo-totem' ? t('站定 {0}/2 秒 · 当前增伤 {1}%', this.state.stationaryTime.toFixed(1), Math.round(this.state.totemBonus * 100)) : id === 'thunder-drum' ? t('攻击计数 {0}/10 · 每跳 180 · 齐射计 1 次；{1}', this.state.thunderAttacks, total) : id === 'taiji-jade' ? `${this.state.characterId === 'shimo' ? t('护盾增加/破裂触发气功波') : t('当前无护盾来源 · 气功波不生效')}；${total}` : id === 'army-breaker-token' ? t('暴击击杀触发爆炸；{0}', total) : total || t('已受属性上下限约束'), id === 'bamboo-dew-pill' ? t('；即时治疗不累计') : '')}</small><em>${t('出售一件 +{0} 铜钱', Math.floor(item.price * 0.6))}</em></span>`
         button.addEventListener('click', () => {
           if (sellItem(this.state, this.state.ownedItems.indexOf(id))) this.overlayMode = ''
         })
@@ -1091,7 +1116,7 @@ class BattleScene extends Phaser.Scene {
       }
       if ((effect.kind === 'hit' || effect.kind === 'crit' || effect.kind === 'projectile-hit' || effect.kind === 'projectile-crit' || effect.kind === 'firecracker-hit' || effect.kind === 'firecracker-crit' || effect.kind === 'player-hit' || effect.kind === 'last-stand') && !this.effectTexts.has(effect.id)) {
         const critical = effect.kind === 'crit' || effect.kind === 'projectile-crit' || effect.kind === 'firecracker-crit'
-        const text = this.add.text(effect.x, effect.y, effect.kind === 'last-stand' ? '不倒' : `${effect.kind === 'player-hit' ? '-' : ''}${effect.value}`, {
+        const text = this.add.text(effect.x, effect.y, effect.kind === 'last-stand' ? t('不倒') : `${effect.kind === 'player-hit' ? '-' : ''}${effect.value}`, {
           fontFamily: 'PingFang SC, sans-serif', fontSize: critical || effect.kind === 'last-stand' ? '24px' : '17px',
           fontStyle: 'bold', color: critical ? '#ffe06a' : effect.kind === 'last-stand' ? '#cdf08a' : effect.kind === 'player-hit' ? '#ff766d' : '#fff0c5',
           stroke: '#202622', strokeThickness: 4,
@@ -1255,20 +1280,20 @@ class BattleScene extends Phaser.Scene {
     const talentStatus = document.querySelector<HTMLElement>('#talent-status')
     if (talentStatus) {
       const status = [
-        this.state.player.ironArmorTime > 0 ? `食铁护甲 +8 · ${this.state.player.ironArmorTime.toFixed(1)}s` : '',
-        this.state.chosenUpgrades.includes('battle-fury') ? `越战越勇 +${Math.floor(this.state.waveKills / 50) * 2}%` : '',
-        this.state.chosenUpgrades.includes('bamboo-unity') ? `万竹归心 +${getBambooWeaponCount(this.state) * 5}%` : '',
-        this.state.ownedItems.includes('tumbler-charm') ? `不倒翁 ${this.state.lastStandUsed ? '已触发' : '待命'}` : '',
-        this.state.ownedItems.includes('chain-copper-clasp') && this.state.comboHits > 0 ? `连环铜扣 +${this.state.comboHits * 4}%` : '',
-        this.state.player.overflowDamageTime > 0 ? `酒仙余劲 +20% · ${this.state.player.overflowDamageTime.toFixed(1)}s` : '',
-        this.state.ownedItems.includes('thunder-drum') ? `雷鼓 ${this.state.thunderAttacks}/10` : '',
-        this.state.ownedItems.includes('bamboo-totem') ? this.state.totemBonus > 0 ? `图腾 +${Math.round(this.state.totemBonus * 100)}%` : `图腾蓄力 ${this.state.stationaryTime.toFixed(1)}/2s` : '',
+        this.state.player.ironArmorTime > 0 ? t('食铁护甲 +8 · {0}s', this.state.player.ironArmorTime.toFixed(1)) : '',
+        this.state.chosenUpgrades.includes('battle-fury') ? t('越战越勇 +{0}%', Math.floor(this.state.waveKills / 50) * 2) : '',
+        this.state.chosenUpgrades.includes('bamboo-unity') ? t('万竹归心 +{0}%', getBambooWeaponCount(this.state) * 5) : '',
+        this.state.ownedItems.includes('tumbler-charm') ? t('不倒翁 {0}', this.state.lastStandUsed ? t('已触发') : t('待命')) : '',
+        this.state.ownedItems.includes('chain-copper-clasp') && this.state.comboHits > 0 ? t('连环铜扣 +{0}%', this.state.comboHits * 4) : '',
+        this.state.player.overflowDamageTime > 0 ? t('灵茶余劲 +20% · {0}s', this.state.player.overflowDamageTime.toFixed(1)) : '',
+        this.state.ownedItems.includes('thunder-drum') ? t('雷鼓 {0}/10', this.state.thunderAttacks) : '',
+        this.state.ownedItems.includes('bamboo-totem') ? this.state.totemBonus > 0 ? t('图腾 +{0}%', Math.round(this.state.totemBonus * 100)) : t('图腾蓄力 {0}/2s', this.state.stationaryTime.toFixed(1)) : '',
       ].filter(Boolean).join(' · ')
       talentStatus.hidden = !status
       talentStatus.textContent = status
     }
     const values: Record<string, string> = {
-      '#character-name': characters[this.state.characterId].name,
+      '#character-name': t(characters[this.state.characterId].name),
       '#health-text': `${Math.ceil(this.state.player.hp)} / ${this.state.player.maxHp}`,
       '#xp-text': `${this.state.player.xp} / ${this.state.player.nextXp}`,
       '#level': String(this.state.player.level), '#wave': String(this.state.wave),
@@ -1280,20 +1305,20 @@ class BattleScene extends Phaser.Scene {
       if (element) element.textContent = value
     }
     const weaponStrip = document.querySelector<HTMLElement>('#weapon-strip')
-    const weaponHudMode = `${this.state.characterId}-${this.state.signatureWeaponLevel}-${this.state.signatureWeaponEvolved}-${Object.entries(this.state.weaponLevels).join('-')}`
+    const weaponHudMode = `${locale}-${this.state.characterId}-${this.state.signatureWeaponLevel}-${this.state.signatureWeaponEvolved}-${Object.entries(this.state.weaponLevels).join('-')}`
     if (weaponStrip && weaponHudMode !== this.weaponHudMode) {
       this.weaponHudMode = weaponHudMode
       const character = characters[this.state.characterId]
       const signature = signatureWeapons[character.weaponId]
-      weaponStrip.innerHTML = `<span class="weapon-slot${this.state.signatureWeaponEvolved ? ' evolved' : ''}"><img src="${import.meta.env.BASE_URL}${this.state.signatureWeaponEvolved ? signature.evolution.image : signature.image}" alt="${this.state.signatureWeaponEvolved ? signature.evolution.name : signature.name}"><span><b>${this.state.signatureWeaponEvolved ? signature.evolution.name : signature.name} · ${this.state.signatureWeaponEvolved ? '觉醒' : `Lv.${this.state.signatureWeaponLevel}`}</b><small>${this.state.signatureWeaponEvolved ? signature.evolution.description : character.weaponDescription}</small></span></span>${weaponIds.filter((id) => (this.state.weaponLevels[id] ?? 0) > 0).map((id) => {
+      weaponStrip.innerHTML = `<span class="weapon-slot${this.state.signatureWeaponEvolved ? ' evolved' : ''}"><img src="${import.meta.env.BASE_URL}${this.state.signatureWeaponEvolved ? signature.evolution.image : signature.image}" alt="${this.state.signatureWeaponEvolved ? t(signature.evolution.name) : t(signature.name)}"><span><b>${this.state.signatureWeaponEvolved ? t(signature.evolution.name) : t(signature.name)} · ${this.state.signatureWeaponEvolved ? t('觉醒') : `Lv.${this.state.signatureWeaponLevel}`}</b><small>${this.state.signatureWeaponEvolved ? t(signature.evolution.description) : t(character.weaponDescription)}</small></span></span>${weaponIds.filter((id) => (this.state.weaponLevels[id] ?? 0) > 0).map((id) => {
         const weapon = weapons[id]
         const level = this.state.weaponLevels[id] ?? 0
-        let detail = `${level >= 3 ? '双段' : '单段'}快拳 · 范围 ${62 + level * 4}`
-        if (id === 'firecracker-launcher') detail = `${level >= 3 ? '双弹' : '单弹'}爆破 · 范围 ${48 + level * 8}`
-        if (id === 'spinning-bamboo-blade') detail = `${level >= 5 ? 3 : level >= 3 ? 2 : 1} 刃环身 · 轨道 ${58 + level * 5}`
-        if (id === 'panda-wine-gourd') detail = `${level >= 3 ? '双区' : '单区'}酒焰 · 持续 ${(2.4 + level * 0.15).toFixed(1)}秒`
-        if (id === 'bamboo-crossbow-turret') detail = `${level >= 5 ? 3 : level >= 3 ? 2 : 1} 台竹弩 · 自动索敌`
-        return `<span class="weapon-slot"><img src="${import.meta.env.BASE_URL}${weapon.image}" alt="${weapon.name}"><span><b>${weapon.name} · Lv.${level}</b><small>${detail}</small></span></span>`
+        let detail = t('{0}快拳 · 范围 {1}', level >= 3 ? t('双段') : t('单段'), 62 + level * 4)
+        if (id === 'firecracker-launcher') detail = t('{0}爆破 · 范围 {1}', level >= 3 ? t('双弹') : t('单弹'), 48 + level * 8)
+        if (id === 'spinning-bamboo-blade') detail = t('{0} 刃环身 · 轨道 {1}', level >= 5 ? 3 : level >= 3 ? 2 : 1, 58 + level * 5)
+        if (id === 'panda-wine-gourd') detail = t('{0}茶焰 · 持续 {1}秒', level >= 3 ? t('双区') : t('单区'), (2.4 + level * 0.15).toFixed(1))
+        if (id === 'bamboo-crossbow-turret') detail = t('{0} 台竹弩 · 自动索敌', level >= 5 ? 3 : level >= 3 ? 2 : 1)
+        return `<span class="weapon-slot"><img src="${import.meta.env.BASE_URL}${weapon.image}" alt="${t(weapon.name)}"><span><b>${t(weapon.name)} · Lv.${level}</b><small>${detail}</small></span></span>`
       }).join('')}`
     }
     const boss = this.state.enemies.find((enemy) => enemy.kind === 'boss')
@@ -1305,10 +1330,10 @@ class BattleScene extends Phaser.Scene {
     if (bossBar) bossBar.hidden = !boss || this.state.victory
     if (bossFill) bossFill.style.width = `${boss ? Math.max(0, boss.hp / boss.maxHp * 100) : 0}%`
     if (bossHealth) bossHealth.textContent = boss ? `${Math.ceil(boss.hp)} / ${boss.maxHp}` : ''
-    if (bossPhase) bossPhase.textContent = boss?.enraged ? '狂暴' : boss?.phase === 2 ? '腐化蔓延' : '盘根守势'
+    if (bossPhase) bossPhase.textContent = boss?.enraged ? t('狂暴') : boss?.phase === 2 ? t('腐化蔓延') : t('盘根守势')
     if (bossAnnouncement) {
       bossAnnouncement.hidden = this.state.bossIntroTime === 0
-      bossAnnouncement.textContent = '最终波 · 腐竹巨灵苏醒'
+      bossAnnouncement.textContent = t('最终波 · 腐竹巨灵苏醒')
     }
     if (this.state.signatureWeaponEvolved && !this.evolutionShown) {
       this.evolutionShown = true
@@ -1316,26 +1341,26 @@ class BattleScene extends Phaser.Scene {
       const announcement = document.querySelector<HTMLElement>('#evolution-announcement')!
       const image = document.querySelector<HTMLImageElement>('#evolution-image')!
       image.src = `${import.meta.env.BASE_URL}${signature.evolution.image}`
-      image.alt = signature.evolution.name
-      document.querySelector<HTMLElement>('#evolution-name')!.textContent = signature.evolution.name
-      document.querySelector<HTMLElement>('#evolution-copy')!.textContent = signature.evolution.description
+      image.alt = t(signature.evolution.name)
+      document.querySelector<HTMLElement>('#evolution-name')!.textContent = t(signature.evolution.name)
+      document.querySelector<HTMLElement>('#evolution-copy')!.textContent = t(signature.evolution.description)
       announcement.hidden = false
       announcement.onanimationend = () => { announcement.hidden = true }
     }
     const dash = document.querySelector<HTMLElement>('#dash')
     if (dash) {
-      dash.textContent = this.state.player.dashCooldown === 0 ? '闪避就绪' : `闪避 ${this.state.player.dashCooldown.toFixed(1)}s`
+      dash.textContent = this.state.player.dashCooldown === 0 ? t('闪避就绪') : t('闪避 {0}s', this.state.player.dashCooldown.toFixed(1))
       dash.classList.toggle('ready', this.state.player.dashCooldown === 0)
       dash.classList.toggle('near-player', this.state.player.x > 1400 && this.state.player.y < 180)
     }
     mobileDash.disabled = this.state.player.dashCooldown > 0
-    mobileDash.querySelector<HTMLElement>('small')!.textContent = this.state.player.dashCooldown === 0 ? '就绪' : `${this.state.player.dashCooldown.toFixed(1)}s`
+    mobileDash.querySelector<HTMLElement>('small')!.textContent = this.state.player.dashCooldown === 0 ? t('就绪') : `${this.state.player.dashCooldown.toFixed(1)}s`
     const hurtVignette = document.querySelector<HTMLElement>('#hurt-vignette')
     if (hurtVignette) hurtVignette.classList.toggle('active', this.state.effects.some((effect) => effect.kind === 'player-hit'))
     const buildTags = document.querySelector<HTMLElement>('#build-tags')
     if (buildTags) {
-      const names = this.state.chosenUpgrades.slice(-3).map((id) => upgrades[id].name)
-      buildTags.innerHTML = (names.length ? names : ['初入竹林']).map((name) => `<span>${name}</span>`).join('')
+      const names = this.state.chosenUpgrades.slice(-3).map((id) => t(upgrades[id].name))
+      buildTags.innerHTML = (names.length ? names : [t('初入竹林')]).map((name) => `<span>${name}</span>`).join('')
     }
     const itemIcons = document.querySelector<HTMLElement>('#item-icons')
     if (itemIcons) {
@@ -1343,8 +1368,8 @@ class BattleScene extends Phaser.Scene {
       itemIcons.innerHTML = ownedItemIds.length ? ownedItemIds.map((id) => {
         const item = items[id]
         const count = this.state.ownedItems.filter((ownedId) => ownedId === id).length
-        return `<div class="item-detail"><img src="${import.meta.env.BASE_URL}${item.image}" alt=""><span><b>${item.name}${count > 1 ? ` ×${count}` : ''}</b><small>${count > 1 ? '每件：' : ''}${item.description}</small></span></div>`
-      }).join('') : '<small class="item-empty">尚未获得宝物</small>'
+        return `<div class="item-detail"><img src="${import.meta.env.BASE_URL}${item.image}" alt=""><span><b>${t(item.name)}${count > 1 ? ` ×${count}` : ''}</b><small>${count > 1 ? t('每件：') : ''}${t(item.description)}</small></span></div>`
+      }).join('') : `<small class="item-empty">${t('尚未获得宝物')}</small>`
     }
     const buildPanel = document.querySelector<HTMLElement>('.build-panel')
     if (buildPanel) buildPanel.classList.toggle('near-player', this.state.player.x > 1400 && this.state.player.y > 850)
@@ -1357,44 +1382,44 @@ class BattleScene extends Phaser.Scene {
       const signature = signatureWeapons[character.weaponId]
       const stats = this.state.runStats
       const damageEntries = [
-        { name: this.state.characterId === 'shanlan' && this.state.signatureWeaponEvolved ? signature.evolution.name : characters.shanlan.weaponName, image: this.state.characterId === 'shanlan' && this.state.signatureWeaponEvolved ? signature.evolution.image : characters.shanlan.weaponImage, value: stats.damage['bamboo-staff'] ?? 0 },
-        { name: this.state.characterId === 'qingtuan' && this.state.signatureWeaponEvolved ? signature.evolution.name : characters.qingtuan.weaponName, image: this.state.characterId === 'qingtuan' && this.state.signatureWeaponEvolved ? signature.evolution.image : characters.qingtuan.weaponImage, value: stats.damage['leaf-dart'] ?? 0 },
-        { name: `${this.state.characterId === 'shimo' && this.state.signatureWeaponEvolved ? signature.evolution.name : characters.shimo.weaponName}（含破盾反击）`, image: this.state.characterId === 'shimo' && this.state.signatureWeaponEvolved ? signature.evolution.image : characters.shimo.weaponImage, value: stats.damage['iron-bamboo-shield'] ?? 0 },
-        ...weaponIds.map((id) => ({ name: weapons[id].name, image: weapons[id].image, value: stats.damage[id] ?? 0 })),
-        { name: items['panda-roller'].name, image: items['panda-roller'].image, value: stats.damage['panda-roller'] ?? 0 },
-        ...(['army-breaker-token', 'thunder-drum', 'taiji-jade'] as const).map((id) => ({ name: items[id].name, image: items[id].image, value: stats.damage[id] ?? 0 })),
-        { name: upgrades['thorn-fur'].name, image: upgrades['thorn-fur'].image ?? '', value: stats.damage['thorn-fur'] ?? 0 },
-        { name: upgrades['panda-roll'].name, image: upgrades['panda-roll'].image ?? '', value: stats.damage['panda-roll'] ?? 0 },
+        { name: this.state.characterId === 'shanlan' && this.state.signatureWeaponEvolved ? t(signature.evolution.name) : t(characters.shanlan.weaponName), image: this.state.characterId === 'shanlan' && this.state.signatureWeaponEvolved ? signature.evolution.image : characters.shanlan.weaponImage, value: stats.damage['bamboo-staff'] ?? 0 },
+        { name: this.state.characterId === 'qingtuan' && this.state.signatureWeaponEvolved ? t(signature.evolution.name) : t(characters.qingtuan.weaponName), image: this.state.characterId === 'qingtuan' && this.state.signatureWeaponEvolved ? signature.evolution.image : characters.qingtuan.weaponImage, value: stats.damage['leaf-dart'] ?? 0 },
+        { name: t('{0}（含破盾反击）', this.state.characterId === 'shimo' && this.state.signatureWeaponEvolved ? t(signature.evolution.name) : t(characters.shimo.weaponName)), image: this.state.characterId === 'shimo' && this.state.signatureWeaponEvolved ? signature.evolution.image : characters.shimo.weaponImage, value: stats.damage['iron-bamboo-shield'] ?? 0 },
+        ...weaponIds.map((id) => ({ name: t(weapons[id].name), image: weapons[id].image, value: stats.damage[id] ?? 0 })),
+        { name: t(items['panda-roller'].name), image: items['panda-roller'].image, value: stats.damage['panda-roller'] ?? 0 },
+        ...(['army-breaker-token', 'thunder-drum', 'taiji-jade'] as const).map((id) => ({ name: t(items[id].name), image: items[id].image, value: stats.damage[id] ?? 0 })),
+        { name: t(upgrades['thorn-fur'].name), image: upgrades['thorn-fur'].image ?? '', value: stats.damage['thorn-fur'] ?? 0 },
+        { name: t(upgrades['panda-roll'].name), image: upgrades['panda-roll'].image ?? '', value: stats.damage['panda-roll'] ?? 0 },
       ].filter((entry) => entry.value > 0).sort((a, b) => b.value - a.value)
       const totalDamage = damageEntries.reduce((sum, entry) => sum + entry.value, 0)
       const totalInjury = Object.values(stats.injuries).reduce((sum, value) => sum + value, 0)
       const elapsed = Math.ceil(this.state.time)
       const portrait = document.querySelector<HTMLImageElement>('#result-portrait')!
       portrait.src = `${import.meta.env.BASE_URL}${character.portrait}`
-      portrait.alt = character.name
-      document.querySelector<HTMLElement>('#result-title')!.textContent = this.state.victory ? '竹林得守' : '此战暂歇'
-      document.querySelector<HTMLElement>('#result-context')!.textContent = `${character.name} · ${character.role} · Lv.${this.state.player.level} · 第 ${this.state.wave} 波`
+      portrait.alt = t(character.name)
+      document.querySelector<HTMLElement>('#result-title')!.textContent = this.state.victory ? t('竹林得守') : t('此战暂歇')
+      document.querySelector<HTMLElement>('#result-context')!.textContent = t('{0} · {1} · Lv.{2} · 第 {3} 波', t(character.name), t(character.role), this.state.player.level, this.state.wave)
       const seal = document.querySelector<HTMLElement>('#result-seal')!
-      seal.textContent = this.state.victory ? '通关' : `第 ${this.state.wave} 波`
+      seal.textContent = this.state.victory ? t('通关') : t('第 {0} 波', this.state.wave)
       seal.dataset.victory = String(this.state.victory)
       document.querySelector<HTMLElement>('#result-stats')!.innerHTML = [
-        ['战斗时长', `${Math.floor(elapsed / 60)}分${elapsed % 60}秒`], ['击破敌人', this.state.kills.toLocaleString('zh-CN')],
-        ['累计输出', Math.round(totalDamage).toLocaleString('zh-CN')], ['生命损失', Math.round(totalInjury).toLocaleString('zh-CN')],
-      ].map(([label, value]) => `<div><dt>${label}</dt><dd>${value}</dd></div>`).join('')
+        [t('战斗时长'), t('{0}分{1}秒', Math.floor(elapsed / 60), elapsed % 60)], [t('击破敌人'), this.state.kills.toLocaleString(locale)],
+        [t('累计输出'), Math.round(totalDamage).toLocaleString(locale)], [t('生命损失'), Math.round(totalInjury).toLocaleString(locale)],
+      ].map(([label, value]) => `<div><dt>${t(label)}</dt><dd>${value}</dd></div>`).join('')
       document.querySelector<HTMLElement>('#result-cause')!.textContent = this.state.victory
-        ? '腐竹巨灵已败，竹林重归安宁。换一位侠客，试试另一种招式。'
-        : `最后一击：${stats.lastInjury ? injurySources[stats.lastInjury] : '暂无记录'}。${stats.lastInjury === 'root' || stats.lastInjury === 'shockwave' ? '留意地面预警，在招式落下前离开或闪避。' : stats.lastInjury === 'enemy-shot' ? '横向移动避开弹幕，给自己留出闪避空间。' : '被围住时及时闪避，下一局可兼顾生命与输出成长。'}`
-      document.querySelector<HTMLElement>('#result-damage')!.innerHTML = damageEntries.length ? damageEntries.map((entry) => `<div class="result-damage-row"><img src="${import.meta.env.BASE_URL}${entry.image}" alt=""><div><div class="result-row-label"><span>${entry.name}</span><b>${Math.round(entry.value).toLocaleString('zh-CN')} · ${Math.round(entry.value / totalDamage * 100)}%</b></div><div class="result-meter"><i style="width:${entry.value / totalDamage * 100}%"></i></div></div></div>`).join('') : '<p class="result-empty">尚未命中敌人，下一局试着靠近攻击范围。</p>'
-      document.querySelector<HTMLElement>('#result-injury-note')!.textContent = `只计生命扣除 · 护盾另吸收 ${Math.round(stats.shieldAbsorbed)} 点`
-      document.querySelector<HTMLElement>('#result-injuries')!.innerHTML = Object.entries(stats.injuries).map(([id, value]) => ({ name: Object.entries(injurySources).find(([key]) => key === id)?.[1] ?? '其他', value })).filter((entry) => entry.value > 0).sort((a, b) => b.value - a.value).map((entry) => `<div class="result-injury-row"><span>${entry.name}</span><b>${Math.round(entry.value)} 点</b></div>`).join('') || '<p class="result-empty">未损失生命，护盾吸收不计入此处。</p>'
-      document.querySelector<HTMLElement>('#result-loadout')!.innerHTML = `<span class="${this.state.signatureWeaponEvolved ? 'evolved' : ''}"><img src="${import.meta.env.BASE_URL}${this.state.signatureWeaponEvolved ? signature.evolution.image : signature.image}" alt="">${this.state.signatureWeaponEvolved ? signature.evolution.name : signature.name} · ${this.state.signatureWeaponEvolved ? '觉醒' : `Lv.${this.state.signatureWeaponLevel}`}</span>${weaponIds.filter((id) => this.state.weaponLevels[id]).map((id) => `<span><img src="${import.meta.env.BASE_URL}${weapons[id].image}" alt="">${weapons[id].name} · Lv.${this.state.weaponLevels[id]}</span>`).join('')}`
-      document.querySelector<HTMLElement>('#result-item-count')!.textContent = `${this.state.ownedItems.length} 件宝物`
-      document.querySelector<HTMLElement>('#result-items')!.innerHTML = [...new Set(this.state.ownedItems)].map((id) => `<div><img src="${import.meta.env.BASE_URL}${items[id].image}" alt=""><span><b>${items[id].name} ×${this.state.ownedItems.filter((ownedId) => ownedId === id).length}</b><small>每件：${items[id].description}</small></span></div>`).join('') || '<p class="result-empty">本局没有携带宝物。</p>'
-      document.querySelector<HTMLElement>('#result-upgrade-count')!.textContent = `${this.state.chosenUpgrades.length} 次选择 · ${stats.upgradeRefreshes} 次刷新`
+        ? t('腐竹巨灵已败，竹林重归安宁。换一位侠客，试试另一种招式。')
+        : t('最后一击：{0}。{1}', stats.lastInjury ? t(injurySources[stats.lastInjury]) : t('暂无记录'), stats.lastInjury === 'root' || stats.lastInjury === 'shockwave' ? t('留意地面预警，在招式落下前离开或闪避。') : stats.lastInjury === 'enemy-shot' ? t('横向移动避开弹幕，给自己留出闪避空间。') : t('被围住时及时闪避，下一局可兼顾生命与输出成长。'))
+      document.querySelector<HTMLElement>('#result-damage')!.innerHTML = damageEntries.length ? damageEntries.map((entry) => `<div class="result-damage-row"><img src="${import.meta.env.BASE_URL}${entry.image}" alt=""><div><div class="result-row-label"><span>${t(entry.name)}</span><b>${Math.round(entry.value).toLocaleString(locale)} · ${Math.round(entry.value / totalDamage * 100)}%</b></div><div class="result-meter"><i style="width:${entry.value / totalDamage * 100}%"></i></div></div></div>`).join('') : `<p class="result-empty">${t('尚未命中敌人，下一局试着靠近攻击范围。')}</p>`
+      document.querySelector<HTMLElement>('#result-injury-note')!.textContent = t('只计生命扣除 · 护盾另吸收 {0} 点', Math.round(stats.shieldAbsorbed))
+      document.querySelector<HTMLElement>('#result-injuries')!.innerHTML = Object.entries(stats.injuries).map(([id, value]) => ({ name: t(Object.entries(injurySources).find(([key]) => key === id)?.[1] ?? '其他'), value })).filter((entry) => entry.value > 0).sort((a, b) => b.value - a.value).map((entry) => `<div class="result-injury-row"><span>${t(entry.name)}</span><b>${t('{0} 点', Math.round(entry.value))}</b></div>`).join('') || `<p class="result-empty">${t('未损失生命，护盾吸收不计入此处。')}</p>`
+      document.querySelector<HTMLElement>('#result-loadout')!.innerHTML = `<span class="${this.state.signatureWeaponEvolved ? 'evolved' : ''}"><img src="${import.meta.env.BASE_URL}${this.state.signatureWeaponEvolved ? signature.evolution.image : signature.image}" alt="">${this.state.signatureWeaponEvolved ? t(signature.evolution.name) : t(signature.name)} · ${this.state.signatureWeaponEvolved ? t('觉醒') : `Lv.${this.state.signatureWeaponLevel}`}</span>${weaponIds.filter((id) => this.state.weaponLevels[id]).map((id) => `<span><img src="${import.meta.env.BASE_URL}${weapons[id].image}" alt="">${t(weapons[id].name)} · Lv.${this.state.weaponLevels[id]}</span>`).join('')}`
+      document.querySelector<HTMLElement>('#result-item-count')!.textContent = t('{0} 件宝物', this.state.ownedItems.length)
+      document.querySelector<HTMLElement>('#result-items')!.innerHTML = [...new Set(this.state.ownedItems)].map((id) => `<div><img src="${import.meta.env.BASE_URL}${items[id].image}" alt=""><span><b>${t(items[id].name)} ×${this.state.ownedItems.filter((ownedId) => ownedId === id).length}</b><small>${t('每件：{0}', t(items[id].description))}</small></span></div>`).join('') || `<p class="result-empty">${t('本局没有携带宝物。')}</p>`
+      document.querySelector<HTMLElement>('#result-upgrade-count')!.textContent = t('{0} 次选择 · {1} 次刷新', this.state.chosenUpgrades.length, stats.upgradeRefreshes)
       document.querySelector<HTMLElement>('#result-upgrades')!.innerHTML = [...new Set(this.state.chosenUpgrades)].map((id) => {
-        const contribution = id === 'thorn-fur' ? `反击 ${stats.talentTriggers[id] ?? 0} 次` : id === 'panda-roll' ? `震击命中 ${stats.talentTriggers[id] ?? 0} 个目标` : id === 'battle-fury' ? `最高 ${stats.maxBattleFuryStacks} 层` : id === 'iron-constitution' ? `触发临时护甲 ${stats.talentTriggers[id] ?? 0} 次` : id === 'bamboo-unity' ? `终局 ${getBambooWeaponCount(this.state)} 种竹武器，伤害 +${getBambooWeaponCount(this.state) * 5}%` : ''
-        return `<div>${upgrades[id].image ? `<img src="${import.meta.env.BASE_URL}${upgrades[id].image}" alt="">` : ''}<span><b>${upgrades[id].name} ×${this.state.chosenUpgrades.filter((chosen) => chosen === id).length}</b><small>每次：${upgrades[id].description}${contribution ? ` · ${contribution}` : ''}</small></span></div>`
-      }).join('') || '<p class="result-empty">尚未习得强化。</p>'
+        const contribution = id === 'thorn-fur' ? t('反击 {0} 次', stats.talentTriggers[id] ?? 0) : id === 'panda-roll' ? t('震击命中 {0} 个目标', stats.talentTriggers[id] ?? 0) : id === 'battle-fury' ? t('最高 {0} 层', stats.maxBattleFuryStacks) : id === 'iron-constitution' ? t('触发临时护甲 {0} 次', stats.talentTriggers[id] ?? 0) : id === 'bamboo-unity' ? t('终局 {0} 种竹武器，伤害 +{1}%', getBambooWeaponCount(this.state), getBambooWeaponCount(this.state) * 5) : ''
+        return `<div>${upgrades[id].image ? `<img src="${import.meta.env.BASE_URL}${upgrades[id].image}" alt="">` : ''}<span><b>${t(upgrades[id].name)} ×${this.state.chosenUpgrades.filter((chosen) => chosen === id).length}</b><small>${t('每次：{0}{1}', t(upgrades[id].description), contribution ? ` · ${contribution}` : '')}</small></span></div>`
+      }).join('') || `<p class="result-empty">${t('尚未习得强化。')}</p>`
       const debugRun = import.meta.env.DEV && [...new URLSearchParams(location.search).keys()].some((key) => key.startsWith('playtest-'))
       if (!debugRun) {
         try { battleRecords = parseBattleRecords(localStorage.getItem('panda-battle-records')) } catch { recordsAvailable = false }
@@ -1410,8 +1435,9 @@ class BattleScene extends Phaser.Scene {
         } catch { recordsAvailable = false }
       }
       const record = battleRecords[this.state.characterId]
-      document.querySelector<HTMLElement>('#result-record')!.textContent = `${character.name}战绩 · 出战 ${record.runs} 局 · 通关 ${record.wins} 次 · 最高第 ${record.bestWave} 波 · 最多击破 ${record.bestKills}${record.bestClearTime ? ` · 最快通关 ${Math.floor(record.bestClearTime / 60)}分${record.bestClearTime % 60}秒` : ''}`
-      document.querySelector<HTMLElement>('#result-save-status')!.textContent = `${debugRun ? '测试对局，不计入战绩。' : recordsAvailable ? '战绩已保存在当前浏览器。' : '战绩未能保存，刷新后可能丢失；仍可继续游玩。'} 对局种子 ${stats.initialSeed}`
+      renderCharacterRecords()
+      document.querySelector<HTMLElement>('#result-record')!.textContent = t('{0}战绩 · 出战 {1} 局 · 通关 {2} 次 · 最高第 {3} 波 · 最多击破 {4}{5}', t(character.name), record.runs, record.wins, record.bestWave, record.bestKills, record.bestClearTime ? t(' · 最快通关 {0}分{1}秒', Math.floor(record.bestClearTime / 60), record.bestClearTime % 60) : '')
+      document.querySelector<HTMLElement>('#result-save-status')!.textContent = t('{0} 对局种子 {1}', debugRun ? t('测试对局，不计入战绩。') : recordsAvailable ? t('战绩已保存在当前浏览器。') : t('战绩未能保存，刷新后可能丢失；仍可继续游玩。'), stats.initialSeed)
       document.querySelector<HTMLElement>('#pause-overlay')!.hidden = true
       resultOverlay.hidden = false
       resultOverlay.querySelector<HTMLElement>('.result-panel')!.focus({ preventScroll: true })
@@ -1435,19 +1461,19 @@ document.querySelectorAll<HTMLButtonElement>('[data-character]').forEach((button
     const weaponCopy = document.querySelector<HTMLElement>('#weapon-copy')
     const loadingPortrait = document.querySelector<HTMLImageElement>('#loading-portrait')!
     loadingPortrait.src = `${import.meta.env.BASE_URL}${character.portrait}`
-    loadingPortrait.alt = character.name
-    document.querySelector<HTMLElement>('#loading-title')!.textContent = `${character.name} · 即将出战`
+    loadingPortrait.alt = t(character.name)
+    document.querySelector<HTMLElement>('#loading-title')!.textContent = t('{0} · 即将出战', t(character.name))
     loadingOverlay.hidden = false
     if (characterSelect) characterSelect.hidden = true
-    if (characterName) characterName.textContent = character.name
+    if (characterName) characterName.textContent = t(character.name)
     const maxHp = characterId === 'qingtuan' ? 10 : characterId === 'shimo' ? 30 : 20
     if (healthText) healthText.textContent = `${maxHp} / ${maxHp}`
     if (weaponImage) {
       weaponImage.src = `${import.meta.env.BASE_URL}${character.weaponImage}`
-      weaponImage.alt = character.weaponName
+      weaponImage.alt = t(character.weaponName)
     }
-    if (weaponName) weaponName.textContent = character.weaponName
-    if (weaponCopy) weaponCopy.textContent = character.weaponDescription
+    if (weaponName) weaponName.textContent = t(character.weaponName)
+    if (weaponCopy) weaponCopy.textContent = t(character.weaponDescription)
     new Phaser.Game({
       type: Phaser.AUTO, parent: 'game', width: 960, height: 540, backgroundColor: '#173527', scene: BattleScene,
       loader: { timeout: 15000 },
