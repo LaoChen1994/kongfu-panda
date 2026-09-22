@@ -208,6 +208,7 @@ kbd { padding: 4px 7px; border: 1px solid #637969; border-bottom-width: 3px; bor
 .shop-card { position: relative; display: grid; grid-template-columns: 62px 1fr auto; grid-template-rows: auto auto auto 1fr auto; min-height: 145px; gap: 3px 8px; padding: 10px; border: 2px solid #76562b; border-radius: 10px 8px 12px 9px; background: #fff7dfc9; box-shadow: 0 4px 0 #6b4e29, 0 7px 12px #4a341d29; }
 .shop-card[data-rarity="稀有"] { border-color: #547b51; box-shadow: 0 4px 0 #3f623e, 0 7px 12px #4a341d29; }
 .shop-card[data-rarity="史诗"] { border-color: #80589b; box-shadow: 0 4px 0 #593d70, 0 7px 14px #7651a83d; }
+.shop-card[data-rarity="传说"] { border: 4px double #b87522; background: linear-gradient(145deg, #fff3cfe8, #e6c47ed9); box-shadow: 0 4px 0 #765426, 0 7px 14px #b875223d; }
 .shop-card > img { grid-row: 1 / 5; width: 62px; height: 62px; object-fit: contain; filter: drop-shadow(0 3px 2px #5c431f55); }
 .shop-card > small { grid-column: 2 / 4; color: #8a612d; font: 14px 'PingFang SC', sans-serif; }
 .shop-card > strong { grid-column: 2 / 4; padding-right: 24px; color: #202622; font-size: 19px; }

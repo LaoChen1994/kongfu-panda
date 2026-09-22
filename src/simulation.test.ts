@@ -1,6 +1,124 @@
 import { buyItem, characters, chooseUpgrade, continueWave, createGameState, enemyDefinitions, getBambooWeaponCount, getShopPrice, isSignatureWeaponId, isWeaponId, items, refreshShop, refreshUpgrades, regularEnemyIds, sellItem, sellWeapon, signatureWeapons, stepGame, toggleShopLock, upgrades, weaponIds, weapons } from './simulation.js'
 import { parseBattleRecords } from './records.js'
 
+if (Object.keys(items).length !== 24) throw new Error('MVP 应有 24 件道具')
+for (const id of ['army-breaker-token', 'thunder-drum', 'bamboo-totem', 'taiji-jade'] as const) {
+  const state = createGameState(2209)
+  state.shopOpen = true
+  state.shopChoices = [id, null, null, null]
+  if (buyItem(state, 0) || state.ownedItems.length) throw new Error('余额不足不能获得最终批道具')
+  state.player.coins = 500
+  if (!buyItem(state, 0)) throw new Error(`${id} 应可购买`)
+  state.shopChoices[0] = id
+  if (buyItem(state, 0)) throw new Error(`${id} 应唯一`)
+  if (id === 'army-breaker-token' && state.player.criticalDamage !== 1.4) throw new Error('破军令应降低暴击倍率至 140%')
+  if (id === 'thunder-drum' && state.player.attackSpeed !== 0.95) throw new Error('手鼓应降低 5% 攻速')
+  if (id === 'taiji-jade' && state.player.maxHp !== 17) throw new Error('太极玉应降低 15% 最大生命')
+  sellItem(state, 0)
+  if (Number(state.player.criticalDamage) !== 1.75 || Number(state.player.attackSpeed) !== 1 || Number(state.player.maxHp) !== 20) throw new Error('出售应恢复道具代价')
+}
+
+for (const critical of [true, false]) {
+  const blast = createGameState(2209, 'qingtuan')
+  blast.ownedItems = ['army-breaker-token', 'chain-copper-clasp']
+  blast.spawnTimer = 99
+  blast.leafCooldown = 99
+  blast.enemies = [0, 1, 2].map((index) => ({ id: index + 100, kind: 'chaser', x: 1040 + index * 80, y: 500, hp: index === 0 ? 1 : 20, maxHp: index === 0 ? 1 : 20, cooldown: 99, dashTime: 0, vx: 0, vy: 0 }))
+  blast.playerProjectiles = [0, 1].map((index) => ({ id: index + 200, kind: 'leaf', x: 1040, y: 500, vx: 0, vy: 0, damage: 10, critical, blastRadius: 0 }))
+  stepGame(blast, { x: 0, y: 0, dash: false }, 0.01)
+  if (blast.effects.filter((effect) => effect.kind === 'army-blast').length !== (critical ? 1 : 0)) throw new Error('只有暴击击杀触发一次爆炸，尸体不能重复触发')
+  if ((blast.runStats.damage['army-breaker-token'] ?? 0) !== (critical ? 20 : 0) || !blast.enemies.some((enemy) => enemy.id === 102 && enemy.hp === 20)) throw new Error('爆炸应计实际伤害且不能连锁')
+}
+
+const drum = createGameState(2209, 'qingtuan')
+drum.ownedItems = ['thunder-drum']
+drum.spawnTimer = 99
+drum.thunderAttacks = 9
+drum.leafCooldown = 0
+drum.player.projectileCount = 3
+stepGame(drum, { x: 0, y: 0, dash: false }, 0.01)
+if (drum.thunderAttacks !== 9) throw new Error('无目标不能增加手鼓计数')
+drum.enemies = [0, 1, 2, 3].map((index) => ({ id: index + 100, kind: 'chaser', x: 940 + index * 100, y: 500, hp: 100, maxHp: 100, cooldown: 99, dashTime: 0, vx: 0, vy: 0 }))
+stepGame(drum, { x: 0, y: 0, dash: false }, 0.01)
+if (Number(drum.thunderAttacks) !== 0 || drum.runStats.damage['thunder-drum'] !== 72 || drum.effects.filter((effect) => effect.kind === 'chain-lightning').length !== 3 || drum.enemies[3].hp !== 100) throw new Error('第十次攻击应连锁三个不同敌人，齐射只计一次')
+drum.shopOpen = true
+const pausedDrum = JSON.stringify(drum)
+stepGame(drum, { x: 1, y: 0, dash: true }, 0.05)
+if (JSON.stringify(drum) !== pausedDrum) throw new Error('商城应冻结全部触发状态')
+
+const totem = createGameState(2209)
+totem.ownedItems = ['bamboo-totem']
+totem.spawnTimer = 99
+for (let tick = 0; tick < 39; tick += 1) stepGame(totem, { x: 0, y: 0, dash: false }, 0.05)
+if (totem.totemBonus !== 0) throw new Error('不足 2 秒不应获得图腾增伤')
+stepGame(totem, { x: 0, y: 0, dash: false }, 0.05)
+if (Number(totem.totemBonus) !== 0.25) throw new Error('站定 2 秒获得 25% 增伤')
+totem.pendingUpgrade = true
+const pausedTotem = JSON.stringify(totem)
+stepGame(totem, { x: 1, y: 0, dash: true }, 0.05)
+if (JSON.stringify(totem) !== pausedTotem) throw new Error('升级应冻结图腾计时')
+totem.pendingUpgrade = false
+for (let tick = 0; tick < 20; tick += 1) stepGame(totem, { x: 1, y: 0, dash: false }, 0.05)
+if (Math.abs(totem.totemBonus - 0.125) > 1e-8) throw new Error('移动 1 秒图腾应衰减为 12.5%')
+totem.shopOpen = true
+totem.thunderAttacks = 8
+continueWave(totem)
+if (totem.stationaryTime !== 0 || Number(totem.totemBonus) !== 0 || totem.thunderAttacks !== 0) throw new Error('换波应清空图腾与手鼓进度')
+
+const jade = createGameState(2209, 'shimo')
+jade.ownedItems = ['taiji-jade']
+jade.spawnTimer = 99
+jade.bambooCooldown = 99
+jade.player.shieldTimer = 0
+jade.enemies = [{ id: 100, kind: 'chaser', x: 900, y: 500, hp: 500, maxHp: 500, cooldown: 99, dashTime: 0, vx: 0, vy: 0 }]
+stepGame(jade, { x: 0, y: 0, dash: false }, 0.01)
+if (jade.runStats.damage['taiji-jade'] !== 36) throw new Error('获得护盾应释放气功波')
+jade.player.shieldTimer = 0
+stepGame(jade, { x: 0, y: 0, dash: false }, 0.01)
+if (jade.runStats.damage['taiji-jade'] !== 36) throw new Error('满盾刷新不得假装护盾增加')
+jade.player.shield = 1
+jade.enemyProjectiles = [{ id: 200, x: 800, y: 500, vx: 0, vy: 0 }]
+stepGame(jade, { x: 0, y: 0, dash: false }, 0.01)
+if (Number(jade.runStats.damage['taiji-jade']) !== 72 || jade.player.shield !== 0) throw new Error('破盾应额外释放一次气功波')
+
+const totemDamage = createGameState(2209, 'qingtuan')
+totemDamage.ownedItems = ['bamboo-totem']
+totemDamage.stationaryTime = 2
+totemDamage.spawnTimer = 99
+totemDamage.leafCooldown = 99
+totemDamage.enemies = [{ id: 100, kind: 'chaser', x: 1100, y: 500, hp: 100, maxHp: 100, cooldown: 99, dashTime: 0, vx: 0, vy: 0 }]
+totemDamage.playerProjectiles = [{ id: 200, kind: 'leaf', x: 1100, y: 500, vx: 0, vy: 0, damage: 20, critical: false, blastRadius: 0 }]
+stepGame(totemDamage, { x: 0, y: 0, dash: false }, 0.01)
+if (totemDamage.runStats.damage['leaf-dart'] !== 25) throw new Error('图腾应实际增加 25% 伤害，而不只是显示状态')
+totemDamage.shopOpen = true
+sellItem(totemDamage, 0)
+if (totemDamage.totemBonus !== 0 || totemDamage.stationaryTime !== 0) throw new Error('出售图腾应立即移除增益')
+
+const noShieldJade = createGameState(2209)
+noShieldJade.ownedItems = ['taiji-jade']
+noShieldJade.spawnTimer = 99
+for (let tick = 0; tick < 180; tick += 1) stepGame(noShieldJade, { x: 0, y: 0, dash: false }, 0.05)
+if (noShieldJade.player.shield !== 0 || noShieldJade.effects.some((effect) => effect.kind === 'taiji-wave')) throw new Error('太极玉不能凭空提供护盾')
+
+const deadTargetDrum = createGameState(2209)
+deadTargetDrum.ownedItems = ['thunder-drum']
+deadTargetDrum.spawnTimer = 99
+deadTargetDrum.bambooCooldown = 0
+deadTargetDrum.enemies = [{ id: 100, kind: 'chaser', x: 840, y: 500, hp: 0, maxHp: 100, cooldown: 99, dashTime: 0, vx: 0, vy: 0 }]
+stepGame(deadTargetDrum, { x: 0, y: 0, dash: false }, 0.01)
+if (deadTargetDrum.thunderAttacks !== 0) throw new Error('攻击已死亡目标不应增加手鼓计数')
+
+const legendaryShop = createGameState(2209)
+legendaryShop.shopOpen = true
+legendaryShop.player.coins = 10000000
+let legendaryCount = 0
+for (let roll = 0; roll < 1000; roll += 1) {
+  refreshShop(legendaryShop)
+  if (new Set(legendaryShop.shopChoices).size !== 4) throw new Error('传说池仍应保持同屏去重')
+  for (const id of legendaryShop.shopChoices) if (id === 'army-breaker-token' || id === 'taiji-jade') legendaryCount += 1
+}
+if (legendaryCount < 60 || legendaryCount > 200) throw new Error(`传说权重异常：${legendaryCount}/4000`)
+
 // 战报只计实际损失生命；同帧多次命中和出售武器不能篡改历史输出。
 const reportDamage = createGameState(77, 'qingtuan')
 reportDamage.spawnTimer = 99

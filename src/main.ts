@@ -92,6 +92,7 @@ const buildStatFields = [
   { key: 'rangedDamage', label: '远程伤害', scale: 100, unit: '%' },
   { key: 'attackSpeed', label: '攻击速度', scale: 100, unit: '%' },
   { key: 'criticalChance', label: '暴击率', scale: 100, unit: '%' },
+  { key: 'criticalDamage', label: '暴击倍率', scale: 100, unit: '%' },
   { key: 'dodgeChance', label: '闪避率', scale: 100, unit: '%' },
   { key: 'moveSpeed', label: '移动速度', scale: 100, unit: '%' },
   { key: 'cooldownMultiplier', label: '武器冷却间隔', scale: 100, unit: '%' },
@@ -231,6 +232,7 @@ class BattleScene extends Phaser.Scene {
     this.load.image('panda-wine-gourd', `${assetRoot}weapons/panda-wine-gourd.png`)
     this.load.image('bamboo-crossbow-turret', `${assetRoot}weapons/bamboo-crossbow-turret.png`)
     this.load.image('firecracker-blast', `${assetRoot}effects/firecracker-blast.png`)
+    this.load.image('taiji-wave', `${assetRoot}effects/taiji-wave.png`)
     this.load.image('wine-flame-patch', `${assetRoot}effects/wine-flame-patch.png`)
     this.load.image('mountain-quake', `${assetRoot}effects/mountain-quake.png`)
     this.load.image('dragon-staff-sweep', `${assetRoot}effects/dragon-staff-sweep.png`)
@@ -268,7 +270,7 @@ class BattleScene extends Phaser.Scene {
       const thirdItemCombat = new URLSearchParams(location.search).get('playtest-items') === 'third-combat'
       this.state.shopOpen = !thirdItemCombat
       this.state.player.coins = 500
-      this.state.shopChoices = new URLSearchParams(location.search).get('playtest-items')?.startsWith('third')
+      this.state.shopChoices = new URLSearchParams(location.search).get('playtest-items')?.startsWith('final') ? ['army-breaker-token', 'thunder-drum', 'bamboo-totem', 'taiji-jade'] : new URLSearchParams(location.search).get('playtest-items')?.startsWith('third')
         ? ['tumbler-charm', 'chain-copper-clasp', 'guild-token', 'wine-immortal-gourd']
         : ['barbed-backplate', 'twin-bamboo', 'monk-beads', 'lucky-bell']
       if (thirdItemCombat) {
@@ -282,6 +284,17 @@ class BattleScene extends Phaser.Scene {
         this.state.playerProjectiles = Array.from({ length: 5 }, (): (typeof this.state.playerProjectiles)[number] => ({ id: this.state.nextId++, kind: 'leaf', x: 1040, y: 500, vx: 0, vy: 0, damage: 20, critical: false, blastRadius: 0 }))
         this.state.enemyProjectiles = [{ id: this.state.nextId++, x: 800, y: 500, vx: 0, vy: 0 }]
         this.state.drops = [{ id: this.state.nextId++, kind: 'heal', x: 800, y: 500, value: 10 }]
+      }
+      if (new URLSearchParams(location.search).get('playtest-items') === 'final-combat') {
+        for (let index = 0; index < 4; index += 1) buyItem(this.state, index)
+        this.state.shopOpen = false
+        this.state.spawnTimer = 99
+        this.state.player.nextXp = 99999
+        this.state.player.hitCooldown = 12
+        this.state.player.shieldTimer = 3
+        this.state.thunderAttacks = 8
+        this.state.player.criticalChance = 1
+        this.state.enemies = [0, 1, 2, 3, 4, 5].map((index) => ({ id: this.state.nextId++, kind: 'chaser', x: 880 + index * 28, y: 470 + (index % 2) * 45, hp: index === 0 ? 1 : 600, maxHp: index === 0 ? 1 : 600, cooldown: 99, dashTime: 0, vx: 0, vy: 0 }))
       }
     } else if (import.meta.env.DEV && new URLSearchParams(location.search).has('playtest-evolution')) {
       const signature = signatureWeapons[characters[this.state.characterId].weaponId]
@@ -710,6 +723,10 @@ class BattleScene extends Phaser.Scene {
             id === 'chain-copper-clasp' ? '仅连续武器命中叠层；更换目标重置，最高 +20%' : '',
             id === 'guild-token' ? `免费补齐仍免费；正常刷新费用 ${this.state.shopRefreshCost} → ${preview.shopRefreshCost}` : '',
             id === 'wine-immortal-gourd' ? '实际治疗溢出时触发；持续 5 秒，重复触发刷新时间' : '',
+            id === 'army-breaker-token' ? '仅武器暴击击杀触发；爆炸不可暴击或再次引爆' : '',
+            id === 'thunder-drum' ? '每跳范围 180；齐射计 1 次，持续伤害不计；无目标不计，换波清零' : '',
+            id === 'bamboo-totem' ? '站定时注意敌方预警；增伤按战斗时间计时，暂停不流失' : '',
+            id === 'taiji-jade' ? this.state.characterId === 'shimo' ? '护盾实际增加或破裂才触发；生命上限最低 1' : '当前角色无护盾来源，气功波不生效；仍会降低生命上限' : '',
           ].filter(Boolean).join('；')
           if (notice.textContent) article.append(notice)
         }
@@ -769,7 +786,7 @@ class BattleScene extends Phaser.Scene {
           const delta = Math.round((this.state.player[key] - withoutItem.player[key]) * scale)
           return `${label} ${delta > 0 ? '+' : ''}${delta}${unit === '%' ? '百分点' : unit}`
         }).join('；')
-        button.innerHTML = `<img src="${import.meta.env.BASE_URL}${item.image}" alt=""><span><strong>${item.name} ×${count}</strong><small>单件：${item.description}</small><small>当前合计：${id === 'panda-roller' ? '闪避结束震击 32 伤害（唯一）' : id === 'tumbler-charm' ? `每局一次 · ${this.state.lastStandUsed ? '已触发' : '待命'}` : id === 'chain-copper-clasp' ? `同目标连击 ${this.state.comboHits}/5 · 当前 +${this.state.comboHits * 4}%` : id === 'guild-token' ? `每次刷新至少稀有 · 当前刷新 ${this.state.shopRefreshCost} 铜钱` : id === 'wine-immortal-gourd' ? `溢出治疗触发 5 秒 +20% 全伤${this.state.player.overflowDamageTime > 0 ? ` · 剩余 ${this.state.player.overflowDamageTime.toFixed(1)} 秒` : ''}` : total || '已受属性上下限约束'}${id === 'bamboo-dew-pill' ? '；即时治疗不累计' : ''}</small><em>出售一件 +${Math.floor(item.price * 0.6)} 铜钱</em></span>`
+        button.innerHTML = `<img src="${import.meta.env.BASE_URL}${item.image}" alt=""><span><strong>${item.name} ×${count}</strong><small>单件：${item.description}</small><small>当前合计：${id === 'panda-roller' ? '闪避结束震击 32 伤害（唯一）' : id === 'tumbler-charm' ? `每局一次 · ${this.state.lastStandUsed ? '已触发' : '待命'}` : id === 'chain-copper-clasp' ? `同目标连击 ${this.state.comboHits}/5 · 当前 +${this.state.comboHits * 4}%` : id === 'guild-token' ? `每次刷新至少稀有 · 当前刷新 ${this.state.shopRefreshCost} 铜钱` : id === 'wine-immortal-gourd' ? `溢出治疗触发 5 秒 +20% 全伤${this.state.player.overflowDamageTime > 0 ? ` · 剩余 ${this.state.player.overflowDamageTime.toFixed(1)} 秒` : ''}` : id === 'bamboo-totem' ? `站定 ${this.state.stationaryTime.toFixed(1)}/2 秒 · 当前增伤 ${Math.round(this.state.totemBonus * 100)}%` : id === 'thunder-drum' ? `攻击计数 ${this.state.thunderAttacks}/10 · 每跳 180 · 齐射计 1 次；${total}` : id === 'taiji-jade' ? `${this.state.characterId === 'shimo' ? '护盾增加/破裂触发气功波' : '当前无护盾来源 · 气功波不生效'}；${total}` : id === 'army-breaker-token' ? `暴击击杀触发爆炸；${total}` : total || '已受属性上下限约束'}${id === 'bamboo-dew-pill' ? '；即时治疗不累计' : ''}</small><em>出售一件 +${Math.floor(item.price * 0.6)} 铜钱</em></span>`
         button.addEventListener('click', () => {
           if (sellItem(this.state, this.state.ownedItems.indexOf(id))) this.overlayMode = ''
         })
@@ -1017,11 +1034,23 @@ class BattleScene extends Phaser.Scene {
         graphics.lineStyle(7, 0xe3a83b, alpha * 0.9).beginPath().arc(effect.x, centerY, 23, effect.angle - 0.72, effect.angle + 0.72).strokePath()
         graphics.lineStyle(3, 0xf3e6c8, alpha).lineBetween(effect.x + Math.cos(effect.angle) * 14, centerY + Math.sin(effect.angle) * 14, effect.x + Math.cos(effect.angle) * 31, centerY + Math.sin(effect.angle) * 31)
       }
-      if (effect.kind === 'firecracker-blast') {
-        const progress = 1 - effect.life / 0.38
+      if (effect.kind === 'chain-lightning') {
+        for (const [width, color] of [[7, 0x202622], [4, 0xe3a83b], [1.5, 0xf3e6c8]]) {
+          graphics.lineStyle(width, color, alpha).beginPath().moveTo(effect.x, effect.y)
+          for (let point = 1; point <= 6; point += 1) {
+            const distance = effect.value * point / 6
+            const offset = point === 6 ? 0 : (point % 2 === 0 ? -1 : 1) * (5 + effect.id % 5)
+            graphics.lineTo(effect.x + Math.cos(effect.angle) * distance - Math.sin(effect.angle) * offset, effect.y + Math.sin(effect.angle) * distance + Math.cos(effect.angle) * offset)
+          }
+          graphics.strokePath()
+        }
+      }
+      if (effect.kind === 'firecracker-blast' || effect.kind === 'army-blast' || effect.kind === 'taiji-wave') {
+        const progress = 1 - effect.life / (effect.kind === 'taiji-wave' ? 0.5 : effect.kind === 'army-blast' ? 0.45 : 0.38)
         let sprite = this.firecrackerBlastSprites.get(effect.id)
         if (!sprite) {
-          sprite = this.add.image(effect.x, effect.y, 'firecracker-blast').setRotation((effect.id % 8) * Math.PI / 12)
+          sprite = this.add.image(effect.x, effect.y, effect.kind === 'taiji-wave' ? 'taiji-wave' : 'firecracker-blast').setRotation((effect.id % 8) * Math.PI / 12)
+          if (effect.kind === 'army-blast') sprite.setTint(0xffdc83)
           this.firecrackerBlastSprites.set(effect.id, sprite)
         }
         sprite.setPosition(effect.x, effect.y).setDisplaySize(effect.value * (1.45 + progress * 0.65), effect.value * (1.45 + progress * 0.65)).setDepth(effect.y + 8).setAlpha(alpha * 0.92)
@@ -1232,6 +1261,8 @@ class BattleScene extends Phaser.Scene {
         this.state.ownedItems.includes('tumbler-charm') ? `不倒翁 ${this.state.lastStandUsed ? '已触发' : '待命'}` : '',
         this.state.ownedItems.includes('chain-copper-clasp') && this.state.comboHits > 0 ? `连环铜扣 +${this.state.comboHits * 4}%` : '',
         this.state.player.overflowDamageTime > 0 ? `酒仙余劲 +20% · ${this.state.player.overflowDamageTime.toFixed(1)}s` : '',
+        this.state.ownedItems.includes('thunder-drum') ? `雷鼓 ${this.state.thunderAttacks}/10` : '',
+        this.state.ownedItems.includes('bamboo-totem') ? this.state.totemBonus > 0 ? `图腾 +${Math.round(this.state.totemBonus * 100)}%` : `图腾蓄力 ${this.state.stationaryTime.toFixed(1)}/2s` : '',
       ].filter(Boolean).join(' · ')
       talentStatus.hidden = !status
       talentStatus.textContent = status
@@ -1331,6 +1362,7 @@ class BattleScene extends Phaser.Scene {
         { name: `${this.state.characterId === 'shimo' && this.state.signatureWeaponEvolved ? signature.evolution.name : characters.shimo.weaponName}（含破盾反击）`, image: this.state.characterId === 'shimo' && this.state.signatureWeaponEvolved ? signature.evolution.image : characters.shimo.weaponImage, value: stats.damage['iron-bamboo-shield'] ?? 0 },
         ...weaponIds.map((id) => ({ name: weapons[id].name, image: weapons[id].image, value: stats.damage[id] ?? 0 })),
         { name: items['panda-roller'].name, image: items['panda-roller'].image, value: stats.damage['panda-roller'] ?? 0 },
+        ...(['army-breaker-token', 'thunder-drum', 'taiji-jade'] as const).map((id) => ({ name: items[id].name, image: items[id].image, value: stats.damage[id] ?? 0 })),
         { name: upgrades['thorn-fur'].name, image: upgrades['thorn-fur'].image ?? '', value: stats.damage['thorn-fur'] ?? 0 },
         { name: upgrades['panda-roll'].name, image: upgrades['panda-roll'].image ?? '', value: stats.damage['panda-roll'] ?? 0 },
       ].filter((entry) => entry.value > 0).sort((a, b) => b.value - a.value)
