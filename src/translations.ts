@@ -1,5 +1,7 @@
 // 中文原文作为稳定文案键；动态数值使用 {0}、{1} 占位符。
 export const english: Readonly<Record<string, string>> = {
+  "片刻休息": "A short break",
+  "正在准备下一波，战斗已暂停": "Preparing the next wave. Battle is paused",
   "；": "; ",
   "{0} · 即将出战": "{0} · Ready to depart",
   "战绩未能保存，刷新后可能丢失；仍可继续游玩。": "Records could not be saved and may be lost on reload. You can still play.",

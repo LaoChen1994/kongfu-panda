@@ -1,6 +1,6 @@
 # Poki 发布计划
 
-更新：2026-09-22。本文是后续执行清单，不代表已经接入 SDK、通过审核或发布。
+更新：2026-09-24。SDK 一期已进入本地实现与验证；本文不代表已通过 Inspector、平台审核或发布。
 
 ## 当前入口与范围
 
@@ -22,7 +22,7 @@
 
 Poki 支持提交原型，上传并不等于公开上线；内容审核通过后再申请首次试玩。条款由作者本人确认，不由自动化代为接受。[提交指南](https://developers.poki.com/guide/adding-your-game)
 
-## SDK 事件验收设计（待实现）
+## SDK 事件验收设计
 
 - 加载就绪不等于开始游玩；在首个有效游戏输入时进入 gameplayStart。
 - 战斗→升级、商城、暂停、失焦、结算：只发送一次 gameplayStop。恢复到可操作战斗再进入 gameplayStart。
@@ -69,3 +69,12 @@ Poki 的内容规范排除酒精主题，强调原创性及 AI 制作过程可�
 中文源文案是 `src/translations.ts` 的键，英文是对应值；完整句子使用 `{0}` 占位，不能拼接碎片导致语序错误。内容配置保留原始稳定 ID，展示时翻译，稀有度样式和随机权重不得读取翻译后的文字。后续新增玩家文案必须同时增加英文并验证长文本布局。默认中文浏览器用简中，其他语言回退英文，手动选择优先。
 
 集中管理文案、菜单切换和适配较长翻译符合官方本地化建议；本轮只做中英文，不扩展其他语种。[本地化指南](https://developers.poki.com/guide/localization)
+
+## SDK 一期构建与测试入口
+
+- Pages：`pnpm build`，输出 `dist/`；原有 Pages workflow 不变。
+- Poki：`pnpm typecheck && pnpm exec vite build --mode poki`，输出 `dist-poki/`。提交的是该目录内的 Web 构建，不是 Pages URL。
+- 本地：`pnpm exec vite --mode poki --host 127.0.0.1`。
+- 仅开发模式模拟：`?muted=1&playtest-poki=1&playtest-items=final`。测试面板显示 SDK 事件，可手动完成/拒绝模拟广告；`playtest-poki=init-failure` 验证初始化失败。生产包不得包含模拟面板。
+- 已实现商城退出时的普通广告机会；暂停恢复和升级选择不请求广告。初始化失败不挡住游戏，真实广告期间不使用超时强行恢复战斗。
+- 剩余：Inspector 与实际广告联调、平板触控识别、Poki Pill 避让、慢网性能、真机、资源审核、缩略图和后台提交。不新增奖励广告。

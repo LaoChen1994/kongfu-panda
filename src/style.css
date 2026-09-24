@@ -12,6 +12,12 @@
 }
 
 * { box-sizing: border-box; }
+#platform-wait { position: fixed; z-index: 90; }
+html[data-platform="poki"], html[data-platform="poki"] body { width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none; }
+html[data-platform="poki"] .game-shell { width: 100vw; height: 100dvh; padding: 0; margin: 0; }
+html[data-platform="poki"] .topbar { display: none; }
+html[data-platform="poki"] .playfield { width: 100%; height: 100%; border: 0; border-radius: 0; }
+html[data-platform="poki"] .playfield * { overscroll-behavior: contain; }
 
 body {
   margin: 0;
@@ -476,7 +482,11 @@ html[lang="en"] .character-card strong, html[lang="en"] .character-role { letter
   .choice-panel:has(#shop-layout[hidden]) .choice-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
   .choice-panel:has(#shop-layout[hidden]) .choice-card, .choice-panel:has(#shop-layout[hidden]) .choice-card:has(img) { min-height: 0; gap: 4px; padding: 24px 9px 8px; }
   .choice-panel:has(#shop-layout[hidden]) .choice-card:has(img) { grid-template-columns: 42px 1fr; grid-template-rows: auto auto 1fr auto; padding-top: 7px; }
-  .choice-panel:has(#shop-layout[hidden]) .choice-card img { grid-row: 1 / 3; width: 42px; height: 42px; }
+  .choice-panel:has(#shop-layout[hidden]) .choice-card img { grid-row: 1; width: 42px; height: 42px; }
+  .choice-panel:has(#shop-layout[hidden]) .choice-card:has(img) > small { grid-column: 2; padding-right: 18px; }
+  .choice-panel:has(#shop-layout[hidden]) .choice-card:has(img) > strong,
+  .choice-panel:has(#shop-layout[hidden]) .choice-card:has(img) > span,
+  .choice-panel:has(#shop-layout[hidden]) .choice-card:has(img) > em { grid-column: 1 / -1; }
   .choice-panel:has(#shop-layout[hidden]) .choice-card strong { font-size: 19px; }
   .refresh-upgrades { min-height: 44px; margin-top: 6px; }
   .shop-tabs:not([hidden]) { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); flex-shrink: 0; gap: 6px; margin: 3px 0 7px; }
