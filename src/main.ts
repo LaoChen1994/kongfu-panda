@@ -3,6 +3,16 @@ import Phaser from 'phaser'
 import './style.css'
 import { buyItem, characters, chooseUpgrade, continueWave, createGameState, enemyDefinitions, getBambooWeaponCount, getShopPrice, injurySources, isSignatureWeaponId, isWeaponId, items, refreshShop, refreshUpgrades, sellItem, sellWeapon, signatureWeapons, stepGame, toggleShopLock, upgrades, weaponIds, weapons, type CharacterId } from './simulation.js'
 import { parseBattleRecords } from './records.js'
+import { PokiSession } from './poki.js'
+
+const poki = new PokiSession()
+const pokiBuild = import.meta.env.MODE === 'poki'
+document.documentElement.dataset.platform = pokiBuild ? 'poki' : 'pages'
+const testSDK = import.meta.env.DEV && pokiBuild && new URLSearchParams(location.search).has('playtest-poki')
+  ? (await import('./poki-playtest.js')).sdk : undefined
+const platformReady = poki.initialize(pokiBuild, testSDK)
+const platformWait = document.querySelector<HTMLElement>('#platform-wait')!
+const gameShell = document.querySelector<HTMLElement>('.game-shell')!
 
 const assetRoot = `${import.meta.env.BASE_URL}assets/`
 let savedLocale: string | null = null
@@ -177,6 +187,7 @@ class BattleScene extends Phaser.Scene {
   private seenEffects = new Set<number>()
   private keys!: Record<'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd', Phaser.Input.Keyboard.Key>
   private paused = false
+  private adTransition = false
   private dashQueued = false
   private overlayMode = ''
   private audioContext?: AudioContext
@@ -465,9 +476,12 @@ class BattleScene extends Phaser.Scene {
     this.shieldAura = this.add.image(this.state.player.x, this.state.player.y - 26, 'ink-shield-aura').setDisplaySize(104, 104).setVisible(false)
     this.cameras.main.setBounds(0, 0, 1600, 1000)
     this.cameras.main.centerOn(this.state.player.x, this.state.player.y)
-    this.game.events.once(Phaser.Core.Events.POST_RENDER, () => {
+    this.game.events.once(Phaser.Core.Events.POST_RENDER, async () => {
+      await platformReady
+      poki.loadingFinished()
       this.loading = false
       loadingOverlay.hidden = true
+      if (document.hidden || !document.hasFocus()) this.pauseBattle()
     })
     const keyboard = this.input.keyboard
     if (!keyboard) throw new Error(t('浏览器不支持键盘输入'))
@@ -521,18 +535,10 @@ class BattleScene extends Phaser.Scene {
       this.dashQueued = true
       if (onboardingStep === 1) this.setOnboardingStep(2)
     })
-    mobilePause.onclick = () => {
-      if (this.state.pendingUpgrade || this.state.shopOpen || this.state.gameOver || this.state.victory) return
-      this.paused = true
-      this.resetMobileJoystick()
-      pauseOverlay.hidden = false
-      document.querySelector<HTMLElement>('#overlay-title')!.textContent = t('竹息凝神')
-      document.querySelector<HTMLElement>('#overlay-copy')!.textContent = t('战斗与计时已暂停')
-      pauseContinue.focus()
-    }
-    window.addEventListener('blur', this.resetMobileJoystick)
+    mobilePause.onclick = this.pauseBattle
+    window.addEventListener('blur', this.pauseBattle)
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden) this.resetMobileJoystick()
+      if (document.hidden) this.pauseBattle()
     })
     resultRetry.onclick = () => {
       this.state = createGameState(crypto.getRandomValues(new Uint32Array(1))[0], this.state.characterId)
@@ -571,6 +577,7 @@ class BattleScene extends Phaser.Scene {
     document.querySelector<HTMLButtonElement>('#onboarding-skip')!.onclick = () => this.setOnboardingStep(4)
     this.renderOnboarding()
     window.addEventListener('keydown', (event) => {
+      if (this.adTransition) { event.preventDefault(); return }
       if (event.repeat) return
       if (this.state.gameOver || this.state.victory) {
         if (event.code === 'KeyR') { event.preventDefault(); resultRetry.click() }
@@ -597,7 +604,7 @@ class BattleScene extends Phaser.Scene {
       if (this.state.shopOpen && ['Digit1', 'Digit2', 'Digit3', 'Digit4'].includes(event.code)) {
         buyItem(this.state, Number(event.code.slice(-1)) - 1)
       }
-      if (event.code === 'Enter' && this.state.shopOpen) continueWave(this.state)
+      if (event.code === 'Enter' && this.state.shopOpen && !(event.target instanceof HTMLButtonElement)) void this.startNextWave()
       if (event.code === 'Escape' && !this.state.gameOver && !this.state.victory && !this.state.pendingUpgrade && !this.state.shopOpen) {
         this.paused = !this.paused
         this.resetMobileJoystick()
@@ -613,8 +620,50 @@ class BattleScene extends Phaser.Scene {
     })
   }
 
+  private pauseBattle = (): void => {
+    this.resetMobileJoystick()
+    this.input.keyboard?.resetKeys()
+    this.dashQueued = false
+    if (this.adTransition) return
+    poki.setPlaying(false)
+    if (this.state.pendingUpgrade || this.state.shopOpen || this.state.gameOver || this.state.victory) return
+    this.paused = true
+    pauseOverlay.hidden = false
+    document.querySelector<HTMLElement>('#overlay-title')!.textContent = t('竹息凝神')
+    document.querySelector<HTMLElement>('#overlay-copy')!.textContent = t('战斗与计时已暂停')
+  }
+
+  private startNextWave = async (): Promise<void> => {
+    if (this.adTransition || !this.state.shopOpen || this.state.pendingUpgrade) return
+    if (!pokiBuild) { continueWave(this.state); return }
+    this.adTransition = true
+    poki.setPlaying(false)
+    this.resetMobileJoystick()
+    this.input.keyboard?.resetKeys()
+    this.dashQueued = false
+    gameShell.inert = true
+    platformWait.hidden = false
+    const audioWasRunning = this.audioContext?.state === 'running'
+    try {
+      if (audioWasRunning) await this.audioContext?.suspend()
+      await poki.commercialBreak()
+    } catch {
+      // 无法暂停音频时跳过广告机会，仍允许进入下一波。
+    } finally {
+      gameShell.inert = false
+      platformWait.hidden = true
+      this.adTransition = false
+      this.input.keyboard?.resetKeys()
+      continueWave(this.state)
+      if (document.hidden || !document.hasFocus()) this.pauseBattle()
+      if (audioWasRunning) {
+        try { await this.audioContext?.resume() } catch { /* 下一次用户操作可恢复音频 */ }
+      }
+    }
+  }
+
   private playTone(frequency: number, duration: number, volume: number): void {
-    if (!this.audioContext || this.audioContext.state !== 'running') return
+    if (this.adTransition || this.paused || document.hidden || !this.audioContext || this.audioContext.state !== 'running') return
     const oscillator = this.audioContext.createOscillator()
     const gain = this.audioContext.createGain()
     oscillator.type = 'triangle'
@@ -690,7 +739,7 @@ class BattleScene extends Phaser.Scene {
       title.textContent = t('整备下一波构筑')
       copy.textContent = onboardingStep === 3 ? t('首次整备 · 用 {0} 铜钱补强构筑，再进入下一波', this.state.player.coins) : t('现有 {0} 铜钱 · 商品可重复购买，唯一宝物除外', this.state.player.coins)
       continueButton.hidden = false
-      continueButton.onclick = () => continueWave(this.state)
+      continueButton.onclick = this.startNextWave
       const shopSoldOut = this.state.shopChoices.every((id) => id === null)
       const allProductsLocked = this.state.shopChoices.every((id, index) => id !== null && this.state.lockedShopIndices.includes(index))
       refreshButton.textContent = allProductsLocked ? t('全部商品已锁定') : shopSoldOut ? t('补齐商品 · 免费') : t('刷新商品 · {0} 铜钱', this.state.shopRefreshCost)
@@ -822,12 +871,15 @@ class BattleScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     if (this.loading) return
+    if (this.adTransition) return
     const keyboardX = Number(this.keys.right.isDown || this.keys.d.isDown) - Number(this.keys.left.isDown || this.keys.a.isDown)
     const keyboardY = Number(this.keys.down.isDown || this.keys.s.isDown) - Number(this.keys.up.isDown || this.keys.w.isDown)
     const inputX = this.mobilePointerId === null ? keyboardX : this.mobileInputX
     const inputY = this.mobilePointerId === null ? keyboardY : this.mobileInputY
     const portraitBlocked = matchMedia('(max-width: 760px) and (orientation: portrait)').matches
-    if (!this.paused && !portraitBlocked) {
+    const battleActive = !this.paused && !portraitBlocked && !document.hidden && !this.state.pendingUpgrade && !this.state.shopOpen && !this.state.gameOver && !this.state.victory
+    poki.setPlaying(battleActive)
+    if (battleActive) {
       if (this.hitStop > 0) this.hitStop = Math.max(0, this.hitStop - delta / 1000)
       else {
         stepGame(this.state, {
@@ -837,6 +889,7 @@ class BattleScene extends Phaser.Scene {
         }, Math.min(delta, 100) / 1000)
       }
     }
+    if (this.state.pendingUpgrade || this.state.shopOpen || this.state.gameOver || this.state.victory) poki.setPlaying(false)
     this.dashQueued = false
     if (onboardingStep === 2 && this.state.pendingUpgrade) this.sawOnboardingUpgrade = true
     if (onboardingStep === 2 && this.sawOnboardingUpgrade && !this.state.pendingUpgrade) this.setOnboardingStep(3)
