@@ -86,12 +86,10 @@
         </div>
         <div id="pause-overlay" class="overlay" hidden>
           <div class="overlay-card pause-card" role="dialog" aria-modal="true" aria-labelledby="overlay-title">
-            <strong id="overlay-title">竹息凝神</strong>
-            <span id="overlay-copy">按 ESC 继续战斗</span>
-            <div class="language-controls" role="group" aria-label="Language / 语言">
-              <button type="button" data-language="zh-CN" lang="zh-CN">中文</button>
-              <button type="button" data-language="en" lang="en">English</button>
-            </div>
+            <header class="pause-header">
+              <strong id="overlay-title">竹息凝神</strong>
+              <span id="overlay-copy">战斗与计时已暂停</span>
+            </header>
             <div class="pause-actions">
               <button id="pause-continue" type="button">继续战斗 <kbd>ESC</kbd></button>
               <button id="pause-restart" type="button">重新开始本局</button>
@@ -100,6 +98,13 @@
               <legend>体验设置</legend>
               <label><input id="setting-shake" type="checkbox" checked><span><b>屏幕震动</b><small>暴击、受伤和破盾时轻微震动</small></span></label>
               <label><input id="setting-reduced-motion" type="checkbox"><span><b>低动画模式</b><small>降低非攻击动画与界面过渡</small></span></label>
+              <div class="pause-language">
+                <span>界面语言</span>
+                <div class="language-controls" role="group" aria-label="Language / 语言">
+                  <button type="button" data-language="zh-CN" lang="zh-CN">中文</button>
+                  <button type="button" data-language="en" lang="en">English</button>
+                </div>
+              </div>
             </fieldset>
             <small id="settings-status" class="settings-status" role="status"></small>
           </div>

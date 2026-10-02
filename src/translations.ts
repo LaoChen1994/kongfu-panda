@@ -242,6 +242,7 @@ export const english: Readonly<Record<string, string>> = {
   "继续战斗": "Resume",
   "重新开始本局": "Restart run",
   "体验设置": "Experience settings",
+  "界面语言": "Language",
   "屏幕震动": "Screen shake",
   "暴击、受伤和破盾时轻微震动": "Light shake on critical hits, damage and shield breaks",
   "低动画模式": "Reduced motion",
