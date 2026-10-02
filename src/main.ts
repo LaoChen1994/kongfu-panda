@@ -7,7 +7,7 @@ import { PokiSession } from './poki.js'
 
 const poki = new PokiSession()
 const pokiBuild = import.meta.env.MODE === 'poki'
-document.documentElement.dataset.platform = pokiBuild ? 'poki' : 'pages'
+document.documentElement.dataset.platform = import.meta.env.MODE === 'desktop' ? 'desktop' : pokiBuild ? 'poki' : 'pages'
 const testSDK = import.meta.env.DEV && pokiBuild && new URLSearchParams(location.search).has('playtest-poki')
   ? (await import('./poki-playtest.js')).sdk : undefined
 const platformReady = poki.initialize(pokiBuild, testSDK)
@@ -147,25 +147,25 @@ const buildStatFields = [
 ] as const
 const animationSets = [
   { key: 'panda-idle', path: 'panda-wanderer/idle', frames: 6, frameRate: 7, repeat: -1 },
-  { key: 'panda-run', path: 'panda-wanderer/run', frames: 8, frameRate: 13, repeat: -1 },
+  { key: 'panda-run', path: 'panda-wanderer/run', frames: 8, frameRate: 16, repeat: -1 },
   { key: 'panda-attack', path: 'panda-wanderer/attack', frames: 6, frameRate: 22, repeat: 0 },
   { key: 'qingtuan-idle', path: 'qingtuan/idle', frames: 6, frameRate: 7, repeat: -1 },
-  { key: 'qingtuan-run', path: 'qingtuan/run', frames: 8, frameRate: 13, repeat: -1 },
+  { key: 'qingtuan-run', path: 'qingtuan/run', frames: 8, frameRate: 16, repeat: -1 },
   { key: 'qingtuan-attack', path: 'qingtuan/attack', frames: 6, frameRate: 20, repeat: 0 },
   { key: 'shimo-idle', path: 'shimo/idle', frames: 6, frameRate: 6, repeat: -1 },
-  { key: 'shimo-run', path: 'shimo/run', frames: 8, frameRate: 11, repeat: -1 },
+  { key: 'shimo-run', path: 'shimo/run', frames: 8, frameRate: 14, repeat: -1 },
   { key: 'shimo-attack', path: 'shimo/attack', frames: 6, frameRate: 18, repeat: 0 },
-  { key: 'redfang-chaser-move', path: 'redfang-chaser/move', frames: 8, frameRate: 12, repeat: -1 },
+  { key: 'redfang-chaser-move', path: 'redfang-chaser/move', frames: 8, frameRate: 14, repeat: -1 },
   { key: 'redfang-chaser-attack', path: 'redfang-chaser/attack', frames: 6, frameRate: 18, repeat: 0 },
-  { key: 'violet-horn-dasher-move', path: 'violet-horn-dasher/move', frames: 8, frameRate: 10, repeat: -1 },
+  { key: 'violet-horn-dasher-move', path: 'violet-horn-dasher/move', frames: 8, frameRate: 12, repeat: -1 },
   { key: 'violet-horn-dasher-attack', path: 'violet-horn-dasher/attack', frames: 6, frameRate: 15, repeat: 0 },
-  { key: 'cyan-lantern-shooter-move', path: 'cyan-lantern-shooter/move', frames: 8, frameRate: 8, repeat: -1 },
+  { key: 'cyan-lantern-shooter-move', path: 'cyan-lantern-shooter/move', frames: 8, frameRate: 10, repeat: -1 },
   { key: 'cyan-lantern-shooter-attack', path: 'cyan-lantern-shooter/attack', frames: 6, frameRate: 15, repeat: 0 },
-  { key: 'shellback-boar-move', path: 'shellback-boar/move', frames: 6, frameRate: 7, repeat: -1 },
+  { key: 'shellback-boar-move', path: 'shellback-boar/move', frames: 6, frameRate: 10, repeat: -1 },
   { key: 'shellback-boar-attack', path: 'shellback-boar/attack', frames: 4, frameRate: 12, repeat: 0 },
   { key: 'weasel-assassin-move', path: 'weasel-assassin/move', frames: 6, frameRate: 12, repeat: -1 },
   { key: 'weasel-assassin-attack', path: 'weasel-assassin/attack', frames: 4, frameRate: 16, repeat: 0 },
-  { key: 'fox-sorcerer-move', path: 'fox-sorcerer/move', frames: 6, frameRate: 7, repeat: -1 },
+  { key: 'fox-sorcerer-move', path: 'fox-sorcerer/move', frames: 6, frameRate: 10, repeat: -1 },
   { key: 'fox-sorcerer-attack', path: 'fox-sorcerer/attack', frames: 4, frameRate: 12, repeat: 0 },
 ]
 
@@ -174,6 +174,10 @@ class BattleScene extends Phaser.Scene {
   private actorGraphics!: Phaser.GameObjects.Graphics
   private playerSprite!: Phaser.GameObjects.Sprite
   private enemySprites = new Map<number, Phaser.GameObjects.Sprite>()
+  private xpDropSprites = new Map<number, Phaser.GameObjects.Image>()
+  private xpPickupSprites: Array<{ sprite: Phaser.GameObjects.Image; life: number }> = []
+  private enemyHits = new Map<number, { pause: number; life: number }>()
+  private attackingEnemyIds = new Set<number>()
   private bossHazardSprites = new Map<number, Phaser.GameObjects.Image>()
   private shieldAura!: Phaser.GameObjects.Image
   private leafSprites = new Map<number, Phaser.GameObjects.Image>()
@@ -192,10 +196,11 @@ class BattleScene extends Phaser.Scene {
   private overlayMode = ''
   private audioContext?: AudioContext
   private lastHitSound = 0
-  private hitStop = 0
   private lastAttackId = 0
   private lastPlayerProjectileId = 0
   private weaponHudMode = ''
+  private buildHudMode = ''
+  private onboardingMode = ''
   private loading = true
   private loadFailed = false
   private resultShown = false
@@ -206,6 +211,7 @@ class BattleScene extends Phaser.Scene {
   private mobileInputX = 0
   private mobileInputY = 0
   private mobileShopTab: 'market' | 'summary' | 'inventory' = 'market'
+  private motionSamples: Array<{ delta: number; time: number; x: number; y: number; inputX: number; inputY: number; animation: string; frame: number; flipX: boolean; enemyAnimation: string; enemyFrame: number }> = []
 
   private setMobileShopTab = (tab: 'market' | 'summary' | 'inventory'): void => {
     this.mobileShopTab = tab
@@ -238,6 +244,9 @@ class BattleScene extends Phaser.Scene {
     hint.hidden = onboardingStep >= 4 || this.loading || this.paused || this.state.pendingUpgrade || this.state.shopOpen || this.state.gameOver || this.state.victory
     if (hint.hidden) return
     const mobileLayout = matchMedia('(max-width: 960px) and (orientation: landscape)').matches
+    const mode = `${locale}-${onboardingStep}-${mobileLayout}`
+    if (mode === this.onboardingMode) return
+    this.onboardingMode = mode
     document.querySelector<HTMLElement>('#onboarding-copy')!.innerHTML = [
       mobileLayout ? t('拖动左侧摇杆移动，侠客会自动攻击最近的敌人') : `<kbd>WASD</kbd>${t(' 或方向键移动，侠客会自动攻击最近的敌人')}`,
       mobileLayout ? t('点击右侧闪避穿出包围，闪避期间不会受伤') : `<kbd>SPACE</kbd>${t(' 闪避穿出包围，闪避期间不会受伤')}`,
@@ -259,6 +268,7 @@ class BattleScene extends Phaser.Scene {
       loadingRetry.hidden = false
     })
     this.load.image('bamboo-ground', `${assetRoot}environments/bamboo-ground.png`)
+    this.load.image('spirit-bamboo-xp', `${assetRoot}drops/spirit-bamboo-xp.png`)
     this.load.image('leaf-dart', `${assetRoot}weapons/leaf-dart.png`)
     this.load.image('myriad-leaf-return', `${assetRoot}weapons/myriad-leaf-return.png`)
     this.load.image('coiling-dragon-bamboo', `${assetRoot}weapons/coiling-dragon-bamboo.png`)
@@ -288,6 +298,27 @@ class BattleScene extends Phaser.Scene {
 
   create(): void {
     if (this.loadFailed) return
+    if (import.meta.env.DEV && new URLSearchParams(location.search).has('playtest-drops')) {
+      this.state = createGameState(20261002, selectedCharacter)
+      this.state.waveDuration = 999
+      this.state.spawnTimer = 999
+      this.state.player.nextXp = 99999
+      this.state.drops = Array.from({ length: 24 }, (_, index) => ({ id: this.state.nextId++, kind: 'xp', x: 1000 + (index % 6) * 36, y: 410 + Math.floor(index / 6) * 40, value: 4 }))
+      this.state.drops.push({ id: this.state.nextId++, kind: 'coin', x: 1030, y: 610, value: 2 }, { id: this.state.nextId++, kind: 'heal', x: 1090, y: 610, value: 10 })
+    }
+    if (import.meta.env.DEV && new URLSearchParams(location.search).has('playtest-motion')) {
+      this.state = createGameState(20261002, selectedCharacter)
+      this.state.waveDuration = 999
+      this.state.spawnTimer = 999
+      this.state.player.hp = 500
+      this.state.player.maxHp = 500
+      this.state.player.nextXp = 99999
+      this.state.enemies = new URLSearchParams(location.search).get('playtest-motion') === 'walk' ? [] : Array.from({ length: 48 }, (_, index) => ({ id: this.state.nextId++, kind: 'chaser', x: 800 + Math.cos(index * Math.PI / 24) * (90 + index * 3), y: 500 + Math.sin(index * Math.PI / 24) * (90 + index * 3), hp: 500, maxHp: 500, cooldown: 99, dashTime: 0, vx: 0, vy: 0 }))
+      const output = document.createElement('output')
+      output.id = 'motion-playtest'
+      output.hidden = true
+      gameShell.append(output)
+    }
     if (onboardingPlaytest) {
       this.state.waveDuration = 999
       this.state.spawnTimer = 999
@@ -544,11 +575,17 @@ class BattleScene extends Phaser.Scene {
       this.state = createGameState(crypto.getRandomValues(new Uint32Array(1))[0], this.state.characterId)
       this.lastAttackId = 0
       this.lastPlayerProjectileId = 0
-      this.hitStop = 0
+      this.enemyHits.clear()
+      this.attackingEnemyIds.clear()
+      for (const sprite of this.xpDropSprites.values()) sprite.destroy()
+      this.xpDropSprites.clear()
+      for (const pickup of this.xpPickupSprites) pickup.sprite.destroy()
+      this.xpPickupSprites = []
       this.dashQueued = false
       this.paused = false
       this.overlayMode = ''
       this.weaponHudMode = ''
+      this.buildHudMode = ''
       this.resultShown = false
       this.sawOnboardingUpgrade = false
       this.sawOnboardingShop = false
@@ -872,6 +909,8 @@ class BattleScene extends Phaser.Scene {
   update(_time: number, delta: number): void {
     if (this.loading) return
     if (this.adTransition) return
+    const previousPlayerX = this.state.player.x
+    const previousPlayerY = this.state.player.y
     const keyboardX = Number(this.keys.right.isDown || this.keys.d.isDown) - Number(this.keys.left.isDown || this.keys.a.isDown)
     const keyboardY = Number(this.keys.down.isDown || this.keys.s.isDown) - Number(this.keys.up.isDown || this.keys.w.isDown)
     const inputX = this.mobilePointerId === null ? keyboardX : this.mobileInputX
@@ -879,16 +918,15 @@ class BattleScene extends Phaser.Scene {
     const portraitBlocked = matchMedia('(max-width: 760px) and (orientation: portrait)').matches
     const battleActive = !this.paused && !portraitBlocked && !document.hidden && !this.state.pendingUpgrade && !this.state.shopOpen && !this.state.gameOver && !this.state.victory
     poki.setPlaying(battleActive)
+    this.anims.globalTimeScale = battleActive ? 1 : 0
     if (battleActive) {
-      if (this.hitStop > 0) this.hitStop = Math.max(0, this.hitStop - delta / 1000)
-      else {
-        stepGame(this.state, {
-          x: inputX,
-          y: inputY,
-          dash: this.dashQueued,
-        }, Math.min(delta, 100) / 1000)
-      }
+      stepGame(this.state, {
+        x: inputX,
+        y: inputY,
+        dash: this.dashQueued,
+      }, Math.min(delta, 100) / 1000)
     }
+    if (this.state.pendingUpgrade || this.state.shopOpen || this.state.gameOver || this.state.victory) this.anims.globalTimeScale = 0
     if (this.state.pendingUpgrade || this.state.shopOpen || this.state.gameOver || this.state.victory) poki.setPlaying(false)
     this.dashQueued = false
     if (onboardingStep === 2 && this.state.pendingUpgrade) this.sawOnboardingUpgrade = true
@@ -1004,11 +1042,35 @@ class BattleScene extends Phaser.Scene {
     }
     for (const [id, sprite] of this.turretSprites) if (!liveTurretIds.has(id)) { sprite.destroy(); this.turretSprites.delete(id) }
 
+    const liveXpDropIds = new Set<number>()
     for (const drop of this.state.drops) {
-      const color = drop.kind === 'xp' ? 0xb8ed72 : drop.kind === 'coin' ? 0xf0b844 : 0x63d889
-      graphics.fillStyle(color, 0.9).fillCircle(drop.x, drop.y, drop.kind === 'xp' ? 5 : 6)
-      graphics.lineStyle(2, 0xf9f0c8, 0.7).strokeCircle(drop.x, drop.y, drop.kind === 'xp' ? 8 : 9)
+      if (drop.kind === 'xp') {
+        liveXpDropIds.add(drop.id)
+        let sprite = this.xpDropSprites.get(drop.id)
+        if (!sprite) {
+          sprite = this.add.image(drop.x, drop.y, 'spirit-bamboo-xp').setOrigin(0.5, 0.9)
+          this.xpDropSprites.set(drop.id, sprite)
+        }
+        const pulse = gameSettings.reducedMotion ? 0 : Math.sin(this.state.time * 2.4 + drop.id)
+        sprite.setPosition(drop.x, drop.y + pulse * 1.5).setDisplaySize(22 * (1 + pulse * 0.06), 22 * (1 + pulse * 0.06)).setDepth(drop.y - 36)
+      } else {
+        const color = drop.kind === 'coin' ? 0xf0b844 : 0x63d889
+        graphics.fillStyle(color, 0.9).fillCircle(drop.x, drop.y, 6)
+        graphics.lineStyle(2, 0xf9f0c8, 0.7).strokeCircle(drop.x, drop.y, 9)
+      }
     }
+    for (const [id, sprite] of this.xpDropSprites) if (!liveXpDropIds.has(id)) {
+      this.xpDropSprites.delete(id)
+      if (battleActive && !this.state.shopOpen && !this.state.pendingUpgrade && !this.state.gameOver && !this.state.victory && !gameSettings.reducedMotion && Math.hypot(sprite.x - this.state.player.x, sprite.y - this.state.player.y) < 50) this.xpPickupSprites.push({ sprite, life: 0.18 })
+      else sprite.destroy()
+    }
+    for (const pickup of this.xpPickupSprites) {
+      if (battleActive) pickup.life = Math.max(0, pickup.life - delta / 1000)
+      if (gameSettings.reducedMotion || pickup.life === 0) { pickup.sprite.destroy(); pickup.life = 0; continue }
+      const ratio = pickup.life / 0.18
+      pickup.sprite.setAlpha(ratio).setDisplaySize(22 * ratio, 22 * ratio)
+    }
+    this.xpPickupSprites = this.xpPickupSprites.filter((pickup) => pickup.life > 0)
     const liveAttackIds = new Set<number>()
     for (const attack of this.state.attacks) {
       liveAttackIds.add(attack.id)
@@ -1148,8 +1210,13 @@ class BattleScene extends Phaser.Scene {
       }
       if (!this.seenEffects.has(effect.id)) {
         this.seenEffects.add(effect.id)
+        if (effect.kind === 'hit' || effect.kind === 'crit' || effect.kind === 'projectile-hit' || effect.kind === 'projectile-crit' || effect.kind === 'firecracker-hit' || effect.kind === 'firecracker-crit') {
+          const hitPause = effect.kind.endsWith('crit') ? 0.04 : 0.012
+          for (const enemy of this.state.enemies) {
+            if (Math.abs(effect.x - enemy.x) < 24 && Math.abs(effect.y + 28 - enemy.y) < 24) this.enemyHits.set(enemy.id, { pause: Math.max(this.enemyHits.get(enemy.id)?.pause ?? 0, hitPause), life: 0.12 })
+          }
+        }
         if (effect.kind === 'crit' || effect.kind === 'projectile-crit' || effect.kind === 'firecracker-crit') {
-          this.hitStop = 0.04
           if (gameSettings.screenShake) this.cameras.main.shake(75, 0.0025)
           this.playTone(155, 0.08, 0.035)
         } else if (effect.kind === 'player-hit') {
@@ -1159,7 +1226,6 @@ class BattleScene extends Phaser.Scene {
           if (gameSettings.screenShake) this.cameras.main.shake(130, 0.006)
           this.playTone(92, 0.14, 0.06)
         } else if ((effect.kind === 'hit' || effect.kind === 'projectile-hit' || effect.kind === 'firecracker-hit') && performance.now() - this.lastHitSound > 70) {
-          this.hitStop = effect.kind === 'hit' ? 0.018 : 0.012
           this.lastHitSound = performance.now()
           this.playTone(effect.kind === 'hit' ? 105 : 130, 0.045, 0.018)
         } else if (effect.kind === 'kill' && performance.now() - this.lastHitSound > 70) {
@@ -1269,18 +1335,31 @@ class BattleScene extends Phaser.Scene {
           : this.add.sprite(enemy.x, enemy.y, `${family}-move-01`).setOrigin(0.5, 1).setScale(size / 96).play(`${family}-move`)
         this.enemySprites.set(enemy.id, sprite)
       }
-      const flashing = this.state.effects.some((effect) => (effect.kind === 'hit' || effect.kind === 'crit' || effect.kind === 'projectile-hit' || effect.kind === 'projectile-crit' || effect.kind === 'firecracker-hit' || effect.kind === 'firecracker-crit') && Math.abs(effect.x - enemy.x) < 24 && Math.abs(effect.y + 28 - enemy.y) < 24)
       const attacking = enemy.kind === 'chaser' ? enemy.elite ? (enemy.telegraph ?? 0) > 0 || enemy.dashTime > 0 : Math.hypot(this.state.player.x - enemy.x, this.state.player.y - enemy.y) < 42 : enemy.kind === 'dasher' || enemy.kind === 'assassin' ? enemy.dashTime > 0 || (enemy.telegraph ?? 0) > 0 : enemy.kind === 'boar' ? Math.hypot(this.state.player.x - enemy.x, this.state.player.y - enemy.y) < 48 : enemy.cooldown > (enemy.kind === 'sorcerer' ? 3.65 : 1.45)
-      if (enemy.kind !== 'boss') {
-        sprite.play(`${family}-${attacking ? 'attack' : 'move'}`, true).setFlipX((enemy.facingX ?? this.state.player.x - enemy.x) < 0)
-        sprite.anims.timeScale = gameSettings.reducedMotion && !attacking ? 0.5 : 1
+      const hit = this.enemyHits.get(enemy.id)
+      const hitPause = hit?.pause ?? 0
+      if (battleActive && hit) {
+        hit.pause = Math.max(0, hit.pause - delta / 1000)
+        hit.life = Math.max(0, hit.life - delta / 1000)
       }
+      const flashing = (hit?.life ?? 0) > 0.06
+      const hitReaction = (hit?.life ?? 0) / 0.12
+      if (enemy.kind !== 'boss') {
+        if (attacking && (!this.attackingEnemyIds.has(enemy.id) || !sprite.anims.isPlaying)) sprite.play(`${family}-attack`, true)
+        else if (sprite.anims.currentAnim?.key !== `${family}-attack` || !sprite.anims.isPlaying) sprite.play(`${family}-move`, true)
+        if (attacking) this.attackingEnemyIds.add(enemy.id)
+        else this.attackingEnemyIds.delete(enemy.id)
+        const facingX = enemy.facingX ?? this.state.player.x - enemy.x
+        if (Math.abs(facingX) > 0.05) sprite.setFlipX(facingX < 0)
+        sprite.anims.timeScale = hitPause > 0 ? 0 : gameSettings.reducedMotion && sprite.anims.currentAnim?.key !== `${family}-attack` ? 0.5 : 1
+      }
+      const enemyAttacking = sprite.anims.currentAnim?.key === `${family}-attack` && sprite.anims.isPlaying
       const generatedEnemy = enemy.kind === 'boar' || enemy.kind === 'assassin' || enemy.kind === 'sorcerer'
       const actionScale = enemy.kind === 'boss' ? 1 + (gameSettings.reducedMotion ? 0 : Math.sin(this.state.time * (enemy.enraged ? 6 : 3)) * 0.018) : generatedEnemy ? enemy.kind === 'assassin' && enemy.dashTime > 0 ? 1.06 : 1 : (enemy.kind === 'dasher' && enemy.dashTime > 0 ? 1.12 : 1) * (
-        attacking ? enemy.kind === 'chaser' ? 0.9 : enemy.kind === 'dasher' ? 0.625 : 0.51 : 1
+        enemyAttacking ? enemy.kind === 'chaser' ? 0.9 : enemy.kind === 'dasher' ? 0.625 : 0.51 : 1
       )
       const baseScale = enemy.kind === 'boss' ? size / 512 : size / 96
-      sprite.setPosition(enemy.x, enemy.y).setDepth(enemy.y).setScale(baseScale * actionScale * (flashing ? 1.04 : 1), baseScale * actionScale * (flashing ? 0.96 : 1))
+      sprite.setPosition(enemy.x, enemy.y).setDepth(enemy.y).setScale(baseScale * actionScale * (1 + hitReaction * 0.04), baseScale * actionScale * (1 - hitReaction * 0.04))
       if (enemy.kind === 'boss' && enemy.phase === 2) sprite.setTint(enemy.enraged ? 0xff8c92 : 0xd9a8ff)
       else if (enemy.elite) sprite.setTint(0xffc477)
       else sprite.clearTint()
@@ -1290,7 +1369,7 @@ class BattleScene extends Phaser.Scene {
         graphics.fillStyle(0xd9554d, 0.9).fillRect(enemy.x - 18, enemy.y - size - 5, 36 * Math.max(0, enemy.hp / enemy.maxHp), 4)
       }
     }
-    for (const [id, sprite] of this.enemySprites) if (!liveEnemyIds.has(id)) { sprite.destroy(); this.enemySprites.delete(id) }
+    for (const [id, sprite] of this.enemySprites) if (!liveEnemyIds.has(id)) { sprite.destroy(); this.enemySprites.delete(id); this.enemyHits.delete(id); this.attackingEnemyIds.delete(id) }
 
     const { x, y, dashTime } = this.state.player
     if (dashTime > 0) graphics.fillStyle(0xd4ffb8, 0.22).fillCircle(x, y, 38)
@@ -1298,27 +1377,29 @@ class BattleScene extends Phaser.Scene {
     const shieldPulse = 1 + (gameSettings.reducedMotion ? 0 : Math.sin(this.state.time * 2.3) * 0.018)
     this.shieldAura.setPosition(x, y - 10).setDepth(y + 1).setVisible(shieldRatio > 0).setAlpha(0.1 + shieldRatio * 0.09 + (gameSettings.reducedMotion ? 0 : Math.sin(this.state.time * 4) * 0.018)).setDisplaySize(102 * shieldPulse, 72 * shieldPulse)
     const playerAnimation = characters[this.state.characterId].animation
-    const latestAttack = this.state.attacks.at(-1)
+    const latestAttack = this.state.attacks.filter((attack) => attack.kind !== 'fists').at(-1)
     if (latestAttack && latestAttack.id > this.lastAttackId) {
       this.lastAttackId = latestAttack.id
-      this.playerSprite.setFlipX(Math.cos(latestAttack.angle) < 0).play(`${playerAnimation}-attack`)
+      this.playerSprite.setFlipX(Math.cos(latestAttack.angle) < 0).play(`${playerAnimation}-attack`, true)
     }
-    const latestProjectile = this.state.playerProjectiles.at(-1)
-    if (latestProjectile && latestProjectile.kind !== 'bolt' && latestProjectile.id > this.lastPlayerProjectileId) {
+    const latestProjectile = this.state.characterId === 'qingtuan' ? this.state.playerProjectiles.filter((projectile) => projectile.kind === 'leaf' && !projectile.returning).at(-1) : undefined
+    if (latestProjectile && latestProjectile.id > this.lastPlayerProjectileId) {
       this.lastPlayerProjectileId = latestProjectile.id
-      this.playerSprite.setFlipX(latestProjectile.vx < 0).play(`${playerAnimation}-attack`)
+      this.playerSprite.setFlipX(latestProjectile.vx < 0).play(`${playerAnimation}-attack`, true)
     }
     const playerAttacking = this.playerSprite.anims.currentAnim?.key === `${playerAnimation}-attack` && this.playerSprite.anims.isPlaying
-    const moveX = Number(this.keys.right.isDown || this.keys.d.isDown) - Number(this.keys.left.isDown || this.keys.a.isDown)
-    const moveY = Number(this.keys.down.isDown || this.keys.s.isDown) - Number(this.keys.up.isDown || this.keys.w.isDown)
-    if (!playerAttacking) {
-      this.playerSprite.play(`${playerAnimation}-${moveX !== 0 || moveY !== 0 || dashTime > 0 ? 'run' : 'idle'}`, true)
-      this.playerSprite.setFlipX(moveX === 0 ? this.state.player.facingX < 0 : moveX < 0)
+    const moveX = dashTime > 0 ? this.state.player.dashX : inputX
+    if (!playerAttacking && battleActive) {
+      const moving = Math.hypot(x - previousPlayerX, y - previousPlayerY) > 0.001
+      this.playerSprite.play(`${playerAnimation}-${moving ? 'run' : 'idle'}`, true)
+      if (Math.abs(moveX) > 0.05) this.playerSprite.setFlipX(moveX < 0)
     }
     this.playerSprite.anims.timeScale = gameSettings.reducedMotion && !playerAttacking ? 0.5 : 1
     const playerHurt = this.state.player.hitCooldown > 0
+    const playerHit = this.state.effects.find((effect) => effect.kind === 'player-hit' && effect.life > 0.23)
+    const playerHitReaction = playerHit ? (playerHit.life - 0.23) / 0.12 : 0
     const playerScale = playerAttacking ? this.state.characterId === 'shanlan' ? 68 / 96 * 0.56 : 68 / 128 : 68 / 96
-    this.playerSprite.setPosition(x, y).setDepth(y).setRotation(playerAttacking ? 0 : moveY * 0.035).setScale(playerScale * (playerHurt ? 1.06 : 1), playerScale * (playerHurt ? 0.92 : 1)).setAlpha(playerHurt ? 0.55 + Math.sin(this.state.time * 50) * 0.25 : 1)
+    this.playerSprite.setPosition(x, y).setDepth(y).setRotation(0).setScale(playerScale * (1 + playerHitReaction * 0.06), playerScale * (1 - playerHitReaction * 0.08)).setAlpha(playerHurt ? 0.85 + Math.sin(this.state.time * 18) * 0.15 : 1)
 
     const healthFill = document.querySelector<HTMLElement>('#health-fill')
     const xpFill = document.querySelector<HTMLElement>('#xp-fill')
@@ -1355,7 +1436,7 @@ class BattleScene extends Phaser.Scene {
     }
     for (const [selector, value] of Object.entries(values)) {
       const element = document.querySelector<HTMLElement>(selector)
-      if (element) element.textContent = value
+      if (element && element.textContent !== value) element.textContent = value
     }
     const weaponStrip = document.querySelector<HTMLElement>('#weapon-strip')
     const weaponHudMode = `${locale}-${this.state.characterId}-${this.state.signatureWeaponLevel}-${this.state.signatureWeaponEvolved}-${Object.entries(this.state.weaponLevels).join('-')}`
@@ -1410,22 +1491,33 @@ class BattleScene extends Phaser.Scene {
     mobileDash.querySelector<HTMLElement>('small')!.textContent = this.state.player.dashCooldown === 0 ? t('就绪') : `${this.state.player.dashCooldown.toFixed(1)}s`
     const hurtVignette = document.querySelector<HTMLElement>('#hurt-vignette')
     if (hurtVignette) hurtVignette.classList.toggle('active', this.state.effects.some((effect) => effect.kind === 'player-hit'))
-    const buildTags = document.querySelector<HTMLElement>('#build-tags')
-    if (buildTags) {
-      const names = this.state.chosenUpgrades.slice(-3).map((id) => t(upgrades[id].name))
-      buildTags.innerHTML = (names.length ? names : [t('初入竹林')]).map((name) => `<span>${name}</span>`).join('')
-    }
-    const itemIcons = document.querySelector<HTMLElement>('#item-icons')
-    if (itemIcons) {
-      const ownedItemIds = this.state.ownedItems.filter((id, index, ownedItems) => ownedItems.indexOf(id) === index)
-      itemIcons.innerHTML = ownedItemIds.length ? ownedItemIds.map((id) => {
-        const item = items[id]
-        const count = this.state.ownedItems.filter((ownedId) => ownedId === id).length
-        return `<div class="item-detail"><img src="${import.meta.env.BASE_URL}${item.image}" alt=""><span><b>${t(item.name)}${count > 1 ? ` ×${count}` : ''}</b><small>${count > 1 ? t('每件：') : ''}${t(item.description)}</small></span></div>`
-      }).join('') : `<small class="item-empty">${t('尚未获得宝物')}</small>`
+    const buildHudMode = `${locale}-${this.state.chosenUpgrades.join('-')}-${this.state.ownedItems.join('-')}`
+    if (buildHudMode !== this.buildHudMode) {
+      this.buildHudMode = buildHudMode
+      const buildTags = document.querySelector<HTMLElement>('#build-tags')
+      if (buildTags) {
+        const names = this.state.chosenUpgrades.slice(-3).map((id) => t(upgrades[id].name))
+        buildTags.innerHTML = (names.length ? names : [t('初入竹林')]).map((name) => `<span>${name}</span>`).join('')
+      }
+      const itemIcons = document.querySelector<HTMLElement>('#item-icons')
+      if (itemIcons) {
+        const ownedItemIds = this.state.ownedItems.filter((id, index, ownedItems) => ownedItems.indexOf(id) === index)
+        itemIcons.innerHTML = ownedItemIds.length ? ownedItemIds.map((id) => {
+          const item = items[id]
+          const count = this.state.ownedItems.filter((ownedId) => ownedId === id).length
+          return `<div class="item-detail"><img src="${import.meta.env.BASE_URL}${item.image}" alt=""><span><b>${t(item.name)}${count > 1 ? ` ×${count}` : ''}</b><small>${count > 1 ? t('每件：') : ''}${t(item.description)}</small></span></div>`
+        }).join('') : `<small class="item-empty">${t('尚未获得宝物')}</small>`
+      }
     }
     const buildPanel = document.querySelector<HTMLElement>('.build-panel')
     if (buildPanel) buildPanel.classList.toggle('near-player', this.state.player.x > 1400 && this.state.player.y > 850)
+
+    if (import.meta.env.DEV && document.querySelector('#motion-playtest')) {
+      const enemySprite = this.enemySprites.values().next().value
+      this.motionSamples.push({ delta, time: this.state.time, x, y, inputX, inputY, animation: this.playerSprite.anims.currentAnim?.key ?? '', frame: this.playerSprite.anims.currentFrame?.index ?? 0, flipX: this.playerSprite.flipX, enemyAnimation: enemySprite?.anims.currentAnim?.key ?? '', enemyFrame: enemySprite?.anims.currentFrame?.index ?? 0 })
+      if (this.motionSamples.length > 180) this.motionSamples.shift()
+      if (Math.floor(_time / 500) !== Math.floor((_time - delta) / 500)) document.querySelector<HTMLElement>('#motion-playtest')!.textContent = JSON.stringify(this.motionSamples)
+    }
 
     if (this.state.gameOver || this.state.victory) {
       if (this.resultShown) return
