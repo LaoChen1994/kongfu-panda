@@ -7,7 +7,7 @@
     "frontendDist": "../dist-desktop",
     "devUrl": "http://127.0.0.1:1420",
     "beforeDevCommand": "pnpm exec vite --mode desktop --host 127.0.0.1 --port 1420 --strictPort",
-    "beforeBuildCommand": "pnpm typecheck && pnpm exec vite build --mode desktop"
+    "beforeBuildCommand": "pnpm build:desktop"
   },
   "app": {
     "windows": [
@@ -37,6 +37,6 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "macOS": { "minimumSystemVersion": "13.0" }
+    "macOS": { "minimumSystemVersion": "13.0", "signingIdentity": "-" }
   }
 }
