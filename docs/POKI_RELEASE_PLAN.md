@@ -72,8 +72,8 @@ Poki 的内容规范排除酒精主题，强调原创性及 AI 制作过程可�
 
 ## SDK 一期构建与测试入口
 
-- Pages：`pnpm build`，输出 `dist/`；原有 Pages workflow 不变。
-- Poki：`pnpm typecheck && pnpm exec vite build --mode poki`，输出 `dist-poki/`。提交的是该目录内的 Web 构建，不是 Pages URL。
+- Pages：`pnpm build:web`（兼容 `pnpm build`），输出 `dist/`；原有 Pages 发布触发方式不变。
+- Poki：`pnpm build:poki`，输出 `dist-poki/`。提交的是该目录内的 Web 构建，不是 Pages URL。
 - 本地：`pnpm exec vite --mode poki --host 127.0.0.1`。
 - 仅开发模式模拟：`?muted=1&playtest-poki=1&playtest-items=final`。测试面板显示 SDK 事件，可手动完成/拒绝模拟广告；`playtest-poki=init-failure` 验证初始化失败。生产包不得包含模拟面板。
 - 已实现商城退出时的普通广告机会；暂停恢复和升级选择不请求广告。初始化失败不挡住游戏，真实广告期间不使用超时强行恢复战斗。
