@@ -13,7 +13,12 @@
     "build:mac": "tauri build --bundles app,dmg",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
     "desktop:dev": "tauri dev",
-    "desktop:build": "tauri build"
+    "desktop:build": "tauri build",
+    "dev:cloudflare": "pnpm build:web && wrangler dev --local --ip 127.0.0.1",
+    "deploy:cloudflare": "pnpm test && pnpm build:web && wrangler deploy",
+    "preview:cloudflare": "pnpm test && pnpm build:web && wrangler preview",
+    "check:cloudflare": "pnpm build:web && wrangler deploy --dry-run",
+    "test:cloudflare": "node --test scripts/cloudflare.test.mjs"
   },
   "keywords": [],
   "author": "",
@@ -26,7 +31,8 @@
     "@tauri-apps/cli": "^2.12.1",
     "@types/node": "^22.20.5",
     "typescript": "^7.0.2",
-    "vite": "^8.2.2"
+    "vite": "^8.2.2",
+    "wrangler": "4.149.0"
   },
   "type": "module"
 }
