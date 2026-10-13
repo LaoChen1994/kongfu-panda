@@ -56,4 +56,5 @@ Cloudflare Git 集成管理部署认证，不要求用户发送 API Token。新�
 - 2026-10-13 首次静态发布已完成，试玩地址：[Cloudflare 试玩站](https://kongfu-panda.735849467.workers.dev/)。GitHub Pages 继续保留。
 - 已连接现有 GitHub 集成，生产分支为 codex/cloudflare-web；构建与发布命令、Node 22 和 pnpm 10.33.4 已在后台保存。连接后的下一次推送用于验证首次自动构建，不把“已保存配置”等同于“自动发布已验证”。
 - 本地 Node 20 / Node 22 各 52 项测试通过，Web/Poki/桌面前端构建通过；本地和线上静态 HTTP 回归各 4 项通过。线上英文选角、石墨加载、战斗、升级和暂停已验证。
+- 首次 Git 自动构建在 Linux / Node 22.23.3 被五组原始全状态 SHA 差异拦截。用户确认后，从原实现参考代码受控追加 48 个可移植指纹，保留原始 SHA 和所有业务摘要，补充浮点尾差与真实变化检查；不跳过测试、不改玩法。重跑通过后才确认自动发布完成。
 - 本轮截图和详细记录在 artifacts/agent-loop/cloudflare-web/iteration-01/notes.md。国内手机实网速度仍需用户在目标网络测量，不承诺 workers.dev 一定更快。

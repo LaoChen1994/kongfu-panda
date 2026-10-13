@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { buyItem, chooseUpgrade, continueWave, createGameState, refreshShop, refreshUpgrades, sellItem, sellWeapon, stepGame, toggleShopLock } from './simulation.js'
-import { recordReplay } from './test-support/replay.js'
+import { recordReplay, serializeReplay } from './test-support/replay.js'
 
 for (const characterId of ['shanlan', 'qingtuan', 'shimo'] as const) {
   for (const build of ['starter', 'mixed'] as const) {
@@ -26,11 +26,39 @@ for (const characterId of ['shanlan', 'qingtuan', 'shimo'] as const) {
       const actual = recordReplay(characterId, 20261002, build)
       assert.equal(actual.length, expected.length, '检查点数量不能改变')
       for (const [index, point] of actual.entries()) {
-        assert.deepEqual(point, expected[index], `main=ebadff3, seed=20261002, character=${characterId}, build=${build}, tick=${point.tick}, event=${point.event}`)
+        const expectedPoint: unknown = expected[index]
+        assert.ok(expectedPoint !== null && typeof expectedPoint === 'object')
+        assert.ok('portableFingerprint' in expectedPoint && typeof expectedPoint.portableFingerprint === 'string', '基线必须包含受控生成的全状态可移植指纹')
+        assert.deepEqual(
+          JSON.parse(serializeReplay(Object.fromEntries(Object.entries(point).filter(([key]) => key !== 'fingerprint')), 'portable')),
+          JSON.parse(serializeReplay(Object.fromEntries(Object.entries(expectedPoint).filter(([key]) => key !== 'fingerprint')), 'portable')),
+          `main=ebadff3, seed=20261002, character=${characterId}, build=${build}, tick=${point.tick}, event=${point.event}`,
+        )
       }
     })
   }
 }
+
+test('可移植回放只忽略浮点尾差，原始序列化仍能检测差异', () => {
+  const state = createGameState(20261002)
+  const changed = structuredClone(state)
+  changed.player.x += 1e-10
+  assert.notEqual(serializeReplay(changed, 'raw'), serializeReplay(state, 'raw'))
+  assert.equal(serializeReplay(changed, 'portable'), serializeReplay(state, 'portable'))
+  changed.player.x += 0.001
+  assert.notEqual(serializeReplay(changed, 'portable'), serializeReplay(state, 'portable'))
+})
+
+test('可移植回放保留整数规则、实体字段和数组顺序', () => {
+  const state = createGameState(20261002)
+  const changed = structuredClone(state)
+  changed.player.coins += 1
+  assert.notEqual(serializeReplay(changed, 'portable'), serializeReplay(state, 'portable'))
+  assert.notEqual(serializeReplay({ seed: 7 }, 'portable'), serializeReplay({ seed: 8 }, 'portable'))
+  assert.notEqual(serializeReplay({ enemies: [{ id: 1, hp: 10 }] }, 'portable'), serializeReplay({ enemies: [{ id: 1, hp: 9 }] }, 'portable'))
+  assert.notEqual(serializeReplay({ ids: [1, 2] }, 'portable'), serializeReplay({ ids: [2, 1] }, 'portable'))
+  assert.equal(serializeReplay({ coins: 2, hp: 10 }, 'portable'), serializeReplay({ hp: 10, coins: 2 }, 'portable'))
+})
 
 test('不同种子改变遭遇和选择，但仍满足十波数量边界', () => {
   const first = recordReplay('shanlan', 7, 'starter')

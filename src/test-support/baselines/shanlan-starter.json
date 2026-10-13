@@ -86,7 +86,8 @@
     "boss": null,
     "victory": false,
     "gameOver": false,
-    "fingerprint": "74e02856afb0c704c50c19b1d65b7b08f163c7bba99f2ad10f2c918c0ed7206a"
+    "fingerprint": "74e02856afb0c704c50c19b1d65b7b08f163c7bba99f2ad10f2c918c0ed7206a",
+    "portableFingerprint": "74e02856afb0c704c50c19b1d65b7b08f163c7bba99f2ad10f2c918c0ed7206a"
   },
   {
     "tick": 241,
@@ -181,7 +182,8 @@
     "boss": null,
     "victory": false,
     "gameOver": false,
-    "fingerprint": "79395c7d7a0703b817b379c935721d94ebb450b259803041cef83f1b1f6d3a80"
+    "fingerprint": "79395c7d7a0703b817b379c935721d94ebb450b259803041cef83f1b1f6d3a80",
+    "portableFingerprint": "941a698176266ffc10088ae39f00069e07925cd9428734bbace3f17a35bf472c"
   },
   {
     "tick": 1000,
@@ -276,7 +278,8 @@
     "boss": null,
     "victory": false,
     "gameOver": false,
-    "fingerprint": "bdafd335996f8e9b82a7f5083904fdab33193ff6ccf435697db59f43dfaee0fa"
+    "fingerprint": "bdafd335996f8e9b82a7f5083904fdab33193ff6ccf435697db59f43dfaee0fa",
+    "portableFingerprint": "762db13309f9dda3c443fe078492fe373a80f7141c264316571ca9f6e1f0ea18"
   },
   {
     "tick": 1001,
@@ -371,7 +374,8 @@
     "boss": null,
     "victory": false,
     "gameOver": false,
-    "fingerprint": "b1646e7b39a3f56856c0e8a3970180ef4052059886756f0632a4eb8f1f662a0c"
+    "fingerprint": "b1646e7b39a3f56856c0e8a3970180ef4052059886756f0632a4eb8f1f662a0c",
+    "portableFingerprint": "5b487345310c27fd844b930d4906d27ad6cb0ccd64d45ba7c054c7759d9b26e0"
   },
   {
     "tick": 4000,
@@ -469,7 +473,8 @@
     "boss": null,
     "victory": false,
     "gameOver": false,
-    "fingerprint": "b6a6312a0f4c47d300b3186d36af04c5ac54c0cb3fc076e902d27afebfd35101"
+    "fingerprint": "b6a6312a0f4c47d300b3186d36af04c5ac54c0cb3fc076e902d27afebfd35101",
+    "portableFingerprint": "e75fcd5cd8b09936cf50122081352139f61d9d3c5bdc035250edb5bf5a15137b"
   },
   {
     "tick": 8000,
@@ -570,7 +575,8 @@
     "boss": null,
     "victory": false,
     "gameOver": false,
-    "fingerprint": "9df6548b38e74b4eef1cab3a2aff5cf6318dc69061f477be36c24d0f3ad154f9"
+    "fingerprint": "9df6548b38e74b4eef1cab3a2aff5cf6318dc69061f477be36c24d0f3ad154f9",
+    "portableFingerprint": "bc8fdaf999eb5e9c96930f9fe1a09f38cfacb08d2034def6f5d65d82a3a3ff3b"
   },
   {
     "tick": 9009,
@@ -684,7 +690,8 @@
     },
     "victory": false,
     "gameOver": false,
-    "fingerprint": "fd05ec5374501050b146bb7c1d901a4aea0738935a27850aee7570efce0f038e"
+    "fingerprint": "fd05ec5374501050b146bb7c1d901a4aea0738935a27850aee7570efce0f038e",
+    "portableFingerprint": "93728aeae97790691b77739764091e79f1fab1bdc9e013a4ee9f2b2e925f6195"
   },
   {
     "tick": 12000,
@@ -799,6 +806,7 @@
     },
     "victory": false,
     "gameOver": false,
-    "fingerprint": "2c37b10ae94d882c175f698334399f72b36439a7685b75a58497e9c2c3ef8ca4"
+    "fingerprint": "2c37b10ae94d882c175f698334399f72b36439a7685b75a58497e9c2c3ef8ca4",
+    "portableFingerprint": "0f7020d19b3343f9a988a0de9b6997c9ff92864105bfef68fda031d70e0c127a"
   }
 ]
