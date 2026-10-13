@@ -1,0 +1,28 @@
+export type ItemId = 'martial-belt' | 'wind-feather' | 'iron-bracer' | 'panda-roller' | 'bamboo-dew-pill' | 'food-god-lunchbox' | 'jade-eyepatch' | 'gale-leggings' | 'mountain-stone' | 'fortune-paw' | 'spirit-bamboo-tube' | 'tiger-seal' | 'barbed-backplate' | 'twin-bamboo' | 'monk-beads' | 'lucky-bell' | 'tumbler-charm' | 'chain-copper-clasp' | 'guild-token' | 'wine-immortal-gourd' | 'army-breaker-token' | 'thunder-drum' | 'bamboo-totem' | 'taiji-jade'
+
+export const items: Record<ItemId, { name: string; rarity: string; description: string; preview: string; price: number; image: string; unique?: boolean; maxStacks?: number }> = {
+  'martial-belt': { name: '武道腰带', rarity: '普通', description: '近战伤害 +10%', preview: '近战伤害提高 10%', price: 18, image: 'assets/items/martial-belt.png' },
+  'wind-feather': { name: '风羽', rarity: '稀有', description: '投射物速度 +20%，远程伤害 +5%', preview: '弹速提高 20% · 远程伤害提高 5%', price: 38, image: 'assets/items/wind-feather.png' },
+  'iron-bracer': { name: '铁砂护腕', rarity: '普通', description: '护甲 +4，移动速度 -3%', preview: '护甲增加 4 · 移速降低 3%', price: 20, image: 'assets/items/iron-bracer.png' },
+  'panda-roller': { name: '熊猫滚轮', rarity: '稀有', description: '闪避结束震开敌人并造成 32 伤害', preview: '解锁闪避震击', price: 38, image: 'assets/items/panda-roller.png', unique: true },
+  'bamboo-dew-pill': { name: '竹露丸', rarity: '普通', description: '最大生命 +10，并立即恢复 10', preview: '生命上限与当前生命提高 10', price: 20, image: 'assets/items/bamboo-dew-pill.png' },
+  'food-god-lunchbox': { name: '食神饭盒', rarity: '稀有', description: '每波开始恢复 15% 最大生命', preview: '每件额外恢复 15% 最大生命', price: 40, image: 'assets/items/food-god-lunchbox.png' },
+  'jade-eyepatch': { name: '翡翠眼罩', rarity: '稀有', description: '暴击率 +8%，最大生命 -5', preview: '暴击提高 8% · 生命上限降低 5', price: 38, image: 'assets/items/jade-eyepatch.png' },
+  'gale-leggings': { name: '疾风绑腿', rarity: '普通', description: '攻击速度 +8%', preview: '所有自动攻击频率提高 8%', price: 20, image: 'assets/items/gale-leggings.png' },
+  'mountain-stone': { name: '镇岳石', rarity: '史诗', description: '护盾效果 +25%，移动速度 -5%', preview: '石墨护盾更厚 · 移速降低 5%', price: 58, image: 'assets/items/mountain-stone.png' },
+  'fortune-paw': { name: '招财熊爪', rarity: '普通', description: '铜钱获取 +12%，敌人数量 +5%', preview: '收益提高，同时增加敌潮压力', price: 24, image: 'assets/items/fortune-paw.png' },
+  'spirit-bamboo-tube': { name: '聚灵竹筒', rarity: '稀有', description: '拾取范围 +30%，移动速度 -3%', preview: '更远吸取掉落 · 移速降低 3%', price: 36, image: 'assets/items/spirit-bamboo-tube.png' },
+  'tiger-seal': { name: '猛虎印', rarity: '史诗', description: '对精英和 Boss 伤害 +18%，对普通敌人伤害 -5%', preview: '专精强敌，但清杂能力下降', price: 60, image: 'assets/items/tiger-seal.png' },
+  'barbed-backplate': { name: '倒刺背甲', rarity: '稀有', description: '受到接触伤害时反伤 12，闪避率 -5%', preview: '近身敌人受反击 · 闪避率最低为 0%', price: 40, image: 'assets/items/barbed-backplate.png' },
+  'twin-bamboo': { name: '双生竹节', rarity: '史诗', description: '投射物 +1，单发投射物伤害 -15%', preview: '飞叶、爆竹和弩箭增发 1 枚 · 最多 2 件', price: 72, image: 'assets/items/twin-bamboo.png', maxStacks: 2 },
+  'monk-beads': { name: '武僧念珠', rarity: '稀有', description: '冷却缩减 +10%，武器伤害 -5%', preview: '所有武器更快出手，但单次伤害降低', price: 40, image: 'assets/items/monk-beads.png' },
+  'lucky-bell': { name: '幸运铜铃', rarity: '稀有', description: '幸运 +15%，商城价格 +5%', preview: '史诗商品更易出现，但后续购买更贵', price: 40, image: 'assets/items/lucky-bell.png' },
+  'tumbler-charm': { name: '不倒翁护符', rarity: '史诗', description: '致命伤保留 1 点生命，每局一次', preview: '触发后沿用本次受击无敌时间', price: 70, image: 'assets/items/tumbler-charm.png', unique: true },
+  'chain-copper-clasp': { name: '连环铜扣', rarity: '稀有', description: '连续命中同一目标时，每次伤害 +4%', preview: '最高 +20%，更换目标后重置', price: 42, image: 'assets/items/chain-copper-clasp.png', unique: true },
+  'guild-token': { name: '商会令牌', rarity: '史诗', description: '刷新至少出现一件稀有商品，刷新费用 +3', preview: '免费补齐仍免费，正常刷新更贵', price: 64, image: 'assets/items/guild-token.png', unique: true },
+  'wine-immortal-gourd': { name: '竹露葫芦', rarity: '史诗', description: '治疗溢出时获得 5 秒全部伤害 +20%', preview: '重复触发刷新持续时间', price: 62, image: 'assets/items/wine-immortal-gourd.png', unique: true },
+  'army-breaker-token': { name: '破军令', rarity: '传说', description: '武器暴击击杀引爆周围 90 范围，基础伤害 40；暴击伤害 -20%', preview: '暴击倍率 175% → 140%；爆炸不连锁', price: 140, image: 'assets/items/army-breaker-token.png', unique: true },
+  'thunder-drum': { name: '雷纹手鼓', rarity: '史诗', description: '每 10 次攻击释放 24 伤害闪电，最多连接 3 个敌人；攻速 -5%', preview: '每跳范围 180；齐射只计 1 次，持续灼烧不计', price: 80, image: 'assets/items/thunder-drum.png', unique: true },
+  'bamboo-totem': { name: '竹林图腾', rarity: '史诗', description: '站定 2 秒获得 +25% 全部伤害；移动后在 2 秒内衰减', preview: '重新站定需再次蓄力；闪避也会中断站定', price: 80, image: 'assets/items/bamboo-totem.png', unique: true },
+  'taiji-jade': { name: '太极玉', rarity: '传说', description: '护盾增加或破裂时释放 130 范围、36 基础伤害气功波；最大生命 -15%', preview: '需要护盾来源；不会自行提供护盾', price: 140, image: 'assets/items/taiji-jade.png', unique: true },
+}

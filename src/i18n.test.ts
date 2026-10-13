@@ -1,6 +1,11 @@
 import { english } from './translations.js'
 import { resolveLocale, setLocale, t } from './i18n.js'
-import { characters, createGameState, injurySources, items, signatureWeapons, stepGame, upgrades, weapons } from './simulation.js'
+import { createGameState, stepGame } from './simulation.js'
+import { characters } from './game/content/characters.js'
+import { enemyDefinitions, injurySources } from './game/content/enemies.js'
+import { items } from './game/content/items.js'
+import { upgrades } from './game/content/upgrades.js'
+import { signatureWeapons, weapons } from './game/content/weapons.js'
 
 for (const [saved, browser, expected] of [
   [null, 'zh-CN', 'zh-CN'], [null, 'zh-TW', 'zh-CN'], [null, 'en-US', 'en'],
@@ -16,7 +21,7 @@ for (const [source, translation] of Object.entries(english)) {
   if (sourceSlots !== targetSlots) throw new Error(`Placeholder mismatch: ${source}`)
 }
 for (const entry of [
-  ...Object.values(characters), ...Object.values(items), ...Object.values(weapons),
+  ...Object.values(characters), ...Object.values(enemyDefinitions), ...Object.values(items), ...Object.values(weapons),
   ...Object.values(upgrades), ...Object.values(signatureWeapons), ...Object.values(signatureWeapons).map((weapon) => weapon.evolution),
   injurySources,
 ]) {

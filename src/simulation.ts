@@ -1,270 +1,9 @@
-export const regularEnemyIds = ['chaser', 'dasher', 'shooter', 'boar', 'assassin', 'sorcerer'] as const
-export type RegularEnemyKind = typeof regularEnemyIds[number]
-export type EnemyKind = RegularEnemyKind | 'boss'
-export type CharacterId = 'shanlan' | 'qingtuan' | 'shimo'
-export type SignatureWeaponId = 'bamboo-staff' | 'leaf-dart' | 'iron-bamboo-shield'
-export type UpgradeId = 'power' | 'haste' | 'vitality' | 'footwork' | 'leaf-volley' | 'wide-sweep' | 'thorn-fur' | 'panda-roll' | 'battle-fury' | 'iron-constitution' | 'bamboo-unity'
-export type ItemId = 'martial-belt' | 'wind-feather' | 'iron-bracer' | 'panda-roller' | 'bamboo-dew-pill' | 'food-god-lunchbox' | 'jade-eyepatch' | 'gale-leggings' | 'mountain-stone' | 'fortune-paw' | 'spirit-bamboo-tube' | 'tiger-seal' | 'barbed-backplate' | 'twin-bamboo' | 'monk-beads' | 'lucky-bell' | 'tumbler-charm' | 'chain-copper-clasp' | 'guild-token' | 'wine-immortal-gourd' | 'army-breaker-token' | 'thunder-drum' | 'bamboo-totem' | 'taiji-jade'
-export const weaponIds = ['iron-pot-gauntlets', 'firecracker-launcher', 'spinning-bamboo-blade', 'panda-wine-gourd', 'bamboo-crossbow-turret'] as const
-export type WeaponId = typeof weaponIds[number]
-export type ShopProductId = ItemId | WeaponId | SignatureWeaponId
-export type DamageSource = WeaponId | 'bamboo-staff' | 'leaf-dart' | 'iron-bamboo-shield' | 'panda-roller' | 'thorn-fur' | 'panda-roll' | 'barbed-backplate' | 'army-breaker-token' | 'thunder-drum' | 'taiji-jade'
-export const injurySources = {
-  chaser: '竹鼠接触', dasher: '山猴冲撞', shooter: '毒蜂接触', boar: '野猪撞击',
-  assassin: '鼬鼠突刺', sorcerer: '狐妖接触', boss: '巨灵接触',
-  'elite-chaser': '赤纹竹鼠冲撞', 'enemy-shot': '毒蜂弹幕', root: '巨灵根刺', shockwave: '巨灵冲击波',
-} as const
-
-export const enemyDefinitions: Record<RegularEnemyKind, { name: string; unlockWave: number; threat: number; baseHp: number; size: number; animation: string }> = {
-  chaser: { name: '竹鼠', unlockWave: 1, threat: 1, baseHp: 30, size: 54, animation: 'redfang-chaser' },
-  dasher: { name: '山猴', unlockWave: 2, threat: 2, baseHp: 38, size: 62, animation: 'violet-horn-dasher' },
-  shooter: { name: '毒蜂', unlockWave: 2, threat: 2, baseHp: 26, size: 58, animation: 'cyan-lantern-shooter' },
-  boar: { name: '甲壳野猪', unlockWave: 3, threat: 3, baseHp: 68, size: 68, animation: 'shellback-boar' },
-  assassin: { name: '鼬鼠刺客', unlockWave: 4, threat: 3, baseHp: 34, size: 58, animation: 'weasel-assassin' },
-  sorcerer: { name: '狐妖术士', unlockWave: 5, threat: 4, baseHp: 42, size: 62, animation: 'fox-sorcerer' },
-}
-
-export const characters: Record<CharacterId, {
-  name: string
-  role: string
-  description: string
-  passive: string
-  weakness: string
-  portrait: string
-  weaponName: string
-  weaponDescription: string
-  weaponImage: string
-  weaponId: SignatureWeaponId
-  animation: string
-}> = {
-  shanlan: {
-    name: '山岚', role: '近战 · 爆发', description: '贴近敌群，用大范围横扫打出持续压制。',
-    passive: '每第 4 次近战变为 180° 旋风，并恢复 1% 最大生命。', weakness: '攻击距离较短',
-    portrait: 'assets/characters/panda-wanderer.png', weaponName: '青竹杖', weaponDescription: '中距 90° 横扫', weaponImage: 'assets/weapons/bamboo-staff.png', weaponId: 'bamboo-staff', animation: 'panda',
-  },
-  qingtuan: {
-    name: '青团', role: '远程 · 机动', description: '保持距离，用高速飞叶穿梭清场。',
-    passive: '每第 6 次射击分裂为 3 枚各造成 45% 伤害的飞叶。', weakness: '生命较低',
-    portrait: 'assets/characters/qingtuan.png', weaponName: '飞叶镖', weaponDescription: '长距高速飞叶', weaponImage: 'assets/weapons/leaf-dart.png', weaponId: 'leaf-dart', animation: 'qingtuan',
-  },
-  shimo: {
-    name: '石墨', role: '肉盾 · 反击', description: '顶住敌潮，用铁盾撞开近身威胁。',
-    passive: '每 8 秒获得 8% 最大生命护盾，破盾时震开周围敌人。', weakness: '移动速度较慢',
-    portrait: 'assets/characters/shimo.png', weaponName: '铁竹盾', weaponDescription: '短距 72° 盾击', weaponImage: 'assets/weapons/iron-bamboo-shield.png', weaponId: 'iron-bamboo-shield', animation: 'shimo',
-  },
-}
-
-export const signatureWeapons: Record<SignatureWeaponId, {
-  characterId: CharacterId
-  name: string
-  rarity: string
-  description: string
-  preview: string
-  price: number
-  image: string
-  evolution: { name: string; description: string; image: string; requiredItem: ItemId }
-}> = {
-  'bamboo-staff': {
-    characterId: 'shanlan', name: '青竹杖', rarity: '普通', description: '山岚专属；升级提高伤害与横扫范围', preview: '专属武器升级，不占通用武器槽', price: 26, image: 'assets/weapons/bamboo-staff.png',
-    evolution: { name: '盘龙金竹', description: '横扫化为两段环形连击，末击强力击退', image: 'assets/weapons/coiling-dragon-bamboo.png', requiredItem: 'martial-belt' },
-  },
-  'leaf-dart': {
-    characterId: 'qingtuan', name: '飞叶镖', rarity: '普通', description: '青团专属；升级提高飞叶伤害', preview: '专属武器升级，不占通用武器槽', price: 26, image: 'assets/weapons/leaf-dart.png',
-    evolution: { name: '万叶归宗', description: '飞叶穿透敌群，并在末端分裂回射', image: 'assets/weapons/myriad-leaf-return.png', requiredItem: 'wind-feather' },
-  },
-  'iron-bamboo-shield': {
-    characterId: 'shimo', name: '铁竹盾', rarity: '普通', description: '石墨专属；升级提高盾击伤害与范围', preview: '专属武器升级，不占通用武器槽', price: 26, image: 'assets/weapons/iron-bamboo-shield.png',
-    evolution: { name: '不动熊山', description: '护盾破裂后留下持续震地波', image: 'assets/weapons/immovable-bear-mountain.png', requiredItem: 'mountain-stone' },
-  },
-}
-
-export const upgrades: Record<UpgradeId, { name: string; rarity: '普通' | '稀有' | '史诗' | '传说'; description: string; preview: string; tag: string; image?: string; unique?: boolean }> = {
-  power: { name: '沉肩坠肘', rarity: '普通', description: '全部伤害 +12%', preview: '所有招式伤害提高 12%', tag: '输出' },
-  haste: { name: '疾风连式', rarity: '普通', description: '攻击速度 +10%', preview: '所有自动攻击间隔缩短', tag: '攻速' },
-  vitality: { name: '竹息养生', rarity: '普通', description: '最大生命 +5，并恢复 5', preview: '立即恢复 5 点生命', tag: '生存' },
-  footwork: { name: '踏叶无痕', rarity: '稀有', description: '移动速度 +10%', preview: '走位和撤离速度提高', tag: '机动' },
-  'leaf-volley': { name: '竹叶连射', rarity: '史诗', description: '额外发射 1 枚飞叶，远程伤害 -10%', preview: '飞叶数量增加，单发伤害降低', tag: '远程 · 天赋' },
-  'wide-sweep': { name: '横扫千军', rarity: '稀有', description: '杖/盾攻击范围 +18，攻击速度 -5%', preview: '近战覆盖扩大，但攻击稍慢', tag: '近战 · 天赋' },
-  'thorn-fur': { name: '荆棘皮毛', rarity: '稀有', description: '受到接触伤害时反击 18 点伤害', preview: '只反击直接接触你的敌人', tag: '生存 · 反击', image: 'assets/upgrades/thorn-fur.png', unique: true },
-  'panda-roll': { name: '熊猫滚滚', rarity: '史诗', description: '闪避结束震击 48 点伤害，冷却 +0.4 秒', preview: '闪避转为范围攻击，基础冷却 2.5秒 → 2.9秒', tag: '机动 · 触发', image: 'assets/upgrades/panda-roll.png', unique: true },
-  'battle-fury': { name: '越战越勇', rarity: '史诗', description: '本波每击破 50 个敌人，全部伤害 +2%', preview: '每波重新累计，不设永久增益', tag: '输出 · 成长', image: 'assets/upgrades/battle-fury.png', unique: true },
-  'iron-constitution': { name: '食铁体质', rarity: '史诗', description: '拾取治疗后获得 4 秒 +8 护甲，治疗量 -10%', preview: '治疗球 10 → 9；短时承伤降低', tag: '生存 · 触发', image: 'assets/upgrades/iron-constitution.png', unique: true },
-  'bamboo-unity': { name: '万竹归心', rarity: '传说', description: '每种竹类武器使全部伤害 +5%，商城更易出现竹类武器', preview: '专属武器计 1 种，最高获得 +15% 伤害', tag: '构筑 · 传说', image: 'assets/upgrades/bamboo-unity.png', unique: true },
-}
-
-export const items: Record<ItemId, { name: string; rarity: string; description: string; preview: string; price: number; image: string; unique?: boolean; maxStacks?: number }> = {
-  'martial-belt': { name: '武道腰带', rarity: '普通', description: '近战伤害 +10%', preview: '近战伤害提高 10%', price: 18, image: 'assets/items/martial-belt.png' },
-  'wind-feather': { name: '风羽', rarity: '稀有', description: '投射物速度 +20%，远程伤害 +5%', preview: '弹速提高 20% · 远程伤害提高 5%', price: 38, image: 'assets/items/wind-feather.png' },
-  'iron-bracer': { name: '铁砂护腕', rarity: '普通', description: '护甲 +4，移动速度 -3%', preview: '护甲增加 4 · 移速降低 3%', price: 20, image: 'assets/items/iron-bracer.png' },
-  'panda-roller': { name: '熊猫滚轮', rarity: '稀有', description: '闪避结束震开敌人并造成 32 伤害', preview: '解锁闪避震击', price: 38, image: 'assets/items/panda-roller.png', unique: true },
-  'bamboo-dew-pill': { name: '竹露丸', rarity: '普通', description: '最大生命 +10，并立即恢复 10', preview: '生命上限与当前生命提高 10', price: 20, image: 'assets/items/bamboo-dew-pill.png' },
-  'food-god-lunchbox': { name: '食神饭盒', rarity: '稀有', description: '每波开始恢复 15% 最大生命', preview: '每件额外恢复 15% 最大生命', price: 40, image: 'assets/items/food-god-lunchbox.png' },
-  'jade-eyepatch': { name: '翡翠眼罩', rarity: '稀有', description: '暴击率 +8%，最大生命 -5', preview: '暴击提高 8% · 生命上限降低 5', price: 38, image: 'assets/items/jade-eyepatch.png' },
-  'gale-leggings': { name: '疾风绑腿', rarity: '普通', description: '攻击速度 +8%', preview: '所有自动攻击频率提高 8%', price: 20, image: 'assets/items/gale-leggings.png' },
-  'mountain-stone': { name: '镇岳石', rarity: '史诗', description: '护盾效果 +25%，移动速度 -5%', preview: '石墨护盾更厚 · 移速降低 5%', price: 58, image: 'assets/items/mountain-stone.png' },
-  'fortune-paw': { name: '招财熊爪', rarity: '普通', description: '铜钱获取 +12%，敌人数量 +5%', preview: '收益提高，同时增加敌潮压力', price: 24, image: 'assets/items/fortune-paw.png' },
-  'spirit-bamboo-tube': { name: '聚灵竹筒', rarity: '稀有', description: '拾取范围 +30%，移动速度 -3%', preview: '更远吸取掉落 · 移速降低 3%', price: 36, image: 'assets/items/spirit-bamboo-tube.png' },
-  'tiger-seal': { name: '猛虎印', rarity: '史诗', description: '对精英和 Boss 伤害 +18%，对普通敌人伤害 -5%', preview: '专精强敌，但清杂能力下降', price: 60, image: 'assets/items/tiger-seal.png' },
-  'barbed-backplate': { name: '倒刺背甲', rarity: '稀有', description: '受到接触伤害时反伤 12，闪避率 -5%', preview: '近身敌人受反击 · 闪避率最低为 0%', price: 40, image: 'assets/items/barbed-backplate.png' },
-  'twin-bamboo': { name: '双生竹节', rarity: '史诗', description: '投射物 +1，单发投射物伤害 -15%', preview: '飞叶、爆竹和弩箭增发 1 枚 · 最多 2 件', price: 72, image: 'assets/items/twin-bamboo.png', maxStacks: 2 },
-  'monk-beads': { name: '武僧念珠', rarity: '稀有', description: '冷却缩减 +10%，武器伤害 -5%', preview: '所有武器更快出手，但单次伤害降低', price: 40, image: 'assets/items/monk-beads.png' },
-  'lucky-bell': { name: '幸运铜铃', rarity: '稀有', description: '幸运 +15%，商城价格 +5%', preview: '史诗商品更易出现，但后续购买更贵', price: 40, image: 'assets/items/lucky-bell.png' },
-  'tumbler-charm': { name: '不倒翁护符', rarity: '史诗', description: '致命伤保留 1 点生命，每局一次', preview: '触发后沿用本次受击无敌时间', price: 70, image: 'assets/items/tumbler-charm.png', unique: true },
-  'chain-copper-clasp': { name: '连环铜扣', rarity: '稀有', description: '连续命中同一目标时，每次伤害 +4%', preview: '最高 +20%，更换目标后重置', price: 42, image: 'assets/items/chain-copper-clasp.png', unique: true },
-  'guild-token': { name: '商会令牌', rarity: '史诗', description: '刷新至少出现一件稀有商品，刷新费用 +3', preview: '免费补齐仍免费，正常刷新更贵', price: 64, image: 'assets/items/guild-token.png', unique: true },
-  'wine-immortal-gourd': { name: '竹露葫芦', rarity: '史诗', description: '治疗溢出时获得 5 秒全部伤害 +20%', preview: '重复触发刷新持续时间', price: 62, image: 'assets/items/wine-immortal-gourd.png', unique: true },
-  'army-breaker-token': { name: '破军令', rarity: '传说', description: '武器暴击击杀引爆周围 90 范围，基础伤害 40；暴击伤害 -20%', preview: '暴击倍率 175% → 140%；爆炸不连锁', price: 140, image: 'assets/items/army-breaker-token.png', unique: true },
-  'thunder-drum': { name: '雷纹手鼓', rarity: '史诗', description: '每 10 次攻击释放 24 伤害闪电，最多连接 3 个敌人；攻速 -5%', preview: '每跳范围 180；齐射只计 1 次，持续灼烧不计', price: 80, image: 'assets/items/thunder-drum.png', unique: true },
-  'bamboo-totem': { name: '竹林图腾', rarity: '史诗', description: '站定 2 秒获得 +25% 全部伤害；移动后在 2 秒内衰减', preview: '重新站定需再次蓄力；闪避也会中断站定', price: 80, image: 'assets/items/bamboo-totem.png', unique: true },
-  'taiji-jade': { name: '太极玉', rarity: '传说', description: '护盾增加或破裂时释放 130 范围、36 基础伤害气功波；最大生命 -15%', preview: '需要护盾来源；不会自行提供护盾', price: 140, image: 'assets/items/taiji-jade.png', unique: true },
-}
-
-export const weapons: Record<WeaponId, { name: string; rarity: string; description: string; preview: string; price: number; image: string }> = {
-  'iron-pot-gauntlets': { name: '铁锅拳套', rarity: '普通', description: '极短距离快速拳击，Lv.3 起追加第二拳', preview: '升级提高伤害与拳风范围', price: 22, image: 'assets/weapons/iron-pot-gauntlets.png' },
-  'firecracker-launcher': { name: '爆竹筒', rarity: '稀有', description: '发射慢速爆竹，命中造成范围爆炸', preview: '升级扩大爆炸，Lv.3 起双弹齐射', price: 42, image: 'assets/weapons/firecracker-launcher.png' },
-  'spinning-bamboo-blade': { name: '旋转竹刃', rarity: '普通', description: '竹刃绕身切割近身敌人，Lv.3 起增加第二把', preview: '升级增加伤害、轨道与竹刃数量', price: 24, image: 'assets/weapons/spinning-bamboo-blade.png' },
-  'panda-wine-gourd': { name: '灵茶葫芦', rarity: '稀有', description: '投出茶焰灼烧一片区域，Lv.3 起同时点燃两处', preview: '升级扩大茶焰并延长持续时间', price: 44, image: 'assets/weapons/panda-wine-gourd.png' },
-  'bamboo-crossbow-turret': { name: '竹弩机关', rarity: '稀有', description: '部署自动索敌的竹弩台，Lv.3 起同时部署两台', preview: '升级增加箭伤、射速与机关数量', price: 48, image: 'assets/weapons/bamboo-crossbow-turret.png' },
-}
-
-export const isWeaponId = (id: ShopProductId): id is WeaponId => id in weapons
-export const isSignatureWeaponId = (id: ShopProductId): id is SignatureWeaponId => id in signatureWeapons
-
-export type GameState = {
-  characterId: CharacterId
-  seed: number
-  runStats: {
-    initialSeed: number
-    damage: Partial<Record<DamageSource, number>>
-    injuries: Partial<Record<keyof typeof injurySources, number>>
-    shieldAbsorbed: number
-    upgradeRefreshes: number
-    talentTriggers: Partial<Record<UpgradeId, number>>
-    maxBattleFuryStacks: number
-    lastInjury?: keyof typeof injurySources
-  }
-  time: number
-  wave: number
-  waveTime: number
-  waveDuration: number
-  kills: number
-  nextId: number
-  spawnTimer: number
-  threatBudget: number
-  eliteSpawns: number
-  bambooCooldown: number
-  leafCooldown: number
-  gauntletCooldown: number
-  firecrackerCooldown: number
-  orbitCooldown: number
-  gourdCooldown: number
-  turretDeployCooldown: number
-  characterAttackCount: number
-  gameOver: boolean
-  victory: boolean
-  pendingUpgrade: boolean
-  shopOpen: boolean
-  upgradeChoices: UpgradeId[]
-  freeUpgradeRefreshUsed: boolean
-  upgradeRefreshCost: number
-  shopChoices: Array<ShopProductId | null>
-  lockedShopIndices: number[]
-  shopRefreshCost: number
-  ownedItems: ItemId[]
-  signatureWeaponLevel: number
-  signatureWeaponEvolved: boolean
-  weaponLevels: Partial<Record<WeaponId, number>>
-  chosenUpgrades: UpgradeId[]
-  waveKills: number
-  bossAttackCount: number
-  bossIntroTime: number
-  corruptionInset: number
-  lastStandUsed: boolean
-  comboTargetId: number | null
-  comboHits: number
-  thunderAttacks: number
-  stationaryTime: number
-  totemBonus: number
-  player: {
-    x: number
-    y: number
-    hp: number
-    maxHp: number
-    level: number
-    xp: number
-    nextXp: number
-    coins: number
-    damage: number
-    meleeDamage: number
-    attackSpeed: number
-    armor: number
-    moveSpeed: number
-    projectileCount: number
-    extraProjectiles: number
-    projectileDamage: number
-    meleeRange: number
-    rangedDamage: number
-    projectileSpeed: number
-    criticalChance: number
-    criticalDamage: number
-    dodgeChance: number
-    reflectDamage: number
-    cooldownMultiplier: number
-    basicAttackDamage: number
-    luck: number
-    shopPriceMultiplier: number
-    pickupRange: number
-    coinGain: number
-    coinRemainder: number
-    enemyPressure: number
-    eliteDamage: number
-    normalDamage: number
-    waveHealing: number
-    shieldPower: number
-    dashCooldown: number
-    dashTime: number
-    dashX: number
-    dashY: number
-    facingX: number
-    facingY: number
-    hitCooldown: number
-    dashBurstPending: boolean
-    shield: number
-    shieldMax: number
-    shieldTimer: number
-    ironArmorTime: number
-    overflowDamageTime: number
-  }
-  enemies: Array<{
-    id: number
-    kind: EnemyKind
-    x: number
-    y: number
-    hp: number
-    maxHp: number
-    cooldown: number
-    dashTime: number
-    vx: number
-    vy: number
-    telegraph?: number
-    facingX?: number
-    facingY?: number
-    elite?: boolean
-    phase?: 1 | 2
-    enraged?: boolean
-  }>
-  bossHazards: Array<{ id: number; kind: 'root' | 'shockwave'; x: number; y: number; radius: number; life: number; duration: number; triggered: boolean }>
-  playerProjectiles: Array<{ id: number; kind: 'leaf' | 'firecracker' | 'bolt'; x: number; y: number; vx: number; vy: number; damage: number; critical: boolean; blastRadius: number; travel?: number; maxTravel?: number; pierces?: number; returning?: boolean; splitOnEnd?: boolean; hitIds?: number[] }>
-  enemyProjectiles: Array<{ id: number; x: number; y: number; vx: number; vy: number }>
-  attacks: Array<{ id: number; x: number; y: number; life: number; radius: number; angle: number; arc: number; critical: boolean; kind: 'staff' | 'whirlwind' | 'dragon-staff' | 'shield' | 'mountain-shield' | 'fists' }>
-  groundZones: Array<{ id: number; kind: 'wine' | 'mountain'; x: number; y: number; radius: number; life: number; duration: number; tickCooldown: number; damage: number }>
-  enemyZones: Array<{ id: number; x: number; y: number; radius: number; life: number; duration: number }>
-  turrets: Array<{ id: number; x: number; y: number; life: number; cooldown: number; level: number; angle: number }>
-  drops: Array<{ id: number; kind: 'xp' | 'coin' | 'heal'; x: number; y: number; value: number }>
-  effects: Array<{ id: number; kind: 'hit' | 'crit' | 'projectile-hit' | 'projectile-crit' | 'firecracker-hit' | 'firecracker-crit' | 'firecracker-blast' | 'kill' | 'player-hit' | 'dash-burst' | 'shield-break' | 'last-stand' | 'enemy-shot' | 'boss-summon' | 'armor-block' | 'army-blast' | 'chain-lightning' | 'taiji-wave'; x: number; y: number; value: number; life: number; angle: number }>
-}
-
-export type PlayerInput = { x: number; y: number; dash: boolean }
+import { characters, type CharacterId } from './game/content/characters.js'
+import { enemyDefinitions, regularEnemyIds, injurySources, type EnemyKind } from './game/content/enemies.js'
+import { items, type ItemId } from './game/content/items.js'
+import { upgrades, type UpgradeId } from './game/content/upgrades.js'
+import { weapons, signatureWeapons, weaponIds, isWeaponId, isSignatureWeaponId, type ShopProductId, type WeaponId } from './game/content/weapons.js'
+import type { DamageSource, EnemyState, GameState, PlayerInput, PlayerProjectileState } from './game/simulation/state.js'
 
 const random = (state: GameState): number => {
   state.seed = (state.seed * 1664525 + 1013904223) >>> 0
@@ -288,7 +27,7 @@ const reduceIncomingDamage = (state: GameState, rawDamage: number): number => {
   return Math.max(1, Math.floor(rawDamage * (1 - armor / (armor + 60))))
 }
 
-const dealEnemyDamage = (state: GameState, enemy: GameState['enemies'][number], rawDamage: number, sourceX: number, sourceY: number, source: DamageSource, critical = false): number => {
+const dealEnemyDamage = (state: GameState, enemy: EnemyState, rawDamage: number, sourceX: number, sourceY: number, source: DamageSource, critical = false): number => {
   if (enemy.hp <= 0) {
     state.runStats.damage[source] ??= 0
     return 0
@@ -339,7 +78,7 @@ const recordAttack = (state: GameState): void => {
   let x = state.player.x
   let y = state.player.y
   for (let jump = 0; jump < 3; jump += 1) {
-    let target: GameState['enemies'][number] | undefined
+    let target: EnemyState | undefined
     let distance = 180
     for (const enemy of state.enemies) {
       const nextDistance = Math.hypot(enemy.x - x, enemy.y - y)
@@ -472,14 +211,10 @@ export const createGameState = (seed = 20260831, characterId: CharacterId = 'sha
   totemBonus: 0,
   player: {
     x: 800, y: 500,
-    hp: characterId === 'qingtuan' ? 10 : characterId === 'shimo' ? 30 : 20,
-    maxHp: characterId === 'qingtuan' ? 10 : characterId === 'shimo' ? 30 : 20,
+    hp: characters[characterId].baseStats.maxHp,
     level: 1, xp: 0, nextXp: 18, coins: 0,
-    damage: 1, meleeDamage: characterId === 'shanlan' ? 1.15 : characterId === 'qingtuan' ? 0.8 : 1,
-    attackSpeed: 1, armor: characterId === 'shimo' ? 8 : 0, moveSpeed: characterId === 'qingtuan' ? 1.1 : characterId === 'shimo' ? 0.9 : 1,
-    projectileCount: 1, extraProjectiles: 0, projectileDamage: 1, meleeRange: characterId === 'shanlan' ? 74 : 82, rangedDamage: 1, projectileSpeed: characterId === 'qingtuan' ? 516 : 430,
-    criticalChance: 0.1, criticalDamage: 1.75, dodgeChance: 0, reflectDamage: 0, cooldownMultiplier: 1, basicAttackDamage: 1, luck: 0, shopPriceMultiplier: 1,
-    pickupRange: 140, coinGain: 1, coinRemainder: 0, enemyPressure: 1, eliteDamage: 1, normalDamage: 1, waveHealing: 0, shieldPower: 1,
+    ...characters[characterId].baseStats,
+    coinRemainder: 0,
     dashCooldown: 0, dashTime: 0, dashX: 1, dashY: 0, facingX: 1, facingY: 0, hitCooldown: 0, dashBurstPending: false,
     shield: 0, shieldMax: 0, shieldTimer: characterId === 'shimo' ? 8 : 0, ironArmorTime: 0, overflowDamageTime: 0,
   },
@@ -487,21 +222,22 @@ export const createGameState = (seed = 20260831, characterId: CharacterId = 'sha
 })
 
 const recalculateBuildStats = (state: GameState): void => {
-  let maxHp = state.characterId === 'qingtuan' ? 10 : state.characterId === 'shimo' ? 30 : 20
-  let moveSpeed = state.characterId === 'qingtuan' ? 1.1 : state.characterId === 'shimo' ? 0.9 : 1
-  let attackSpeed = 1
-  let normalDamage = 1
-  let criticalChance = 0.1
-  let rangedDamage = 1
-  let damage = 1
-  let dodgeChance = 0
-  let reflectDamage = 0
-  let cooldownMultiplier = 1
-  let basicAttackDamage = 1
-  let luck = 0
-  let shopPriceMultiplier = 1
-  let extraProjectiles = 0
-  let projectileDamage = 1
+  const base = characters[state.characterId].baseStats
+  let maxHp = base.maxHp
+  let moveSpeed = base.moveSpeed
+  let attackSpeed = base.attackSpeed
+  let normalDamage = base.normalDamage
+  let criticalChance = base.criticalChance
+  let rangedDamage = base.rangedDamage
+  let damage = base.damage
+  let dodgeChance = base.dodgeChance
+  let reflectDamage = base.reflectDamage
+  let cooldownMultiplier = base.cooldownMultiplier
+  let basicAttackDamage = base.basicAttackDamage
+  let luck = base.luck
+  let shopPriceMultiplier = base.shopPriceMultiplier
+  let extraProjectiles = base.extraProjectiles
+  let projectileDamage = base.projectileDamage
   for (const id of state.ownedItems) {
     if (id === 'bamboo-dew-pill') maxHp += 10
     if (id === 'jade-eyepatch') { maxHp -= 5; criticalChance += 0.08 }
@@ -526,7 +262,7 @@ const recalculateBuildStats = (state: GameState): void => {
   }
   if (state.chosenUpgrades.includes('bamboo-unity')) damage += getBambooWeaponCount(state) * 0.05
   state.player.maxHp = Math.max(1, Math.floor(maxHp * (state.ownedItems.includes('taiji-jade') ? 0.85 : 1)))
-  state.player.criticalDamage = state.ownedItems.includes('army-breaker-token') ? 1.4 : 1.75
+  state.player.criticalDamage = state.ownedItems.includes('army-breaker-token') ? 1.4 : base.criticalDamage
   state.player.moveSpeed = Math.max(0.5, Number(moveSpeed.toFixed(8)))
   state.player.attackSpeed = Math.max(0.55, Number(attackSpeed.toFixed(8)))
   state.player.normalDamage = Math.max(0.5, Number(normalDamage.toFixed(8)))
@@ -1020,7 +756,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
 
   const attackRate = state.player.attackSpeed / state.player.cooldownMultiplier
   if (state.characterId !== 'qingtuan' && state.bambooCooldown <= 0) {
-    let target: GameState['enemies'][number] | undefined
+    let target: EnemyState | undefined
     const attackRadius = state.player.meleeRange + (state.characterId === 'shimo' ? 8 : 24) + (state.signatureWeaponLevel - 1) * 4 + (state.characterId === 'shanlan' && state.signatureWeaponEvolved ? 18 : 0)
     let targetDistance = attackRadius
     for (const enemy of state.enemies) {
@@ -1095,7 +831,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
 
   const gauntletLevel = state.weaponLevels['iron-pot-gauntlets'] ?? 0
   if (gauntletLevel > 0 && state.gauntletCooldown <= 0) {
-    let target: GameState['enemies'][number] | undefined
+    let target: EnemyState | undefined
     const radius = 62 + gauntletLevel * 4
     let targetDistance = radius
     for (const enemy of state.enemies) {
@@ -1252,7 +988,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
     }
   }
 
-  const returningLeaves: GameState['playerProjectiles'] = []
+  const returningLeaves: PlayerProjectileState[] = []
   for (const projectile of state.playerProjectiles) {
     const speed = Math.hypot(projectile.vx, projectile.vy)
     projectile.x += projectile.vx * dt

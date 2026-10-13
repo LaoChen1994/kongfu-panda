@@ -1,4 +1,4 @@
-import type { CharacterId } from './simulation.js'
+import type { CharacterId } from './game/content/characters.js'
 
 export type BattleRecord = { runs: number; wins: number; bestWave: number; bestKills: number; bestClearTime: number }
 

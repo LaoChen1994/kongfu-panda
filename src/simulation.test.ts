@@ -1,4 +1,9 @@
-import { buyItem, characters, chooseUpgrade, continueWave, createGameState, enemyDefinitions, getBambooWeaponCount, getShopPrice, isSignatureWeaponId, isWeaponId, items, refreshShop, refreshUpgrades, regularEnemyIds, sellItem, sellWeapon, signatureWeapons, stepGame, toggleShopLock, upgrades, weaponIds, weapons } from './simulation.js'
+import { buyItem, chooseUpgrade, continueWave, createGameState, getBambooWeaponCount, getShopPrice, refreshShop, refreshUpgrades, sellItem, sellWeapon, stepGame, toggleShopLock } from './simulation.js'
+import { characters } from './game/content/characters.js'
+import { enemyDefinitions, regularEnemyIds } from './game/content/enemies.js'
+import { items } from './game/content/items.js'
+import { upgrades } from './game/content/upgrades.js'
+import { isSignatureWeaponId, isWeaponId, signatureWeapons, weaponIds, weapons } from './game/content/weapons.js'
 import { parseBattleRecords } from './records.js'
 
 if (Object.keys(items).length !== 24) throw new Error('MVP 应有 24 件道具')

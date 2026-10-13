@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto'
-import { buyItem, chooseUpgrade, continueWave, createGameState, refreshShop, sellItem, stepGame, toggleShopLock, type CharacterId, type GameState } from '../simulation.js'
+import { buyItem, chooseUpgrade, continueWave, createGameState, refreshShop, sellItem, stepGame, toggleShopLock } from '../simulation.js'
+import type { CharacterId } from '../game/content/characters.js'
+import type { GameState } from '../game/simulation/state.js'
 
 // 用于锁定重构前的行为，不是数值平衡脚本或真人通关证明。
 const captureCheckpoint = (state: GameState, tick: number, event: string) => ({
