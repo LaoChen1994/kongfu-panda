@@ -3,6 +3,14 @@ import { buyItem, chooseUpgrade, continueWave, createGameState, refreshShop, sel
 import type { CharacterId } from '../game/content/characters.js'
 import type { GameState } from '../game/simulation/state.js'
 
+// 只影响测试序列化；整数与数组顺序精确保留，不修改 Simulation 的计算。
+export const serializeReplay = (state: object, precision: 'raw' | 'portable') => JSON.stringify(state, (_key, value: unknown) => (
+  value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? Object.fromEntries(Object.entries(value).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0))
+    : precision === 'portable' && typeof value === 'number' && Number.isFinite(value) && !Number.isInteger(value)
+      ? Number(value.toFixed(9)) : value
+))
+
 // 用于锁定重构前的行为，不是数值平衡脚本或真人通关证明。
 const captureCheckpoint = (state: GameState, tick: number, event: string) => ({
   tick, event, seed: state.seed, nextId: state.nextId, time: state.time, wave: state.wave, waveTime: state.waveTime,
@@ -15,11 +23,8 @@ const captureCheckpoint = (state: GameState, tick: number, event: string) => ({
   boss: structuredClone(state.enemies.find((enemy) => enemy.kind === 'boss') ?? null),
   victory: state.victory, gameOver: state.gameOver,
   // 对象键排序忽略属性声明顺序，数组顺序仍属于规则契约。
-  fingerprint: createHash('sha256').update(JSON.stringify(state, (_key, value: unknown) => (
-    value !== null && typeof value === 'object' && !Array.isArray(value)
-      ? Object.fromEntries(Object.entries(value).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0))
-      : value
-  ))).digest('hex'),
+  fingerprint: createHash('sha256').update(serializeReplay(state, 'raw')).digest('hex'),
+  portableFingerprint: createHash('sha256').update(serializeReplay(state, 'portable')).digest('hex'),
 })
 
 export const recordReplay = (characterId: CharacterId, seed: number, build: 'starter' | 'mixed') => {

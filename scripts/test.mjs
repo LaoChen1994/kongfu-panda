@@ -1,4 +1,4 @@
-import { rmSync } from 'node:fs'
+import { readdirSync, rmSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
@@ -12,6 +12,10 @@ const compilation = spawnSync(process.execPath, [
 if (compilation.error) throw compilation.error
 if (compilation.status !== 0) process.exit(compilation.status ?? 1)
 
-const tests = spawnSync(process.execPath, ['--test', '.test-dist'], { cwd: projectDirectory, stdio: 'inherit' })
+const tests = spawnSync(process.execPath, [
+  '--test',
+  ...readdirSync(new URL('../.test-dist/', import.meta.url), { recursive: true })
+    .filter((path) => path.endsWith('.test.js')).sort().map((path) => `.test-dist/${path}`),
+], { cwd: projectDirectory, stdio: 'inherit' })
 if (tests.error) throw tests.error
 process.exitCode = tests.status ?? 1
