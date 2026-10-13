@@ -1,7 +1,12 @@
 import { t, locale, setLocale, resolveLocale, applyStaticTranslations } from './i18n.js'
 import Phaser from 'phaser'
 import './style.css'
-import { buyItem, characters, chooseUpgrade, continueWave, createGameState, enemyDefinitions, getBambooWeaponCount, getShopPrice, injurySources, isSignatureWeaponId, isWeaponId, items, refreshShop, refreshUpgrades, sellItem, sellWeapon, signatureWeapons, stepGame, toggleShopLock, upgrades, weaponIds, weapons, type CharacterId } from './simulation.js'
+import { buyItem, chooseUpgrade, continueWave, createGameState, getBambooWeaponCount, getShopPrice, refreshShop, refreshUpgrades, sellItem, sellWeapon, stepGame, toggleShopLock } from './simulation.js'
+import { characters, type CharacterId } from './game/content/characters.js'
+import { enemyDefinitions, injurySources } from './game/content/enemies.js'
+import { items } from './game/content/items.js'
+import { upgrades } from './game/content/upgrades.js'
+import { isSignatureWeaponId, isWeaponId, signatureWeapons, weaponIds, weapons } from './game/content/weapons.js'
 import { parseBattleRecords } from './records.js'
 import { PokiSession } from './poki.js'
 
@@ -1611,7 +1616,7 @@ document.querySelectorAll<HTMLButtonElement>('[data-character]').forEach((button
     loadingOverlay.hidden = false
     if (characterSelect) characterSelect.hidden = true
     if (characterName) characterName.textContent = t(character.name)
-    const maxHp = characterId === 'qingtuan' ? 10 : characterId === 'shimo' ? 30 : 20
+    const maxHp = character.baseStats.maxHp
     if (healthText) healthText.textContent = `${maxHp} / ${maxHp}`
     if (weaponImage) {
       weaponImage.src = `${import.meta.env.BASE_URL}${character.weaponImage}`
