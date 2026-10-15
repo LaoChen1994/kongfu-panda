@@ -2,7 +2,7 @@ import { characters, type CharacterId } from './game/content/characters.js'
 import { enemyDefinitions, regularEnemyIds, injurySources, type EnemyKind } from './game/content/enemies.js'
 import { items, type ItemId } from './game/content/items.js'
 import { upgrades, type UpgradeId } from './game/content/upgrades.js'
-import { weapons, signatureWeapons, weaponIds, isWeaponId, isSignatureWeaponId, type ShopProductId, type WeaponId } from './game/content/weapons.js'
+import { weapons, signatureWeapons, weaponIds, isWeaponId, isSignatureWeaponId, type ShopProductId, type WeaponId, type SignatureWeaponId } from './game/content/weapons.js'
 import type { DamageSource, EnemyState, GameState, PlayerInput, PlayerProjectileState } from './game/simulation/state.js'
 
 const random = (state: GameState): number => {
@@ -13,6 +13,28 @@ const random = (state: GameState): number => {
 export const getBambooWeaponCount = (state: GameState): number => 1
   + ((state.weaponLevels['spinning-bamboo-blade'] ?? 0) > 0 ? 1 : 0)
   + ((state.weaponLevels['bamboo-crossbow-turret'] ?? 0) > 0 ? 1 : 0)
+
+// 战斗与只读预览共用；level 可指定下一等级或场上旧弩台的部署等级。
+export const getWeaponGrowth = (state: GameState, id: WeaponId | SignatureWeaponId, level: number) => {
+  const rate = state.player.attackSpeed / state.player.cooldownMultiplier
+  switch (id) {
+    case 'bamboo-staff':
+    case 'iron-bamboo-shield':
+      return { baseDamage: (id === 'iron-bamboo-shield' ? 34 : 38) * (1 + (level - 1) * 0.12), radius: state.player.meleeRange + (id === 'iron-bamboo-shield' ? 8 : 24) + (level - 1) * 4 + (id === 'bamboo-staff' && state.signatureWeaponEvolved ? 18 : 0), count: id === 'bamboo-staff' && state.signatureWeaponEvolved ? 2 : 1, duration: 0, interval: 0.62 / rate }
+    case 'leaf-dart':
+      return { baseDamage: 24 + (level - 1) * 4, radius: 0, count: state.player.projectileCount + state.player.extraProjectiles, duration: 0, interval: 0.88 / rate }
+    case 'iron-pot-gauntlets':
+      return { baseDamage: 15 + level * 4, radius: 62 + level * 4, count: level >= 3 ? 2 : 1, duration: 0, interval: 0.44 / rate }
+    case 'firecracker-launcher':
+      return { baseDamage: 24 + level * 8, radius: 48 + level * 8, count: (level >= 3 ? 2 : 1) + state.player.extraProjectiles, duration: 0, interval: 1.65 / rate }
+    case 'spinning-bamboo-blade':
+      return { baseDamage: 8 + level * 3, radius: 58 + level * 5, count: level >= 5 ? 3 : level >= 3 ? 2 : 1, duration: 0, interval: 0.42 / rate }
+    case 'panda-wine-gourd':
+      return { baseDamage: 5 + level * 2, radius: 48 + level * 6, count: level >= 3 ? 2 : 1, duration: 2.4 + level * 0.15, interval: 2.4 / rate }
+    case 'bamboo-crossbow-turret':
+      return { baseDamage: 10 + level * 3, radius: 0, count: level >= 5 ? 3 : level >= 3 ? 2 : 1, duration: 12, interval: Math.max(0.42, 0.95 - level * 0.08) / rate }
+  }
+}
 
 const rollUpgradeChoice = (state: GameState, pool: UpgradeId[]): UpgradeId => {
   const roll = random(state) * 100
@@ -754,10 +776,10 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
     }
   }
 
-  const attackRate = state.player.attackSpeed / state.player.cooldownMultiplier
   if (state.characterId !== 'qingtuan' && state.bambooCooldown <= 0) {
     let target: EnemyState | undefined
-    const attackRadius = state.player.meleeRange + (state.characterId === 'shimo' ? 8 : 24) + (state.signatureWeaponLevel - 1) * 4 + (state.characterId === 'shanlan' && state.signatureWeaponEvolved ? 18 : 0)
+    const growth = getWeaponGrowth(state, characters[state.characterId].weaponId, state.signatureWeaponLevel)
+    const attackRadius = growth.radius
     let targetDistance = attackRadius
     for (const enemy of state.enemies) {
       const distance = Math.hypot(enemy.x - state.player.x, enemy.y - state.player.y)
@@ -771,8 +793,8 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
       const whirlwind = state.characterId === 'shanlan' && state.characterAttackCount % 4 === 0
       const dragonStaff = state.characterId === 'shanlan' && state.signatureWeaponEvolved
       const arc = dragonStaff ? Math.PI : whirlwind ? Math.PI / 2 : state.characterId === 'shimo' ? Math.PI / 5 : Math.PI / 4
-      const damage = Math.round((state.characterId === 'shimo' ? 34 : 38) * (1 + (state.signatureWeaponLevel - 1) * 0.12) * state.player.damage * state.player.meleeDamage * state.player.basicAttackDamage * (critical ? state.player.criticalDamage : 1))
-      const strikes = dragonStaff ? 2 : 1
+      const damage = Math.round(growth.baseDamage * state.player.damage * state.player.meleeDamage * state.player.basicAttackDamage * (critical ? state.player.criticalDamage : 1))
+      const strikes = growth.count
       for (let strike = 0; strike < strikes; strike += 1) {
         let hitCount = 0
         for (const enemy of state.enemies) {
@@ -798,7 +820,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
       }
       if (whirlwind) applyHealing(state, Math.max(1, Math.ceil(state.player.maxHp * 0.01)))
     }
-    state.bambooCooldown = 0.62 / attackRate
+    state.bambooCooldown = growth.interval
   }
 
   if (state.characterId === 'qingtuan' && state.leafCooldown <= 0 && state.enemies.length > 0) {
@@ -809,7 +831,8 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
       const distance = Math.hypot(enemy.x - state.player.x, enemy.y - state.player.y)
       if (enemy.hp > 0 && distance < targetDistance) { target = enemy; targetDistance = distance }
     }
-    const projectileCount = state.player.projectileCount + state.player.extraProjectiles
+    const growth = getWeaponGrowth(state, 'leaf-dart', state.signatureWeaponLevel)
+    const projectileCount = growth.count
     for (let index = 0; index < projectileCount; index += 1) {
       state.characterAttackCount += 1
       const baseAngle = Math.atan2(target.y - state.player.y, target.x - state.player.x) + (index - (projectileCount - 1) / 2) * 0.16
@@ -820,19 +843,20 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
         state.playerProjectiles.push({
           id: state.nextId++, kind: 'leaf', x: state.player.x, y: state.player.y,
           vx: Math.cos(angle) * state.player.projectileSpeed, vy: Math.sin(angle) * state.player.projectileSpeed,
-          damage: Math.round((24 + (state.signatureWeaponLevel - 1) * 4) * state.player.damage * state.player.rangedDamage * state.player.basicAttackDamage * state.player.projectileDamage * (critical ? state.player.criticalDamage : 1) * (split ? 0.45 : 1)), critical, blastRadius: 0,
+          damage: Math.round(growth.baseDamage * state.player.damage * state.player.rangedDamage * state.player.basicAttackDamage * state.player.projectileDamage * (critical ? state.player.criticalDamage : 1) * (split ? 0.45 : 1)), critical, blastRadius: 0,
           travel: 0, maxTravel: state.signatureWeaponEvolved ? 520 : undefined, pierces: state.signatureWeaponEvolved ? 3 : 1,
           splitOnEnd: state.signatureWeaponEvolved, hitIds: [],
         })
       }
     }
-    state.leafCooldown = 0.88 / attackRate
+    state.leafCooldown = growth.interval
   }
 
   const gauntletLevel = state.weaponLevels['iron-pot-gauntlets'] ?? 0
   if (gauntletLevel > 0 && state.gauntletCooldown <= 0) {
     let target: EnemyState | undefined
-    const radius = 62 + gauntletLevel * 4
+    const growth = getWeaponGrowth(state, 'iron-pot-gauntlets', gauntletLevel)
+    const radius = growth.radius
     let targetDistance = radius
     for (const enemy of state.enemies) {
       const distance = Math.hypot(enemy.x - state.player.x, enemy.y - state.player.y)
@@ -842,10 +866,10 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
       recordAttack(state)
       const targetAngle = Math.atan2(target.y - state.player.y, target.x - state.player.x)
       const critical = random(state) < state.player.criticalChance
-      const strikes = gauntletLevel >= 3 ? 2 : 1
+      const strikes = growth.count
       for (let strike = 0; strike < strikes; strike += 1) {
         const angle = targetAngle + (strike - (strikes - 1) / 2) * 0.18
-        const damage = Math.round((15 + gauntletLevel * 4) * (strike === 0 ? 1 : 0.65) * state.player.damage * state.player.meleeDamage * state.player.basicAttackDamage * (critical ? state.player.criticalDamage : 1))
+        const damage = Math.round(growth.baseDamage * (strike === 0 ? 1 : 0.65) * state.player.damage * state.player.meleeDamage * state.player.basicAttackDamage * (critical ? state.player.criticalDamage : 1))
         let hitCount = 0
         for (const enemy of state.enemies) {
           const dx = enemy.x - state.player.x
@@ -865,7 +889,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
         state.attacks.push({ id: state.nextId++, x: state.player.x, y: state.player.y, life: 0.18, radius, angle, arc: Math.PI / 7, critical, kind: 'fists' })
       }
     }
-    state.gauntletCooldown = 0.44 / attackRate
+    state.gauntletCooldown = growth.interval
   }
 
   const firecrackerLevel = state.weaponLevels['firecracker-launcher'] ?? 0
@@ -877,7 +901,8 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
       const distance = Math.hypot(enemy.x - state.player.x, enemy.y - state.player.y)
       if (enemy.hp > 0 && distance < targetDistance) { target = enemy; targetDistance = distance }
     }
-    const projectileCount = (firecrackerLevel >= 3 ? 2 : 1) + state.player.extraProjectiles
+    const growth = getWeaponGrowth(state, 'firecracker-launcher', firecrackerLevel)
+    const projectileCount = growth.count
     const targetAngle = Math.atan2(target.y - state.player.y, target.x - state.player.x)
     for (let index = 0; index < projectileCount; index += 1) {
       const angle = targetAngle + (index - (projectileCount - 1) / 2) * 0.18
@@ -885,18 +910,19 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
       state.playerProjectiles.push({
         id: state.nextId++, kind: 'firecracker', x: state.player.x, y: state.player.y,
         vx: Math.cos(angle) * (250 + firecrackerLevel * 12), vy: Math.sin(angle) * (250 + firecrackerLevel * 12),
-        damage: Math.round((24 + firecrackerLevel * 8) * state.player.damage * state.player.rangedDamage * state.player.basicAttackDamage * state.player.projectileDamage * (critical ? state.player.criticalDamage : 1)),
-        critical, blastRadius: 48 + firecrackerLevel * 8,
+        damage: Math.round(growth.baseDamage * state.player.damage * state.player.rangedDamage * state.player.basicAttackDamage * state.player.projectileDamage * (critical ? state.player.criticalDamage : 1)),
+        critical, blastRadius: growth.radius,
       })
     }
-    state.firecrackerCooldown = 1.65 / attackRate
+    state.firecrackerCooldown = growth.interval
   }
 
   const bladeLevel = state.weaponLevels['spinning-bamboo-blade'] ?? 0
   if (bladeLevel > 0 && state.orbitCooldown <= 0) {
-    const radius = 58 + bladeLevel * 5
-    const damage = Math.round((8 + bladeLevel * 3) * state.player.damage * state.player.meleeDamage * state.player.basicAttackDamage)
-    const bladeCount = bladeLevel >= 5 ? 3 : bladeLevel >= 3 ? 2 : 1
+    const growth = getWeaponGrowth(state, 'spinning-bamboo-blade', bladeLevel)
+    const radius = growth.radius
+    const damage = Math.round(growth.baseDamage * state.player.damage * state.player.meleeDamage * state.player.basicAttackDamage)
+    const bladeCount = growth.count
     let bladeHit = false
     for (const enemy of state.enemies) {
       const distance = Math.hypot(enemy.x - state.player.x, enemy.y - state.player.y)
@@ -914,7 +940,7 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
       }
     }
     if (bladeHit) recordAttack(state)
-    state.orbitCooldown = 0.42 / attackRate
+    state.orbitCooldown = growth.interval
   }
 
   const gourdLevel = state.weaponLevels['panda-wine-gourd'] ?? 0
@@ -926,19 +952,20 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
       const distance = Math.hypot(enemy.x - state.player.x, enemy.y - state.player.y)
       if (enemy.hp > 0 && distance < targetDistance) { target = enemy; targetDistance = distance }
     }
-    const zoneCount = gourdLevel >= 3 ? 2 : 1
+    const growth = getWeaponGrowth(state, 'panda-wine-gourd', gourdLevel)
+    const zoneCount = growth.count
     const targetAngle = Math.atan2(target.y - state.player.y, target.x - state.player.x)
     for (let index = 0; index < zoneCount; index += 1) {
       const offset = zoneCount === 1 ? 0 : (index === 0 ? -1 : 1) * 44
       const x = Math.min(1530, Math.max(70, target.x + Math.cos(targetAngle + Math.PI / 2) * offset))
       const y = Math.min(930, Math.max(95, target.y + Math.sin(targetAngle + Math.PI / 2) * offset))
       state.groundZones.push({
-        id: state.nextId++, kind: 'wine', x, y, radius: 48 + gourdLevel * 6,
-        life: 2.4 + gourdLevel * 0.15, duration: 2.4 + gourdLevel * 0.15,
-        tickCooldown: 0, damage: Math.round((5 + gourdLevel * 2) * state.player.damage * state.player.rangedDamage * state.player.basicAttackDamage),
+        id: state.nextId++, kind: 'wine', x, y, radius: growth.radius,
+        life: growth.duration, duration: growth.duration,
+        tickCooldown: 0, damage: Math.round(growth.baseDamage * state.player.damage * state.player.rangedDamage * state.player.basicAttackDamage),
       })
     }
-    state.gourdCooldown = 2.4 / attackRate
+    state.gourdCooldown = growth.interval
   }
 
   for (const zone of state.groundZones) {
@@ -956,11 +983,12 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
   }
 
   const turretLevel = state.weaponLevels['bamboo-crossbow-turret'] ?? 0
-  const turretCount = turretLevel >= 5 ? 3 : turretLevel >= 3 ? 2 : 1
+  const turretGrowth = getWeaponGrowth(state, 'bamboo-crossbow-turret', turretLevel)
+  const turretCount = turretGrowth.count
   if (turretLevel > 0 && state.turretDeployCooldown <= 0 && state.turrets.length < turretCount) {
     for (let index = state.turrets.length; index < turretCount; index += 1) {
       const angle = state.time * 0.7 + index * Math.PI * 2 / turretCount
-      state.turrets.push({ id: state.nextId++, x: state.player.x + Math.cos(angle) * 62, y: state.player.y + Math.sin(angle) * 42, life: 12, cooldown: index * 0.16, level: turretLevel, angle })
+      state.turrets.push({ id: state.nextId++, x: state.player.x + Math.cos(angle) * 62, y: state.player.y + Math.sin(angle) * 42, life: turretGrowth.duration, cooldown: index * 0.16, level: turretLevel, angle })
     }
     state.turretDeployCooldown = 8
   }
@@ -975,16 +1003,17 @@ export const stepGame = (state: GameState, input: PlayerInput, elapsed: number):
         const distance = Math.hypot(enemy.x - turret.x, enemy.y - turret.y)
         if (enemy.hp > 0 && distance < targetDistance) { target = enemy; targetDistance = distance }
       }
+      const growth = getWeaponGrowth(state, 'bamboo-crossbow-turret', turret.level)
       turret.angle = Math.atan2(target.y - turret.y, target.x - turret.x)
       for (let index = 0; index <= state.player.extraProjectiles; index += 1) {
         const angle = turret.angle + (index - state.player.extraProjectiles / 2) * 0.12
         state.playerProjectiles.push({
           id: state.nextId++, kind: 'bolt', x: turret.x, y: turret.y,
           vx: Math.cos(angle) * 520, vy: Math.sin(angle) * 520,
-          damage: Math.round((10 + turret.level * 3) * state.player.damage * state.player.rangedDamage * state.player.basicAttackDamage * state.player.projectileDamage), critical: false, blastRadius: 0,
+          damage: Math.round(growth.baseDamage * state.player.damage * state.player.rangedDamage * state.player.basicAttackDamage * state.player.projectileDamage), critical: false, blastRadius: 0,
         })
       }
-      turret.cooldown = Math.max(0.42, 0.95 - turret.level * 0.08) / attackRate
+      turret.cooldown = growth.interval
     }
   }
 
