@@ -1,12 +1,13 @@
 import { t, locale, setLocale, resolveLocale, applyStaticTranslations } from './i18n.js'
 import Phaser from 'phaser'
 import './style.css'
-import { buyItem, chooseUpgrade, continueWave, createGameState, getBambooWeaponCount, getShopPrice, refreshShop, refreshUpgrades, sellItem, sellWeapon, stepGame, toggleShopLock } from './simulation.js'
+import { buyItem, chooseUpgrade, continueWave, createGameState, getBambooWeaponCount, getWeaponGrowth, getShopPrice, refreshShop, refreshUpgrades, sellItem, sellWeapon, stepGame, toggleShopLock } from './simulation.js'
 import { characters, type CharacterId } from './game/content/characters.js'
 import { enemyDefinitions, injurySources } from './game/content/enemies.js'
 import { items } from './game/content/items.js'
 import { upgrades } from './game/content/upgrades.js'
 import { isSignatureWeaponId, isWeaponId, signatureWeapons, weaponIds, weapons } from './game/content/weapons.js'
+import { getBuildSummary, getWeaponDetails } from './build-presentation.js'
 import { parseBattleRecords } from './records.js'
 import { PokiSession } from './poki.js'
 
@@ -368,6 +369,20 @@ class BattleScene extends Phaser.Scene {
         this.state.player.criticalChance = 1
         this.state.enemies = [0, 1, 2, 3, 4, 5].map((index) => ({ id: this.state.nextId++, kind: 'chaser', x: 880 + index * 28, y: 470 + (index % 2) * 45, hp: index === 0 ? 1 : 600, maxHp: index === 0 ? 1 : 600, cooldown: 99, dashTime: 0, vx: 0, vy: 0 }))
       }
+    } else if (import.meta.env.DEV && new URLSearchParams(location.search).has('playtest-build')) {
+      this.state.shopOpen = true
+      this.state.player.coins = 2000
+      const variant = new URLSearchParams(location.search).get('playtest-build')
+      for (const id of [this.state.characterId === 'shimo' ? 'taiji-jade' : 'twin-bamboo', 'gale-leggings'] as const) {
+        this.state.shopChoices = [id]
+        buyItem(this.state, 0)
+      }
+      this.state.pendingUpgrade = true
+      this.state.upgradeChoices = [this.state.characterId === 'qingtuan' ? 'leaf-volley' : 'wide-sweep']
+      chooseUpgrade(this.state, this.state.upgradeChoices[0])
+      this.state.weaponLevels = variant === 'late' ? { 'spinning-bamboo-blade': 4, 'panda-wine-gourd': 4, 'bamboo-crossbow-turret': 4 } : { 'iron-pot-gauntlets': 2, 'firecracker-launcher': 2 }
+      this.state.signatureWeaponLevel = variant === 'late' ? 5 : 4
+      this.state.shopChoices = variant === 'late' ? ['spinning-bamboo-blade', 'panda-wine-gourd', 'bamboo-crossbow-turret', signatureWeapons[characters[this.state.characterId].weaponId].evolution.requiredItem] : [characters[this.state.characterId].weaponId, 'iron-pot-gauntlets', 'firecracker-launcher', signatureWeapons[characters[this.state.characterId].weaponId].evolution.requiredItem]
     } else if (import.meta.env.DEV && new URLSearchParams(location.search).has('playtest-evolution')) {
       const signature = signatureWeapons[characters[this.state.characterId].weaponId]
       if (new URLSearchParams(location.search).get('playtest-evolution') === 'combat') {
@@ -736,7 +751,7 @@ class BattleScene extends Phaser.Scene {
     if (!overlay || !cards || !title || !kicker || !copy || !continueButton || !shopTabs || !shopLayout || !shopCards || !shopWeapons || !shopInventory || !shopItemCount || !shopStats || !refreshButton || !refreshUpgradeButton) return
     if (this.state.gameOver || this.state.victory) { overlay.hidden = true; return }
 
-    const mode = this.state.pendingUpgrade ? `upgrade-${this.state.player.level}-${this.state.player.coins}-${this.state.freeUpgradeRefreshUsed}-${this.state.upgradeChoices.join('-')}` : this.state.shopOpen ? `shop-${this.state.wave}-${this.state.player.coins}-${this.state.shopChoices.join('-')}-${this.state.lockedShopIndices.join('-')}-${this.state.ownedItems.join('-')}-${this.state.signatureWeaponLevel}-${this.state.signatureWeaponEvolved}-${Object.entries(this.state.weaponLevels).join('-')}` : ''
+    const mode = this.state.pendingUpgrade ? `upgrade-${this.state.player.level}-${this.state.player.coins}-${this.state.freeUpgradeRefreshUsed}-${this.state.upgradeChoices.join('-')}` : this.state.shopOpen ? `shop-${this.state.wave}-${this.state.player.coins}-${this.state.shopChoices.join('-')}-${this.state.lockedShopIndices.join('-')}-${this.state.ownedItems.join('-')}-${this.state.signatureWeaponLevel}-${this.state.signatureWeaponEvolved}-${Object.entries(this.state.weaponLevels).join('-')}-${this.state.player.extraProjectiles}` : ''
     overlay.hidden = !mode
     if (!mode || `${locale}-${mode}` === this.overlayMode) return
     this.overlayMode = `${locale}-${mode}`
@@ -790,8 +805,10 @@ class BattleScene extends Phaser.Scene {
         if (refreshShop(this.state)) this.overlayMode = ''
       }
       const character = characters[this.state.characterId]
+      const buildSummary = getBuildSummary(this.state)
       shopStats.innerHTML = `
         <div class="shop-character"><img src="${import.meta.env.BASE_URL}${character.portrait}" alt=""><strong>${t(character.name)}</strong><span>${t(character.role)}</span></div>
+        <section class="build-summary"><h4>${t('当前构筑')}</h4>${buildSummary.length ? buildSummary.map(({ label, sources }) => `<p><strong>${label}</strong><small>${t('来源：{0}', sources.join(t('、')))}</small></p>`).join('') : `<p>${t('初始招式 · 尚未形成强化方向')}</p>`}</section>
         <dl>
           <div><dt>${t('生命')}</dt><dd>${Math.ceil(this.state.player.hp)} / ${this.state.player.maxHp}</dd></div>
           ${buildStatFields.filter(({ key }) => key !== 'maxHp').map(({ key, label, scale, unit }) => `<div><dt>${t(label)}</dt><dd>${key === 'shieldPower' && this.state.characterId !== 'shimo' || (key === 'projectileCount' || key === 'projectileSpeed') && this.state.characterId !== 'qingtuan' || key === 'meleeRange' && this.state.characterId === 'qingtuan' ? t('不适用') : `${Math.round(this.state.player[key] * scale)}${unit}`}</dd></div>`).join('')}
@@ -814,7 +831,11 @@ class BattleScene extends Phaser.Scene {
         const lockButton = document.createElement('button')
         const locked = this.state.lockedShopIndices.includes(index)
         article.dataset.rarity = product.rarity
-        article.innerHTML = `<kbd>${index + 1}</kbd><img src="${import.meta.env.BASE_URL}${product.image}" alt=""><small>${t(product.rarity)} · ${signatureWeapon ? t('专属武器 · Lv.{0} → Lv.{1}', weaponLevel, weaponLevel + 1) : commonWeapon ? t('武器 · {0}', weaponLevel >= 5 ? t('Lv.5 · 已满级') : weaponLevel > 0 ? `Lv.${weaponLevel} → Lv.${weaponLevel + 1}` : t('新武器')) : t('宝物')}</small><strong>${t(product.name)}</strong><span>${t(product.description)}</span><em>${t(product.preview)}</em>`
+        article.innerHTML = `<kbd>${index + 1}</kbd><img src="${import.meta.env.BASE_URL}${product.image}" alt=""><small>${t(product.rarity)} · ${signatureWeapon ? maxLevel ? t('Lv.5 · 已满级') : t('专属武器 · Lv.{0} → Lv.{1}', weaponLevel, weaponLevel + 1) : commonWeapon ? t('武器 · {0}', weaponLevel >= 5 ? t('Lv.5 · 已满级') : weaponLevel > 0 ? `Lv.${weaponLevel} → Lv.${weaponLevel + 1}` : t('新武器 · Lv.1')) : t('宝物')}</small><strong>${t(product.name)}</strong><span>${t(product.description)}</span><em>${t(product.preview)}</em>`
+        if (commonWeapon || signatureWeapon) {
+          article.querySelector('em')!.textContent = getWeaponDetails(this.state, id, true)
+          article.querySelector('em')!.className = 'weapon-growth'
+        }
         if (!commonWeapon && !signatureWeapon) {
           const preview = structuredClone(this.state)
           preview.player.coins = Math.max(preview.player.coins, price)
@@ -824,6 +845,7 @@ class BattleScene extends Phaser.Scene {
           const notice = document.createElement('small')
           notice.className = 'shop-limit'
           notice.textContent = [
+            available && !this.state.signatureWeaponEvolved && preview.signatureWeaponEvolved ? t('本次购买立即进化') : '',
             id === 'jade-eyepatch' ? t('生命下限 1；暴击上限 100%，溢出不再增加') : '',
             id === 'mountain-stone' || id === 'spirit-bamboo-tube' || id === 'iron-bracer' ? t('移动速度下限 50%') : '',
             id === 'tiger-seal' ? t('普通敌人伤害下限 50%') : '',
@@ -868,7 +890,7 @@ class BattleScene extends Phaser.Scene {
       const signature = signatureWeapons[characters[this.state.characterId].weaponId]
       const signatureRow = document.createElement('div')
       signatureRow.className = `shop-weapon signature-weapon${this.state.signatureWeaponEvolved ? ' evolved' : ''}`
-      signatureRow.innerHTML = `<img src="${import.meta.env.BASE_URL}${this.state.signatureWeaponEvolved ? signature.evolution.image : signature.image}" alt=""><span><strong>${this.state.signatureWeaponEvolved ? t(signature.evolution.name) : t(signature.name)} · ${this.state.signatureWeaponEvolved ? t('已觉醒') : `Lv.${this.state.signatureWeaponLevel}`}</strong><small>${this.state.signatureWeaponEvolved ? t(signature.evolution.description) : t('不可出售 · Lv.5 + {0} 可进化', t(items[signature.evolution.requiredItem].name))}</small></span>`
+      signatureRow.innerHTML = `<img src="${import.meta.env.BASE_URL}${this.state.signatureWeaponEvolved ? signature.evolution.image : signature.image}" alt=""><span><strong>${this.state.signatureWeaponEvolved ? t(signature.evolution.name) : t(signature.name)} · ${this.state.signatureWeaponEvolved ? t('已觉醒') : `Lv.${this.state.signatureWeaponLevel}`}</strong><small>${getWeaponDetails(this.state, characters[this.state.characterId].weaponId)}</small></span>`
       shopWeapons.append(signatureRow)
       const ownedWeaponIds = weaponIds.filter((id) => (this.state.weaponLevels[id] ?? 0) > 0)
       if (ownedWeaponIds.length === 0) shopWeapons.insertAdjacentHTML('beforeend', `<p>${t('尚未获得通用武器')}</p>`)
@@ -878,7 +900,7 @@ class BattleScene extends Phaser.Scene {
         const row = document.createElement('div')
         const sellButton = document.createElement('button')
         row.className = 'shop-weapon'
-        row.innerHTML = `<img src="${import.meta.env.BASE_URL}${weapon.image}" alt=""><span><strong>${t(weapon.name)} · Lv.${level}</strong><small>${t(weapon.description)}</small></span>`
+        row.innerHTML = `<img src="${import.meta.env.BASE_URL}${weapon.image}" alt=""><span><strong>${t(weapon.name)} · Lv.${level}</strong><small>${getWeaponDetails(this.state, id)}</small></span>`
         sellButton.type = 'button'
         sellButton.textContent = t('出售 +{0}', Math.floor(weapon.price * level * 0.6))
         sellButton.addEventListener('click', () => {
@@ -1444,7 +1466,7 @@ class BattleScene extends Phaser.Scene {
       if (element && element.textContent !== value) element.textContent = value
     }
     const weaponStrip = document.querySelector<HTMLElement>('#weapon-strip')
-    const weaponHudMode = `${locale}-${this.state.characterId}-${this.state.signatureWeaponLevel}-${this.state.signatureWeaponEvolved}-${Object.entries(this.state.weaponLevels).join('-')}`
+    const weaponHudMode = `${locale}-${this.state.characterId}-${this.state.signatureWeaponLevel}-${this.state.signatureWeaponEvolved}-${Object.entries(this.state.weaponLevels).join('-')}-${this.state.player.extraProjectiles}`
     if (weaponStrip && weaponHudMode !== this.weaponHudMode) {
       this.weaponHudMode = weaponHudMode
       const character = characters[this.state.characterId]
@@ -1452,11 +1474,12 @@ class BattleScene extends Phaser.Scene {
       weaponStrip.innerHTML = `<span class="weapon-slot${this.state.signatureWeaponEvolved ? ' evolved' : ''}"><img src="${import.meta.env.BASE_URL}${this.state.signatureWeaponEvolved ? signature.evolution.image : signature.image}" alt="${this.state.signatureWeaponEvolved ? t(signature.evolution.name) : t(signature.name)}"><span><b>${this.state.signatureWeaponEvolved ? t(signature.evolution.name) : t(signature.name)} · ${this.state.signatureWeaponEvolved ? t('觉醒') : `Lv.${this.state.signatureWeaponLevel}`}</b><small>${this.state.signatureWeaponEvolved ? t(signature.evolution.description) : t(character.weaponDescription)}</small></span></span>${weaponIds.filter((id) => (this.state.weaponLevels[id] ?? 0) > 0).map((id) => {
         const weapon = weapons[id]
         const level = this.state.weaponLevels[id] ?? 0
-        let detail = t('{0}快拳 · 范围 {1}', level >= 3 ? t('双段') : t('单段'), 62 + level * 4)
-        if (id === 'firecracker-launcher') detail = t('{0}爆破 · 范围 {1}', level >= 3 ? t('双弹') : t('单弹'), 48 + level * 8)
-        if (id === 'spinning-bamboo-blade') detail = t('{0} 刃环身 · 轨道 {1}', level >= 5 ? 3 : level >= 3 ? 2 : 1, 58 + level * 5)
-        if (id === 'panda-wine-gourd') detail = t('{0}茶焰 · 持续 {1}秒', level >= 3 ? t('双区') : t('单区'), (2.4 + level * 0.15).toFixed(1))
-        if (id === 'bamboo-crossbow-turret') detail = t('{0} 台竹弩 · 自动索敌', level >= 5 ? 3 : level >= 3 ? 2 : 1)
+        const growth = getWeaponGrowth(this.state, id, level)
+        let detail = t('{0}快拳 · 范围 {1}', growth.count > 1 ? t('双段') : t('单段'), growth.radius)
+        if (id === 'firecracker-launcher') detail = t('{0}弹齐射 · 半径 {1}', growth.count, growth.radius)
+        if (id === 'spinning-bamboo-blade') detail = t('{0} 刃环身 · 轨道 {1}', growth.count, growth.radius)
+        if (id === 'panda-wine-gourd') detail = t('{0}茶焰 · 持续 {1}秒', growth.count > 1 ? t('双区') : t('单区'), growth.duration.toFixed(2))
+        if (id === 'bamboo-crossbow-turret') detail = t('{0} 台竹弩 · 自动索敌', growth.count)
         return `<span class="weapon-slot"><img src="${import.meta.env.BASE_URL}${weapon.image}" alt="${t(weapon.name)}"><span><b>${t(weapon.name)} · Lv.${level}</b><small>${detail}</small></span></span>`
       }).join('')}`
     }
@@ -1496,12 +1519,12 @@ class BattleScene extends Phaser.Scene {
     mobileDash.querySelector<HTMLElement>('small')!.textContent = this.state.player.dashCooldown === 0 ? t('就绪') : `${this.state.player.dashCooldown.toFixed(1)}s`
     const hurtVignette = document.querySelector<HTMLElement>('#hurt-vignette')
     if (hurtVignette) hurtVignette.classList.toggle('active', this.state.effects.some((effect) => effect.kind === 'player-hit'))
-    const buildHudMode = `${locale}-${this.state.chosenUpgrades.join('-')}-${this.state.ownedItems.join('-')}`
+    const buildHudMode = `${weaponHudMode}-${this.state.chosenUpgrades.join('-')}-${this.state.ownedItems.join('-')}-${this.state.lastStandUsed}`
     if (buildHudMode !== this.buildHudMode) {
       this.buildHudMode = buildHudMode
       const buildTags = document.querySelector<HTMLElement>('#build-tags')
       if (buildTags) {
-        const names = this.state.chosenUpgrades.slice(-3).map((id) => t(upgrades[id].name))
+        const names = getBuildSummary(this.state).map(({ label }) => label)
         buildTags.innerHTML = (names.length ? names : [t('初入竹林')]).map((name) => `<span>${name}</span>`).join('')
       }
       const itemIcons = document.querySelector<HTMLElement>('#item-icons')
