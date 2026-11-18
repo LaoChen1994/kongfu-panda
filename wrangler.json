@@ -2,6 +2,20 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "kongfu-panda",
   "compatibility_date": "2026-10-13",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    {
+      "pattern": "panda.pidanzz.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "panda-dev.pidanzz.com",
+      "custom_domain": true,
+      "enabled": false,
+      "previews_enabled": true
+    }
+  ],
   "assets": {
     "directory": "./dist",
     "not_found_handling": "none"
